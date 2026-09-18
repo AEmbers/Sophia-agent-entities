@@ -1,0 +1,199 @@
+.form {
+  display: grid;
+  gap: 16px;
+}
+
+/* The add-Agent dialog stacks the mode switch above the mode's own content,
+   and the Modal body declares no gap of its own: without this seat the
+   switch's edge is the form's first field edge (measured 0px). The step is
+   the dialog body's own block rhythm, not the Modal's 20px header step, so
+   one body does not speak two rhythms. It has to sit on the switch rather
+   than on `.form`, because the Channel create/edit forms share `.form` and
+   must keep their own first-child seat. */
+.modeSwitch {
+  margin-bottom: 16px;
+}
+
+.field {
+  color: var(--dsw-alias-label-secondary);
+  display: grid;
+  font-size: 12px;
+  gap: 6px;
+  line-height: 18px;
+}
+
+/* border-box keeps the wrap's own padding+border inside width:100% — without
+   it every Input overflows the dialog body's right padding (the lopsided
+   gutter this form was showing). */
+.input {
+  box-sizing: border-box;
+  width: 100%;
+}
+
+/* Picker lists cap their card and scroll internally so growing model
+   catalogs cannot stretch the dialog. */
+.menuCap {
+  max-height: min(320px, 56vh);
+}
+
+/* Model picker trigger styled to the Input atom chrome; the option list is
+   the shared ui-primitives Menu (grouped rows + selection check). */
+.selectTrigger {
+  align-items: center;
+  background: var(--dsw-alias-bg-layer-1);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  box-sizing: border-box;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  display: flex;
+  font-size: 14px;
+  gap: 8px;
+  justify-content: space-between;
+  line-height: 22px;
+  min-height: 32px;
+  padding: 4px 10px;
+  text-align: left;
+}
+
+.selectTrigger:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.selectTrigger:focus-visible {
+  border-color: var(--dsw-alias-brand-primary);
+  outline: none;
+}
+
+.selectValue {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chevron {
+  color: var(--dsw-alias-label-tertiary);
+  display: inline-flex;
+  flex: none;
+  transition: transform 120ms ease;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+.memberPicker {
+  border: 0;
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.memberPicker legend {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  padding: 0 0 6px;
+}
+
+.memberOption {
+  align-items: center;
+  border-radius: 6px;
+  color: var(--dsw-alias-label-primary);
+  display: grid;
+  gap: 0 7px;
+  grid-template-columns: auto 14px minmax(0, 1fr);
+  min-height: 32px;
+  padding: 3px 6px;
+}
+
+.memberOption:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.memberOption input {
+  margin: 0;
+}
+
+.memberOption small {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+  grid-column: 3;
+  line-height: 14px;
+}
+
+.unavailableDot {
+  background: var(--dsw-alias-label-tertiary);
+  border-radius: 50%;
+  corner-shape: round;
+  display: inline-block;
+  height: 7px;
+  justify-self: center;
+  width: 7px;
+}
+
+.error {
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 12px;
+  line-height: 18px;
+  margin: 0;
+}
+
+/* Import view. Its caption and its loading/empty lines take the dialog's own
+   caption scale instead of the UA `<p>` default: the body's inherited 16px
+   made the notice as large as the dialog title. Secondary explains the mode,
+   tertiary states what the list is doing — the same split as the roster
+   surfaces (`members.module.css` `.state`/`.error`). */
+.notice {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  margin: 0;
+}
+
+.state {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  margin: 0;
+}
+
+/* The importable Members are a roster, and they keep the shared roster
+   density (2px between rows, `members.module.css` `.group`) rather than the
+   dialog's 16px stack rhythm: the same person has to read as the same list
+   on every surface that draws them. */
+.roster {
+  display: grid;
+  gap: 2px;
+}
+
+/* A failed read or join states the message and then offers its retry under
+   it, 8px apart — the shipped message-then-action gap (Modal footer, the
+   sidebar's own `.retryError`). Laid out as a plain block, the button's edge
+   rode the message's last line box with no space between them. Both stay in
+   one alert region, and the button keeps its own shape rather than stretching
+   to the column. */
+.failure {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.dialogContent {
+  max-height: min(70vh, 560px);
+  overflow-y: auto;
+}
+
+@media (max-width: 600px) {
+  .dialogContent {
+    max-height: calc(100vh - 180px);
+  }
+
+  .memberPicker {
+    max-height: 180px;
+  }
+}

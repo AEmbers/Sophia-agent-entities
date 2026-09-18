@@ -1,0 +1,380 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 var(--dsh-composer-side-clearance, 16px) 8px;
+}
+
+.card {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+  width: 100%;
+  max-width: var(--dsh-composer-card-max-width, 780px);
+  padding: 10px 0 0;
+  border: 1px solid var(--dsw-alias-border-l2-darkmode-thin);
+  border-radius: 22px;
+  background: var(--dsw-specific-input-major, var(--dsw-alias-bg-layer-1));
+  box-shadow: var(--dsw-shadow-lv2);
+}
+
+.inputArea {
+  position: relative;
+  min-height: 28px;
+}
+
+.inputArea textarea {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  max-height: 336px;
+  padding: 4px 12px 0 16px;
+  resize: none;
+  overflow-y: auto;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-primary, var(--dsw-alias-label-primary));
+  font: inherit;
+  font-size: 15px;
+  line-height: 24px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.inputArea textarea::placeholder {
+  color: var(--dsw-alias-label-caption, var(--dsw-alias-label-tertiary));
+}
+
+/* Member Session is a restricted capability, not a different visual system.
+   These modifiers deliberately leave Channel/Thread's shared composer alone. */
+
+
+
+
+
+
+
+
+
+.inputArea textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.mentionMenu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 12px);
+  left: 0;
+  z-index: 10;
+  max-height: min(320px, 40vh);
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--dsw-alias-border-inverted);
+  border-radius: 12px;
+  background: var(--dsw-specific-menu);
+  box-shadow: var(--dsw-shadow-lv3);
+}
+
+.mentionOption {
+  align-items: center;
+  display: grid;
+  grid-template-columns: 16px minmax(0, auto) minmax(0, 1fr);
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary, var(--dsw-alias-label-primary));
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 22px;
+  text-align: left;
+}
+
+.mentionOption:hover,
+.mentionOption[aria-selected='true'] {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.mentionName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Icon-sized stand-in for the presence dot on the @all row: theme label
+ * color, slightly smaller than the 16px member dots. */
+.mentionAllDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  corner-shape: round;
+  background: var(--dsw-alias-label-primary);
+  justify-self: center;
+}
+
+.mentionDescription {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary, var(--dsw-alias-label-tertiary));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolbar {
+  align-items: center;
+  display: flex;
+  justify-content: flex-end;
+  /* Same 12px control rhythm as the base composer's .row (figma 75:8208). The
+     send circle's own auto margin seats it alone at the right edge, so this gap
+     is what separates the attach circle and the as-task mode pill beside it. */
+  gap: 12px;
+  min-height: 34px;
+  padding: 2px 8px 6px;
+  /* Size container so the as-task pill can drop its label once the card runs
+     out of row width — the same pattern and 460px cut the shipped permission
+     chip uses. Anonymous on purpose: CSS modules hash container names per
+     module sheet, so a name declared here could never match another sheet. */
+  container-type: inline-size;
+}
+
+/* as-task is a mode, not an action: it changes what Send means, so it keeps a
+   word label and sits in the shipped composer's modes seat beside the attach
+   control. The Harness Button atom renders no pressed visual for aria-pressed,
+   so the pill owns its on-state with primary fill; the hover rule has to
+   out-specify `.asTaskPill:hover:not(:disabled)` (0,3,0), or hovering a pressed
+   pill would swap the fill back to the hover wash. */
+.asTaskPill {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 24px;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  flex: none;
+  font-size: 13px;
+  font-weight: 500;
+  gap: 4px;
+  height: 28px;
+  line-height: 20px;
+  padding: 0 10px 0 8px;
+}
+.asTaskPill:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+.asTaskPill:focus-visible {
+  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);
+}
+.asTaskPill:disabled {
+  color: var(--dsw-alias-label-dimmed);
+  cursor: default;
+}
+.asTaskPillOn,
+.asTaskPillOn:hover:not(:disabled) {
+  background: var(--dsw-alias-button-primary-fill);
+  color: var(--dsw-alias-label-primary-foreground);
+}
+.asTaskLabel {
+  white-space: nowrap;
+}
+
+/* Narrow card: the mode keeps its glyph and drops only the word — the shipped
+   permission chip's own cut. `aria-label`, `title` and `aria-pressed` stay on
+   the button, so assistive tech and the keyboard path see no difference. */
+@container (max-width: 460px) {
+  .asTaskPill .asTaskLabel {
+    display: none;
+  }
+}
+
+/* Attach circle — mirrors the base composer's 28px "+" control so both
+   composers read as one design language (figma + control). */
+.attachButton {
+  background: var(--dsw-specific-selector);
+  border: 0;
+  border-radius: 999px;
+  corner-shape: round;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  display: grid;
+  flex: none;
+  height: 28px;
+  place-items: center;
+  width: 28px;
+}
+.attachButton:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover-solid);
+}
+.attachButton:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.attachButton:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary, var(--dsw-specific-selector));
+  outline-offset: 1px;
+}
+
+.fileInput {
+  display: none;
+}
+
+.fileChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 4px 8px 0;
+}
+
+.fileChip {
+  align-items: center;
+  background: var(--dsw-alias-interactive-bg-hover);
+  border-radius: 6px;
+  display: inline-flex;
+  gap: 4px;
+  max-width: 100%;
+  padding: 2px 4px 2px 8px;
+}
+
+.fileChipSize {
+  color: var(--dsw-alias-label-tertiary);
+  margin-left: 6px;
+}
+
+.imageChip {
+  align-items: center;
+  display: flex;
+}
+
+.imageChipPreview {
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 4px;
+  height: 40px;
+  object-fit: cover;
+  width: 56px;
+}
+
+.fileChipName {
+  font-size: 11px;
+  line-height: 16px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileChipRemove {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 12px;
+  height: 16px;
+  justify-content: center;
+  padding: 0;
+  width: 16px;
+}
+.fileChipRemove:hover,
+.fileChipRemove:focus-visible {
+  color: var(--dsw-alias-label-primary);
+}
+.fileChipRemove:focus-visible {
+  outline: 2px solid var(--dsw-alias-label-primary);
+  outline-offset: 1px;
+}
+
+.sendButton {
+  align-items: center;
+  background: var(--dsw-alias-button-info-fill, var(--dsw-alias-button-primary-fill));
+  border: 0;
+  border-radius: 999px;
+  corner-shape: round;
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  height: 34px;
+  justify-content: center;
+  /* The attach circle and the as-task mode pill share the left group, so the
+     primary action takes the right edge for itself. */
+  margin-left: auto;
+  padding: 0;
+  /* Opts out of the toolbar's 2px downward shift (same 2px top pad the base
+     composer's row uses): the send circle keeps its original seat while the
+     smaller controls sit lower. Transform, not margin, so flex centering
+     math is untouched. */
+  transform: translateY(-2px);
+  transition: background-color 100ms ease, opacity 100ms ease;
+  width: 34px;
+}
+
+.sendButton:hover:not(:disabled) {
+  background: var(--dsw-alias-button-info-hover, var(--dsw-alias-button-primary-hover));
+}
+
+.sendButton:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 2px;
+}
+
+.sendButton:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.confirmation {
+  align-self: stretch;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  margin: 0;
+  padding: 0 16px;
+}
+
+/* Quiet "who gets notified" line; sits between the draft and the send action. */
+.notifyRow {
+  color: var(--dsw-alias-label-tertiary, var(--dsw-alias-label-tertiary));
+  font-size: 12px;
+  line-height: 18px;
+  margin: 0;
+  overflow-wrap: anywhere;
+  padding: 0 16px;
+}
+
+.error {
+  align-self: stretch;
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 12px;
+  line-height: 18px;
+  margin: 0;
+  padding: 0 4px 2px;
+}
+
+@media (max-width: 600px) {
+  .mentionOption {
+    grid-template-columns: 16px minmax(0, 1fr);
+    min-height: 36px;
+    padding-block: 6px;
+  }
+
+  .mentionDescription {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sendButton {
+    transition: none;
+  }
+}

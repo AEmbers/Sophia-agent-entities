@@ -1,0 +1,165 @@
+# 架构
+
+[English](architecture.md) | 中文
+
+本文记录当前实现必须保持的边界。稳定领域词汇见 [`domain-model.zh.md`](domain-model.zh.md)；历史设计背景按 [`.scratch/README.md`](../.scratch/README.md) 查阅。当前行为以源码和测试为准；Harness API 以相邻 checkout 的文档、源码和测试为准。
+
+## Package ownership
+
+```text
+packages/agent-team
+  Host service + operation ledger + projections + Agent lifecycle + Remote declarations
+        │
+        ├── packages/tool-agent-team
+        │     model-facing team_inbox / team_thread / team_message / team_claim / team_view
+        │
+        └── packages/client-agent-team
+              typed Remote client + Team mode + browser presentation
+```
+
+这三个目录是同一个发布包 `@wowyuarm/dsh-agent-team` 的构建与导出接缝，由根 `package.json` 声明；它们都没有自己的 manifest。依赖方向是单向的：Host 从不导入 Client 或 tools 的实现内部，tools 在执行时解析 live Host service，Client 只消费 typed Remote、公开类型与 Harness slots——绝不通过相对路径进入另一个接缝的生成 `lib/`。[`development.zh.md`](development.zh.md) 负责接缝的具体机制、Host 模块布局与新增 operation 的清单。
+
+- `packages/agent-team` 拥有 Team capability。`src/index.ts` 组装 service 并声明 Remote methods；`member-runtime.ts` 在只依赖三个依赖项（`ctx`、live member context、共享 running-agents set）的接缝之后持有 per-Member runtime state（tool-policy restriction、capability warning、私有 skill 挂载与选择、私有 memory 供给）；service 自身保留 ledger、handles、notifications 与 recovery orchestration；`ledger.ts` 提交 operations；`spec.ts` 定义 operation records；`types.ts` 把领域拆分（`types/entities.ts`、`types/operations.ts`、`types/requests-results.ts`）re-export 成唯一公开导入路径；`invariant.ts` 校验运行时关系。
+- `packages/tool-agent-team` 在 tools 执行时解析 live Team service。它不创建第二个 service，也不直接写入 projections。
+- `packages/client-agent-team` 分为 Node 部分（`src/index.ts`）和 browser 部分（`src/client/`）。browser 部分通过 typed Remote 读取 Host projections，并通过 public Client slots 渲染。
+
+接缝由第二个调用方、第二个 adapter 或独立持有的状态换来，绝不由行数换来。`index.ts` 与 `ledger.ts` 大，是因为它们承载 composition 与 authority，不是因为缺了一层；不要为了让单个文件变小而拆它们，也不要在真的出现第二份实现之前引入 `services/`、`utils/`、`adapters/` 目录。只做 re-export、只转发 props、只改名的模块不持有状态也不持有不变式：把调用内联，或删掉契约已经死掉的那一侧。
+
+## Host authority
+
+Team 是每个 DSH home 内唯一的协作域。append-only operation ledger 是 Member、Workspace、Channel、Message、独立 Thread aggregate、可选 Task overlay、Claim、Thread Attention、Inbox 和 Activity facts 的 durable authority。
+
+- mutation 进入 Host authority，并提交一条 durable operation。
+- Projections、Inbox results、tools、commands、Remote responses 和 UI 都从已提交的 operations 派生。
+- Client code 不得解释 ledger records，也不得创建 parallel authority。
+- Agent lifecycle、JSON/SQLite replay、authorization、idempotency 和 revision checks 都留在 Host 侧。durable unread 变化可以通过 public Agent safe-boundary API 产生一条有界、合并后的 Agent context notification：direct mentions 携带其 Message 和 source，Task/Claim Activities 携带简要状态变化，ordinary unread 只携带不含正文的 Thread-first route（若存在则带 Task overlay）。Promotion 与其他 Task transition 一样是 Task activity，通过 Activity markers 到达 followers。这类 notification 不是第二权威，也不保证模型恰好处理一次。
+- `changes()` 是流式 Remote，可声明一个 scope（workspace/channel/thread/presence）；省略 scope 时观察共享 Team 投影变化，不包含 presence。Host 先注册监听，再发送当前基线，之后只发送匹配的变更通知；消费者暂停期间仅保留最新待发送版本。取消或 Host 释放时关闭订阅。Thread read 与 `team/dm-sent` 不改变共享投影，因此既不推进其版本也不唤醒订阅者。Presence 使用进程内 epoch，其余 scope 使用最近一次共享投影提交的 ledger sequence。版本只在同一 scope 和 Host 生命周期内有意义。Host 只为受 operation 影响的 Members 重算 Inbox hints。
+- `TeamChangeStream` 在每个页面内通过 `ctx.remote.$stream()` 按 scope 共享一个逻辑流；Harness 管理共享的 `/api/remote.mux` WebSocket 和连接恢复。每次开场基线都会触发重新读取 Host，包括重连后的相同或更低版本，以补上首次读取与订阅之间的变化，并在没有新提交时恢复失败的读取。最后一个 listener 离开时释放该 scope，插件释放时关闭所有 scope。传输失败在恢复前只报告一次；终止性错误直接报告，不使用 Team 自有重试循环。没有长轮询回退、跨页面主从选举或单活跃页面限制。并发的补充读取合并通知；读取期间再收到通知时保留后续一轮读取，不用旧版本过滤重连基线。Human Inbox 徽标订阅无 scope 通知，经 debounce 重拉 Inbox 合计，并在本页 Thread read 后刷新。Presence 订阅更新 Member 可用状态，不唤醒 Inbox。通知只是重新读取的提示，不是第二份事实存储。
+- Host 对 Member Session 的 projection 改为增量折叠。context intent、clock baseline 与一次性 pressure notice 都派生自同一个 Session 自身的 events，现在三者都经 Session event cursor 读取：cursor 把折叠出的值与其已消费的日志位置放在一起——`context-projection.ts` 提供折叠，`session-event-cursor.ts` 提供位置——因此一个日志第一次被读取时折一次，之后每次只折其后追加的 events。cursor 假定该日志只 append，并只校验能校验的部分：它记住自己停在哪个事件的 sequence 与 type，所以 fork 前缀变动、日志变短、或该事件被替换时一律从头重折，fork / resume / rollover 最坏只退回一次冷折，而不会给出错画面。模块里点名记下一条残留而不是掩盖它：同一 sequence、同一 type 但内容被就地替换的事件对该守卫不可见；这只有违反 append-only 契约才可达，而内容敏感的锚点也关不掉它，因为只有锚点位置被重读，更早的已折位置被换掉会同样放行。读取完整被检视日志或外来日志的冷路径——activation、transition、timeline、carried-input 重放——仍全量折叠。三者各自按 Member 保存一个 cursor，并在该 Member 的 Session 变化时替换，因此保留的折叠状态以 roster 为界，而不随 Member 经历过的代数增长。
+- Bundle 目标为 DSH `0.1.5-rc.1`。其 Session persistence 使用当前 DSH schema：随附的 JSONL backend 会自行迁移已发布的旧格式（v0/v1/v2 → V3），旧格式 Session 数据无需手动处置。这个 DSH Session-schema 策略不会抹掉 Team operation history：Team 有意保留针对旧版、Message-level `occurredAt` 之前 records 的窄 replay normalization。普通存储的 Message operations 在加载时使用包裹 operation 的 instant；旧 `team/thread-read` snapshot anchors 与 Message facts 从来源 Message operation 解析 instant，只有必要时才回退到 read operation——而 snapshot 正是唯一仍会走到这条 normalization 的记录形态：它把 Message anchors 与 Thread facts 连同消费掉的 Inbox delta 一起冻结在记录里。当前每次读写入的 receipt 只存进度与 Inbox delta，是唯一不存任何 instant 的 Thread-read 形态；旧记录就地 normalize 并校验，绝不改写。不要增加 Team 自有的 Session migration、宽泛 compatibility reads 或 fallback storage paths；可选的 `member.model` inheritance 与可选 Message attachments 都是当前语义，不是 legacy fields。
+- Thread Attention 是 private Member x Thread state。ordinary unread 来自当前 Attention；structured mentions 创建 direct markers；terminal Task changes 在 Attention 结束后仍可能保留稀疏 Activity markers。Host 是唯一 Inbox authority。Session history 可以保留有界 notification context（包括 direct Message bodies 和 Task/Claim transition summaries），但不能形成 parallel unread projection。
+- Team 管理的 Agent sessions 使用显式 Team preset 和可信的 `danger-full-access` policy，这是面向可信 Workspace 的有意产品边界。
+- Host 激活 Member 时，会通过 session-title service 用其 handle 命名没有标题的 Member session，使普通 Session list 显示 Member identity。显式 rename 或任何已有 title 始终优先，命名失败不会导致 activation 失败。
+- 已接受 Task 的自动 compaction 已退役。Member 上下文压力由 Host 压力策略持有（见 Tools and preset）：预算阈值从当前 route 的 context window 派生，handoff 预算每 generation 一条通知，硬上限强制原地 compaction 并 fail-closed 验证，provider context-overflow 获得一条有界 compact-and-retry。Pending/error bookkeeping 只在进程内维护；只有进入 transaction 的 compactions 才会写入 durable Session history，绝不写入 Team ledger。
+- `$DSH_HOME/agent-team/members/` 下的 private-memory directories 是 Member identity 的 Host-owned effects，不是第二权威。Member activation 确保 private-memory directory、`notes/` 和缺失的 `memory.md` 存在；startup 不会清理 ledger 不知道的 `member:` directories。显式 Member removal 会归档其 Session 并移除该 Member 的 private-memory directory；Team removal path 之外的 entries 保持不动。这项删除与 activation 时对旧式 colon 目录的改名都限定在当前进程自己的 members root 之内——记录里的 `privateMemoryPath` 是一条 durable 绝对事实，指向「当初添加该 Member 的那个 DSH home」里的目录；因此解析到另一个 home 的进程会拒绝搬移或删除它（并告警），而不是把 Member 的真实私有记忆搬出它自己的 home。
+- Member capabilities（Member 实体上的 `capabilities` 字段：预留的 `tools.allow` 与 `skills.allow`）是随全部 lifecycle operation 原样流转的 durable intent。commit 时不做已知名白名单校验，保证 Harness 升级后旧 ledger 仍可重放；与已知名的偏差在 activation 时派生为不持久化的 `capabilityWarnings`。`tools.allow` 是有意的接口预留（无 UI 写入路径），供后续 Runtime Revision manifest 编排依赖，cleanup 时勿删。编辑语义与 `model` 一致（absent 即清除）；不管理 capabilities 的调用方必须回传已存储的值。
+- Activation 把 `tools.allow` 作为 scoped restriction 应用在已组合的 preset 面上，顺序为 mount → restrict → validate（validate 观察限制后的可见面），并在配置之上强制并集八个 Team tools。未知名 drop + warning，不阻断 activation。对 live Member 编辑 allow-list 在 turn 边界同 Session 换装 restriction：idle 立即生效；running 的编辑等待 turn 结束，后续 lifecycle 操作在该等待之后排队（lifecycle Remote 严格串行——等待期间发起的 suspend 在 swap 之后执行；disposed-scope 监听器覆盖 lifecycle 之外的销毁）。restriction 失败只表现为该 Member 的 activation failure。
+- Skills 是 Member 私有的。preset 不带共享 skill-filesystem row；Host 在每个 Member 的 agent exact scope layer 上（traceable-service 接缝，与 tool restriction 同构）注册一个 filesystem provider，只扫两个 Team 自有 root（排除默认 roots）：插件内置的只读 core skills（`packages/agent-team/core-skills/`，排前——同名内置 skill 跨升级保持稳定）和 Member 可写的 `$DSH_HOME/agent-team/members/<memberId>/skills/`。Member catalog 因此以内置集起始（`member-skill-manager` meta skill——全部 skill 写作/安装/credentials 引导都在它里面，persona 只陈述私有空间物理事实）；安装就是往自己目录写（目录形态 `skills/<name>/SKILL.md` + 可选 references/scripts，或平铺 `.md`），有意不提供上传 Remote，filesystem watcher 驱动发现。`skills.allow` 通过 live selection ref 过滤 `list()` 输出（编辑与 tool 编辑同一 turn 边界换过滤并失效 catalog）；过滤是可见性语义不是安全边界——两个 root 始终被扫描和 watch。Member remove 连同私有目录一起删除；suspend/resume 与 Host restart 恢复相同 catalog。
+
+### Composer attachments（cache，不是 archive）
+
+Composer attachments 是 `$DSH_HOME/agent-team/attachments/v1/<attachmentId>/` 下的有界 cache（包含经过清理的原始名称和 `meta.json` sidecar），不是 archive，也不是 ledger bytes。
+
+- `putAttachment` 写入 immutable payload（每个文件上限 10 MB，并从名称中剥离 path separators 和 control characters）；`getAttachment` 为 Client display 读取它们。两者和其他 Host capabilities 一样都是 typed Remote actions。
+- Channel 与 Thread composer 的附件入口有两个：「+」按钮选择文件，或直接向输入框粘贴——携带文件的粘贴会被拦截并进入同一 pending-file chips 流，纯文本粘贴保持浏览器原生插入。
+- Message 在 ledger 中记录 attachment metadata（`attachmentId`、`name`、`byteSize`、`mediaType`）；存储 body 为每个 attachment 携带一行面向机器的 `[attachment] <absolute path>`，让 Member agents 通过普通 file tools 按 path 读取 bytes。Client 会从 display 中移除这些行，改为根据 metadata 渲染 thumbnails/chips。
+- Ledger 是唯一 durable attachment authority。Bytes 是 transient 的：Host startup 以及每 24h 执行一次 GC sweep；被 Message 引用且超过 72h 的 uploads（Member consumption window），或从未发送的 orphaned uploads 超过 24h 的，都会被移除。Metadata 保留，Client 随后优雅降级为 name chip。
+- Members 通过 `team_message` 的可选 `attachments`（absolute paths）共享文件：Host 先验证每个 path（absolute、regular file、non-empty、10 MB），再以 extension-derived media type 复制到 cache 的新 immutable entry，因此 agent-sent images 与 composer uploads 的渲染一致。任一 rejection 都会拒绝整个 send，不提交也不复制。
+- 不需要为手动 path references 增加机制：粘贴到 Message body 的 absolute path 会被 Member agent 像其他文件一样读取，Host 不会触碰不属于自己的内容。
+
+修改 Host capability 时，先阅读 package source/tests，再阅读匹配的 Harness capability contract。导航表见 [`harness-navigation.zh.md`](harness-navigation.zh.md)，其中将 Host 改动映射到 `deepseek-harness/docs/subsystems/` 和 source packages。
+
+## Tools and preset
+
+显式的 `team-member` preset 是唯一的 Team Member composition。它加入完整 coding capability rows（shell、filesystem/search、web search 与 fetch、background jobs、skill 加载工具、todo、compaction）；skill 发现本身不是 preset row——每个 Member 的 provider 由 Host 注册在其 agent scope 上（见 Host authority）、Team collaboration guidance/tools、Harness Workspace instruction discovery 和有界的 private-memory reference context。普通 Sessions 留在这个 isolated roster 之外，不会获得 Team prompt sections、tools 或 Member memory。
+
+八个 model-facing tools 定义在 `packages/tool-agent-team/src/index.ts`；实现的 collaboration contract 记录在 [`team-collaboration.zh.md`](team-collaboration.zh.md)。它们由 `packages/agent-team/preset/team-member/` 下的 `team-member` preset 挂载，并位于 `cordis.patch.yml` 的 isolated scope 中。不要为了让测试可用就把 tool package 作为 global row 添加；普通 Sessions 必须保持 Team-free。
+
+Member 上下文自主管理在这些 preset 之上由 Host 编排：`context_rollover` 与 `context_checkpoint` 工具只做校验并结束/锚定 turn——带 `checkpointRef` 的回返在 tool 时经过与换窗同一 seed resolver 校验，当下不可能成功的 ref 以 model-visible 的 error result 拒绝，而不是返回假 `scheduled`；可变 guard 集（jobs、route limits）在 commit seam 复查；单一 `ContextManagementCoordinator` 监听各 Member Session 的事件，从 durable 的 `tool/call`+`tool/result` 对折出 rollover 与 checkpoint 意图（`context-projection.ts` 中 host-only 的 `agentTeamContext` projection definition 即该折叠，seed 子代的继承前缀被遮蔽），再经串行 lifecycle queue 执行换窗——等真正 idle、在 commit seam 复查 owned-jobs guard、retire 旧代（dispose + 归档、绝不删除）、提交幂等的 `team/member-session-rolled-over` operation、激活全新 Session（checkpoint 回返则激活以精确 completed-turn 前缀作 seed 的 Session，lineage parent 指向 seed 来源），随后以 steer 送达 handoff、以 followup 投递携带的非 Team 输入。意图在折叠层为每条未结束 turn 唯一：同一未结束 turn 内的第二次成功 rollover 调用保持 first-wins，而所属 turn 已结束的 pending 正是 ready（重启后为 recoverable）的意图——正常 in-flight 路径上 coordinator 的进程锁会拒绝后续调用。只有该锁消失后（transition 失败或从未运行），后续 turn 的成功 rollover 才会替换已结束的 intent——这就是 seam 失败后恢复 Member 的 retry 路径。admission gate（`agent/turn-stopping` + `agent/pre-step`）只对旧代 Agent instance 生效，使后续输入无法再开启旧代 model request。quiet checkpoint continuation 恰好投递一次（进程内 per-member latch，跨重启由 projection 的 durable delivery record 判重）。恢复由日志派生：重启重放 pending 意图并完成换窗；落在 rollover 的 durable commit 与新 Session 激活之间的重启，会从 ledger 记录的上一 Session 重建 handoff——即使新 Session 在崩溃前从未落盘——且重建幂等（自身日志已含 handoff 的一代不再收到第二条）。重启后的 carried-input 重放是有界的：当前代一旦已开始自身 turn 即跳过重放（其携带输入已在运行中被投递或取代）；上一代 Session 不可读时，属日志损坏类（`corrupt session log`，Host 会修复 torn tail）或确定性格式拒绝类（`SessionFormatUnsupportedError`，重试无法改变结果）的以 warn 放行，缺失/IO 及未知原因仍 fail-closed——当前代一旦运行过，其激活不再受退役代可读性阻塞。Member Session 是否有 durable 持久内容，通过 session-persistence inspection 判定（会等待进行中的 retirement drain），绝不使用会与 suspend 终末 flush 竞争的裸元数据列表。
+
+上下文压力是第二个 Host 持有的 coordinator（`pressure-policy.ts`），挂在同一 pre-step 接缝上：预算阈值从当前 route 的 context window 派生（handoff 200K / 硬上限 256K cap 加安全 reserve）；handoff 预算处每 generation 一条结构化通知建议 rollover（一次后重新武装）；硬上限处强制原地 compaction，无法证明进展即 fail closed；provider context-overflow 失败获得一条有界 compact-and-retry 序列。原地硬 compaction 绝不取消 owner，因此豁免于拒绝持有 running 或未上报 terminal jobs 的 rollover job guard。
+
+Web Client 是唯一的 Human control surface。它通过 typed Remote 把每个 mutation 委托给 `ctx.agentTeam`，不绕过 Host authorization 或 ledger commits。不要重新加入 slash-command adapter 作为第二界面。
+
+修改 schema、canonical output、presentation 或 preset 时，编辑前先阅读匹配的 Harness docs：
+
+- `../deepseek-harness/docs/subsystems/tools.md`
+- `../deepseek-harness/docs/cookbook/adding-a-tool.md`
+- `../deepseek-harness/docs/subsystems/permission-presets.md`
+
+## Typed Remote
+
+Remote methods 通过 Team service 的 `@Remote` annotations 声明。`scripts/generate-typert.mjs` 使用 Harness `WorkspaceAnalyzer` 和 `FaceModelEmitter`，在 `packages/agent-team/lib/` 下生成 Host 和 Client artifacts。
+
+稳定流程如下：
+
+```text
+Host face declaration
+        │ generate:typert
+        ▼
+Typert Host artifact + Remote client artifact
+        │ ctx.remote.$mount(...)
+        ▼
+Client remote service
+```
+
+`InvocationDescriptor` 是 local reflection metadata，不是 wire message。Wire request 和 response fields 保持为显式 typed values。修改 Remote 时更新 declaration 和 tests，重新生成，然后运行 typecheck/build；不要手工编辑 artifact。
+
+## Client plugin 和 slot composition
+
+Team browser plugin 是 external Client plugin。Shipped Shell 继续拥有 outer layout。Team 增加一个 additive footer action，并动态 shadow 三个 seats：
+
+```text
+sidebar.footer.action       additive Team entry
+sidebar.workspaces          Team shadow, priority -100
+conversation                Team shadow, priority -100
+sidebar.settings            Team shadow, priority -100
+```
+
+Browser activation 顺序是：
+
+```text
+Client plugin apply
+  → ctx.remote.$mount(agentTeamRemote)
+  → ctx.inject(['remote.agentTeam'], ...)
+  → register Team footer and mode shadows
+```
+
+`dsh.client.inject` 描述 client module graph；它不保证 apply order、service readiness 或 slot declaration order。如果 declaration 可能稍后出现，使用 `ctx.slots.inject()`，让 registration 跟随 declaration lifetime，并随 owning fiber disposal。
+
+Slot parent 的 `children` declaration 同时是 render site 和 render authority。两个存活的 parent entries 不能声明同一个 child slot。特别是 Team 的 `sidebar.workspaces` shadow 不得重新声明 shipped `sidebar.workspaces.directoryFlow`；即使 Team entry priority 更高，Harness SlotCore 也会拒绝这个 duplicate。不要复制 private WorkspaceBrowser、ConversationRoot、Shell 或 private CSS 来规避它。
+
+Team feature 需要现有 Harness capability 时，使用 public service 或 package export。对于 directory selection，先检查 `ctx.workspaces.pickDirectory()` 和 `host.pickDirectory` path，再考虑 Team-specific picker。如果 public contract 无法表达目标 composition，记录这个 limitation，选择 Team-owned plugin 或新设计，不要静默依赖 private implementation details。
+
+## Client data 和 presentation boundary
+
+`packages/client-agent-team/src/client/` 下的 components 不接触 `ctx`、operation ledger 或 Host classes。Data 与 callbacks 通过 Client slot contract 进入，包括 owner props、runtime props、declared store 或 inject face。Presentation layer 消费 Host projections 和本地 navigation state，不自行发明 durable facts。
+
+UI work 的边界如下：
+
+- Human navigation 从 Channels 开始，沿 Workspace → Channel → Thread；真实 Task 是其 Thread 上的 card/header overlay。Channel composer 默认创建 taskless Thread，并提供默认关闭的「作为任务」控件以原子创建 Task。taskless Thread 保留 normal read/reply/inbox behavior，但在 promotion 前隐藏 Task status、Claims 和 Task-resolution controls。Promotion 是 durable、non-optimistic 的 Host mutation；成功后 Client 重新读取 Thread 和 supplemental projections，而不是本地合成 Task。Human Client 消费 Host 的 Inbox 投影（「收件箱 / Inbox」队列：合并各 Workspace 的徽标与页，覆盖读者的整片未读——mention 只在其中计数，绝不是准入条件——外加该读者写过 Message 的「最近活跃」段（回复过的 Thread 无论是否 follow 都算他的；按最新活跃降序，Host 侧每个 Workspace 上限 10，合并到页面上最多 5 条，永不进入 agent 的 Inbox）），但绝不维护并行 Inbox authority；打开页不确认任何内容。Thread reads 使用 Host projections（`readThread`、`threadHistory`）和 Host mutations（replies、promotion、Task actions）。当前 Thread UI 不提供 Attention controls 或 observations；其 Host Remote methods 留给后续自有 UI。Browser 会持久化 Team navigation mode、Workspace selection、最近选中的 Channel 或 Thread 以及 Inbox 页位置（回到 Team 时恢复位置），但不持久化 unread 或 Attention。Agent Inbox 仍由 Host 持有，并通过 `team_inbox` 提供。
+- Sidebar row order（Channels/Agents）是每个 browser 的 Human presentation preference，保存在 `localStorage`，加载时折叠到 Remote default order 上（保留的 refs 保持顺序，移除的 refs 丢弃，新的 refs 追加）；它从不成为 ledger fact。Whole-row native drag 复用 Harness list interaction model，并且是 Team-owned rows 唯一的重排控件。
+- 嵌入的 Team Member Session 使用未修改的 shipped composer：Team 不注册任何成员会话的 composer 表面——不接管 seat、无 trigger sources、无 dock 提示条。rc.1 把 trigger-menu overlay 移进了 `conversation.composer.bar` 的 children（接管者会一并继承渲染义务并使 overlay 悬空），且 Team 自有的命令/成员引用入口相对 shipped 词汇表不再有不可替代的价值，因此一并移除。普通会话与成员会话共享同一 composer 与词汇表。
+- 有对应能力时复用 public Harness primitives 和 `--dsw-*` theme tokens。
+- CSS 保持在 CSS Modules 中；不要 import private Harness CSS。
+- Runtime presence 必须与 Claim 和 Task state 分离。
+- Task resolution controls 会修改 Task 和 Claim。Closed Task 对 replies 和 new Attention 是 terminal；reopen 会恢复 open Task，但不会恢复此前的 Attention。
+- Message、Activity、Claim 和 Task 的 presentation 要保持区分且用户可读；不要暴露 opaque refs 或 internal enums。
+- Durable mutations 不做 optimistic update；失败时保留 input，并渲染下一份 Host projection。
+- 保持 Team mode enter/leave、refresh recovery、slot restoration 和 narrow layout behavior。
+
+UI redesign 已完成。需要理解当时的取舍时，查 [`.scratch/archive/2026-08/ui-redesign/`](../.scratch/archive/2026-08/ui-redesign/)；它是历史设计背景，不是当前实现权威。UI 改动的当前验收规则见 [`development.zh.md`](development.zh.md)。
+
+## Workspace、Session 和 storage reuse
+
+Team 读取现有 Harness Workspace projection，不创建第二套 Workspace store 或 Session tree。当前 Client 不调用 `ctx.workspaces.pickDirectory()` 或 `ctx.workspaces.create()`；需要创建 Workspace 时，用户回到普通 Session UI。
+
+Member sessions 出现在普通 Session list 中，并且在 Host 保持 Member Agent live 时可继续读取。Cold Member session（suspended Member、activation failed，或 Host 尚未完成 restoring）无法通过 generic Session UI resume：该路径会在 ambient shipped roster 中解析 session 记录的 preset，而该 roster 刻意不包含 bundle-private `team-member` preset，因此 resume 会明确失败，而不会用错误 composition 重建 history。请通过 Team panel resume 这些 Members，或使用健康的 bundle 重启；不要给 ambient roster 增加 Team fallback。
+
+修改 Workspace、Session、storage、persistence 或 Thread Inbox 时，先阅读相关 Team source/tests，然后阅读：
+
+- `../deepseek-harness/docs/subsystems/workspace.md`
+- `../deepseek-harness/docs/subsystems/session.md`
+- `../deepseek-harness/docs/subsystems/storage.md`
+- `../deepseek-harness/docs/subsystems/persistence.md`
+- `../deepseek-harness/docs/defensive-patterns.md`
+
+Team ledger 仍是唯一的 Team durable authority。Recovery 和 teardown 改动需要 failure-window 或 composition evidence，不能依赖 silent fallback。
+
+Shipped bundle composition 只通过 public per-domain route table 把 `agent_team` domain 路由到 SQLite backend；其他 domains 保持 JSON default。SQLite medium（`$DSH_HOME/storages/agent_team.sqlite`）在首次 routed open 时全新创建；旧的 `agent_team.json` medium 永远不会被读取或迁移——是否移动或删除由 operator 决定。该 backend 是收归自有包名下的 vendored fork（`@wowyuarm/dsh-agent-team/sqlite-backend`，见 `packages/agent-team/src/vendor/storage-sqlite/`）：DSH Desktop generation 安装器会删掉 `@deepseek-ai/*` 拷贝，而没有任何已发布 host closure 提供上游包，因此 loader 行若指名它会阻断启动（GitHub issue #28）。fork 保留上游 `sqlite` backend 名与 config 形状，既有介质无需迁移即可打开。
+
+0.1.5 分界之前写出的 Member Session 带有两个自定义 message source kind（`agent-team-context-handoff`、`agent-team-context-continuation`），released format 的迁移审计已不再准入它们。该拒绝是 fail-closed 的，且发生在任何插件挂载之前，因此读时拦截无法救回这些日志。`packages/agent-team/src/session-remediation.ts` 改为在启动时从写入侧修复：对每个 `enabled` Member，遍历其绑定的 Session 以及 header 上记录的每一级 `parentSession` 祖先；对 storage layer 拒绝、且行内确实带有上述 kind 的 artifact，把 source 改写为已准入形状（`plugin` + 具名 sections 的 `snapshot`），经 format catalog 的内存迁移链对整份 artifact 做全量校验，再用 hardlink 独占发布在原文件旁写出一份当前格式兄弟文件（`session.v3.jsonl.zstd`）。原 artifact 永不被写入——storage layer 优先读兄弟文件，删掉它就是回滚。因其它原因被拒的 artifact（未闭合的 `turn/start`、seq gap）保持字节不变并记诊断；历史里仍带旧 kind 但可读的世代只记日志、不改写，因为其 storage layer 可能仍在追加。完成标记缓存在独立的 `agent_team_remediation` domain——刻意不放进 `agent_team` domain，后者的版本号是 ledger schema 的闸门。
+
+Host 的每一次逐 Session stored 读取都经过同一个 seam：`packages/agent-team/src/stored-session-reader.ts` 负责一次 `open → read → close`（句柄保证关闭），并把所有失败归一为五类——`missing`、`refused`（确定性格式拒绝，携带 artifact 路径）、`corrupt`、`io`、`unknown`。消费方按类别选择策略，绝不匹配 Harness 错误文案：当前绑定激活与 checkpoint seed 解析对任何失败 fail-closed；carried-input replay 只对已退役世代的确定性 `refused`/`corrupt` 跳过；handoff 重建与 token 测量降级；timeline 在不可读祖先处截断 lineage 并以 `incompleteFrom` 显式报告，而不是静默断链。DSH persistence 接口变化只需在该模块内适配一次。上游 JSONL backend 的 corruption 系列以裸 `Error` 抛出，seam 内部以该稳定文案前缀识别；文案一旦变化即退化为 `unknown`，所有消费方对 `unknown` 走保守路径。
+
+成员重启是确定性格式拒绝的有界自愈：激活失败带 `session-refused` diagnostic 时，`recoverMember` 先对该成员运行同一套启动 remediation，修出 artifact 才重试一次激活；走完而无 Team 可证明可修的内容时，diagnostic 标记为不可修复，Client 停止提供重启并显示 artifact 路径。激活 diagnostic 是结构化的——`AgentTeamMemberDiagnostic` 携带 `class`（`session-refused`、`session-unreadable`、`preset-composition`、`rollover`、`runtime`、`activation`）、detail，以及适用时的被拒 artifact 路径与可修复判定。availability/presence 仍是仅有的用户可见状态；diagnostic 是投影派生态、绝不持久化，ledger 仍是唯一 Team 权威。

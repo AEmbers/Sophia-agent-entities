@@ -1,0 +1,612 @@
+:global(html[data-agent-team-mode='team']) button[class*='newSession'] {
+  display: none;
+}
+
+.workspaceBrowser {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  padding: 0 8px 8px;
+}
+
+.railButton {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  justify-content: center;
+  padding: 0;
+}
+.railButton:hover,
+.railButton:focus-visible {
+  --team-mark-ring: var(--dsw-alias-interactive-bg-hover);
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+.railButton:focus-visible {
+  outline: 2px solid var(--dsw-alias-label-primary);
+  outline-offset: 1px;
+}
+
+.workspaceList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 2px;
+}
+
+.workspaceRow {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  display: flex;
+  gap: 6px;
+  height: 34px;
+  padding: 0 8px;
+  text-align: left;
+  width: 100%;
+}
+/* Location reads like the harness session tree: the leaf that is the current
+   page carries the fill (aria-current='page' — the open Channel row, or this
+   Workspace row while its overview is up); the browsed Workspace row otherwise
+   stays quiet and only its folder icon tints (data-selected). */
+.workspaceRow:hover,
+.workspaceRow:focus-visible,
+.workspaceRow[aria-current='page'] {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+.workspaceRow:focus-visible {
+  outline: 2px solid var(--dsw-alias-label-primary);
+  outline-offset: -2px;
+}
+
+.workspaceIcon {
+  align-items: center;
+  color: var(--dsw-alias-label-tertiary);
+  display: inline-flex;
+  flex: 0 0 16px;
+  height: 20px;
+  justify-content: center;
+}
+.workspaceRow[data-selected] .workspaceIcon {
+  color: var(--dsw-alias-state-business-primary);
+}
+.workspaceCopy { display: flex; min-width: 0; }
+.workspaceCopy strong {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.emptyState {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  margin: 8px;
+}
+
+/* The Human mention-Inbox entry: a card above the Workspaces section on the
+   wide rail, a queue icon on the narrow rail. Both mark unread the same way — a
+   dot on the icon's corner rather than a number beside it. The quantity is not
+   gone, it moved into the control's own name: what a reader scans the sidebar
+   for is whether anything waits, and the count answers a question asked on
+   purpose. */
+.inboxCard {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  height: 34px;
+  margin: 4px 0 2px;
+  padding: 0 8px;
+  text-align: left;
+  width: 100%;
+}
+.inboxCard:hover,
+.inboxCard:focus-visible,
+.inboxCard[aria-current='page'] {
+  /* The mark on the card cuts itself out of the card, not out of the page. */
+  --team-mark-ring: var(--dsw-alias-interactive-bg-hover);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+.inboxCard:focus-visible {
+  outline: 2px solid var(--dsw-alias-label-primary);
+  outline-offset: -2px;
+}
+.inboxCard .inboxMark {
+  color: var(--dsw-alias-label-tertiary);
+}
+.inboxCardLabel {
+  font-size: 14px;
+  line-height: 20px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The mark is anchored to the glyph rather than to the control, so the wide card
+   and the 36px rail button put the same dot on the same corner of the same icon.
+   Zero renders no mark at all, which is the absence of unread rather than an
+   empty dot. */
+.inboxMark {
+  display: inline-flex;
+  flex: 0 0 16px;
+  position: relative;
+}
+/* Everything the sidebar still says about unread: the solid ink the queue uses
+   for a Thread that named the reader, at the size of a mark instead of a count.
+   The ring is the surface's own background, so the dot reads as a mark laid over
+   the icon's strokes rather than one blending into them — and it follows the
+   card's hovered and current-page fills, which are not the page background. */
+.inboxDot {
+  background: var(--dsw-alias-state-business-primary);
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--team-mark-ring, var(--dsw-alias-bg-base));
+  corner-shape: round;
+  height: 8px;
+  left: -2px;
+  position: absolute;
+  top: -2px;
+  width: 8px;
+}
+.railWorkspace {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+}
+.railButton {
+  border-radius: 50%;
+  corner-shape: round;
+  height: 36px;
+  position: relative;
+  width: 36px;
+}
+/* The rail's own current-page marker: the icon-only rail reads the same
+   `aria-current="page"` the wide card does, and while the Inbox is the page on
+   screen its icon wears the card's own fill — which is also the surface its
+   unread dot has to cut itself out of. The rail carries no label, so this fill
+   is the only thing that says where the reader is. */
+.railButton[aria-current='page'] {
+  --team-mark-ring: var(--dsw-alias-interactive-bg-hover);
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* One scroll container carries both sections; headers stay in flow. */
+.workspaceSection {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 2px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.section { display: flex; flex-direction: column; }
+.sectionHeader {
+  align-items: center;
+  display: flex;
+  min-height: 26px;
+  padding-right: 2px;
+}
+/* Quiet disclosure: the row itself never lights up; only the chevron
+   responds to pointer and keyboard focus. */
+.sectionToggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 12px;
+  gap: 4px;
+  line-height: 18px;
+  min-height: 24px;
+  min-width: 0;
+  padding: 0 6px;
+}
+.sectionToggle:focus-visible {
+  outline: 2px solid var(--dsw-alias-label-primary);
+  outline-offset: 1px;
+}
+.sectionToggle:hover .sectionChevron,
+.sectionToggle:focus-visible .sectionChevron {
+  color: var(--dsw-alias-label-primary);
+}
+.sectionChevron {
+  color: var(--dsw-alias-label-tertiary);
+  flex: 0 0 auto;
+  transition: transform 120ms ease, color 120ms ease;
+}
+.sectionToggle[aria-expanded='false'] .sectionChevron { transform: rotate(-90deg); }
+.sectionTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sectionActions {
+  align-items: center;
+  display: inline-flex;
+  margin-left: auto;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.iconButton {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  corner-shape: round;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  height: 24px;
+  justify-content: center;
+  padding: 0;
+  width: 24px;
+}
+.iconButton:hover,
+.iconButton:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+.iconButton:focus-visible {
+  outline: 2px solid var(--dsw-alias-label-primary);
+  outline-offset: 1px;
+}
+
+.textButton {
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 18px;
+  padding: 2px 5px;
+}
+.textButton:hover,
+.textButton:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+.textButton:focus-visible {
+  outline: 2px solid var(--dsw-alias-label-primary);
+  outline-offset: 1px;
+}
+.textButton:disabled { cursor: not-allowed; opacity: 0.4; }
+
+.channelList,
+.agentList {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0 4px 4px;
+}
+
+.sidebarRowDragging {
+  opacity: 0.5;
+}
+
+.sidebarRowDropBefore,
+.sidebarRowDropAfter {
+  position: relative;
+}
+
+.sidebarRowDropBefore::before,
+.sidebarRowDropAfter::after {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  right: 4px;
+  height: 12px;
+  background:
+    linear-gradient(
+      55deg,
+      transparent calc(50% - 1px),
+      var(--dsw-alias-state-business-primary) calc(50% - 1px) calc(50% + 1px),
+      transparent calc(50% + 1px)
+    ) 0 0 / 5px 7px no-repeat,
+    linear-gradient(
+      125deg,
+      transparent calc(50% - 1px),
+      var(--dsw-alias-state-business-primary) calc(50% - 1px) calc(50% + 1px),
+      transparent calc(50% + 1px)
+    ) 0 5px / 5px 7px no-repeat,
+    linear-gradient(
+      var(--dsw-alias-state-business-primary) 0 0
+    ) 4px 5px / calc(100% - 4px) 2px no-repeat;
+  pointer-events: none;
+}
+
+.sidebarRowDropBefore::before {
+  top: -7px;
+}
+
+.sidebarRowDropAfter::after {
+  bottom: -7px;
+}
+
+.channelRow {
+  align-items: center;
+  border-radius: 8px;
+  color: var(--dsw-alias-label-primary);
+  display: flex;
+  min-height: 30px;
+  position: relative;
+}
+.channelSelect {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  box-sizing: border-box;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 30px;
+  padding: 3px 4px 3px 8px;
+  text-align: left;
+}
+/* Same visible keyboard ring the shipped sidebar's panel rows use. */
+.channelSelect:focus-visible {
+  outline: 2px solid var(--dsw-alias-label-primary);
+  outline-offset: -2px;
+}
+.channelName {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agentRow {
+  align-items: center;
+  border-radius: 8px;
+  color: var(--dsw-alias-label-primary);
+  display: flex;
+  min-height: 38px;
+  position: relative;
+}
+.agentSelect {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  box-sizing: border-box;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  flex: 1;
+  gap: 0 8px;
+  grid-template-columns: 24px minmax(0, 1fr);
+  min-width: 0;
+  min-height: 38px;
+  padding: 3px 4px 3px 8px;
+  text-align: left;
+}
+.agentSelect:focus-visible {
+  outline: 2px solid var(--dsw-alias-label-primary);
+  outline-offset: -2px;
+}
+/* The leaf-row convention: while this Member's Session is the conversation
+   seat, its card carries the resident fill the workspace overview yields. */
+.agentSelect[aria-current='page'] {
+  background: var(--dsw-alias-interactive-bg-hover);
+  border-radius: 8px;
+}
+/* While any row-level interaction state paints the full-row fill, suppress
+   the card's own resident fill so the two never stack into a visible seam. */
+.agentRow:hover .agentSelect[aria-current='page'],
+.agentRow:focus-within .agentSelect[aria-current='page'],
+.agentRow[data-menu-open] .agentSelect[aria-current='page'] {
+  background: transparent;
+}
+.agentAvatar {
+  align-items: center;
+  background: hsl(var(--team-avatar-hue, 212) 42% 46%);
+  border-radius: 50%;
+  corner-shape: round;
+  color: #fff;
+  cursor: default;
+  display: inline-flex;
+  flex: 0 0 24px;
+  font-size: 11px;
+  font-weight: 600;
+  height: 24px;
+  justify-content: center;
+  position: relative;
+  width: 24px;
+}
+/* Presence badge rides the avatar's bottom-right edge; the ring matches the
+   sidebar fill so the dot reads as one glyph instead of a floating dot. */
+.agentAvatarBadge {
+  align-items: center;
+  background: var(--dsw-specific-sidebar-fill);
+  border-radius: 50%;
+  corner-shape: round;
+  bottom: -3px;
+  box-shadow: 0 0 0 1px var(--dsw-specific-sidebar-fill);
+  display: inline-flex;
+  height: 12px;
+  justify-content: center;
+  line-height: 0;
+  padding: 1px;
+  position: absolute;
+  right: -3px;
+  width: 12px;
+}
+/* The sidebar's own seating of the shared Member identity. No main-axis
+   centring here: a centred flex line would walk the whole identity right off
+   the avatar's left edge, which is exactly the offset this list kept showing. */
+.agentCopy { display: flex; flex-direction: column; justify-content: flex-start; min-width: 0; }
+.agentCopy strong {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 17px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agentCopy small {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+  line-height: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.unavailableDot {
+  background: var(--dsw-alias-label-tertiary);
+  border-radius: 50%;
+  corner-shape: round;
+  display: inline-block;
+  height: 7px;
+  width: 7px;
+}
+
+/* Trailing row actions surface on hover only and replace the trailing meta
+   cell, mirroring the harness session rows (time → ellipsis). */
+.rowMenu {
+  align-items: center;
+  display: none;
+  flex: none;
+  padding-right: 4px;
+}
+.channelRow:hover .rowMenu,
+.channelRow:focus-within .rowMenu,
+.channelRow[data-menu-open] .rowMenu,
+.agentRow:hover .rowMenu,
+.agentRow:focus-within .rowMenu,
+.agentRow[data-menu-open] .rowMenu {
+  display: inline-flex;
+}
+/* An open row menu pins the hover fill while the portal list is up. */
+.channelRow[data-menu-open],
+.agentRow[data-menu-open],
+.channelRow:hover,
+.agentRow:hover,
+.channelRow:focus-within,
+.agentRow:focus-within,
+.channelRow[aria-current='page'] {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.rowMenuButton {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  display: inline-flex;
+  height: 20px;
+  justify-content: center;
+  padding: 0;
+  width: 20px;
+}
+.rowMenuButton:hover,
+.rowMenuButton:focus-visible {
+  color: var(--dsw-alias-label-primary);
+}
+.rowMenuButton:focus-visible {
+  outline: 2px solid var(--dsw-alias-label-primary);
+  outline-offset: 1px;
+}
+
+.retryError {
+  align-items: center;
+  color: var(--dsw-alias-state-error-primary);
+  display: flex;
+  font-size: 11px;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 8px 12px;
+}
+
+.rowAlert {
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  padding: 2px 8px 6px;
+}
+
+/* A Panel's own failure line, on the rail's 11px alert scale. The 12px inset
+   lands the text on the row labels (list padding 4px + row padding 8px), so a
+   failed load reads as part of the list instead of loose rail text. A missing
+   CSS-module class resolves to `undefined` and renders unstyled: this rule is
+   what the Panels' `css.error` resolves to, so the two stay in step. */
+.error {
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 11px;
+  line-height: 16px;
+  margin: 0;
+  overflow-wrap: anywhere;
+  padding: 4px 12px 6px;
+}
+
+.editDescription {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  margin: 0 0 10px;
+}
+.editMemberList { display: grid; gap: 2px; }
+.editChannelName {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Quiet helper line under a form field (catalog loading/failure states). */
+.editHint {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+  margin: 0;
+}
+
+.menuHint {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+  line-height: 14px;
+  margin-left: 4px;
+}
+.rowError {
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 11px;
+  grid-column: 1 / -1;
+  line-height: 16px;
+  margin: 2px 0;
+}

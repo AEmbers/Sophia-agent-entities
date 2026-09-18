@@ -1,0 +1,84 @@
+/* The shared roster row: one Member's identity, presence and Channel
+   membership. Every surface that draws a person renders this geometry, so the
+   dialog, the Channel editor, the sidebar and the footer roster read as the
+   same list at the same density. */
+
+.row {
+  align-items: center;
+  border-radius: 8px;
+  display: grid;
+  gap: 0 10px;
+  /* The action track is declared only when one is rendered: a read-only roster
+     gives its width back to the description instead of reserving a hole. */
+  grid-template-columns: 24px minmax(0, 1fr);
+  min-height: 40px;
+  padding: 8px 10px;
+}
+
+.row:has(button) {
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+}
+
+/* The row is a hit target for its action, so it answers the pointer. */
+.row:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.copy {
+  display: grid;
+  min-width: 0;
+}
+
+.copy strong {
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The description annotates the handle, never competes with it: one step down
+   in both size and tone. */
+.copy small {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Membership is the row's only control, and it keeps one width in both
+   directions: the label changes between add and remove, the shape does not. */
+.action {
+  justify-self: end;
+  min-width: 64px;
+}
+
+/* A failed mutation is announced inside the row it belongs to, under the copy
+   column, so the message never reads as another Member's. */
+.error {
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 11px;
+  grid-column: 2 / -1;
+  line-height: 16px;
+  margin: 2px 0 0;
+}
+
+/* Narrow dialogs cannot afford a third column: the action drops under the
+   identity and aligns with the copy, so the description keeps its width. */
+@media (max-width: 600px) {
+  .row,
+  .row:has(button) {
+    align-items: start;
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+
+  .action {
+    grid-column: 2;
+    justify-self: start;
+    margin-top: 6px;
+  }
+}
