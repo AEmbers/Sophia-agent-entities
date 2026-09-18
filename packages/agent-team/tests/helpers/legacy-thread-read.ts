@@ -1,0 +1,41 @@
+import type { AgentTeamThreadReadReceipt, AgentTeamThreadReadResult, AgentTeamThreadReadSnapshot } from '../../src/types.ts'
+
+/**
+ * Rebuild the pre-receipt Thread-read data a ledger written before B2 stored:
+ * the picture the read answered with, frozen into the record beside the Inbox
+ * delta it consumed. Tests use it to keep the legacy load/normalize/validate
+ * path covered — production code never writes this shape again — and to prove
+ * a stored record of either shape still opens, replays and validates.
+ */
+export function snapshotReadData(data: AgentTeamThreadReadReceipt, picture: Omit<AgentTeamThreadReadResult, 'receipt'>): AgentTeamThreadReadSnapshot {
+  return {
+    workspaceId: data.workspaceId,
+    memberId: data.memberId,
+    ...(picture.task === undefined ? {} : { task: picture.task }),
+    thread: picture.thread,
+    claims: picture.claims,
+    anchor: picture.anchor,
+    anchorMentions: picture.anchorMentions,
+    facts: picture.facts,
+    readThroughSequence: picture.readThroughSequence,
+    remainingUnreadCount: picture.remainingUnreadCount,
+    ...(picture.attention === undefined ? {} : { attention: picture.attention }),
+    inbox: data.inbox,
+  }
+}
+
+/**
+ * The slim receipt the current code stores for the same read. Tests use it to
+ * build the counterfactual ledger a pre-receipt installation would have written
+ * had it never frozen a picture — same progress, same Inbox delta, no picture.
+ */
+export function receiptReadData(data: AgentTeamThreadReadSnapshot): AgentTeamThreadReadReceipt {
+  return {
+    workspaceId: data.workspaceId,
+    memberId: data.memberId,
+    threadRef: data.thread.threadRef,
+    ...(data.task === undefined ? {} : { taskRef: data.task.taskRef }),
+    readThroughSequence: data.readThroughSequence,
+    inbox: data.inbox,
+  }
+}

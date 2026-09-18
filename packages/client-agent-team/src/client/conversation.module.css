@@ -1,0 +1,522 @@
+.surface {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.surfaceHeader {
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  min-width: 0;
+  padding: 14px clamp(18px, 3vw, 36px) 12px;
+}
+
+.headerRow {
+  align-items: flex-start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  margin: 0 auto;
+  max-width: 880px;
+  min-width: 0;
+}
+
+.headerCopy { min-width: 0; }
+.headerCopy h1 {
+  color: var(--dsw-alias-label-primary);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 28px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.headerCopy p {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 20px;
+  margin: 3px 0 0;
+}
+
+.headerActions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+.backRow {
+  margin: 0 auto 8px;
+  max-width: 880px;
+}
+
+.timeline {
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px clamp(18px, 3vw, 36px) 24px;
+  scrollbar-gutter: stable;
+}
+.timelineContent {
+  display: flex;
+  flex-direction: column;
+  margin: 0 auto;
+  max-width: 880px;
+  min-height: 100%;
+  min-width: 0;
+}
+/* Empty and loading states ride the free timeline space instead of the top edge. */
+.emptySurface {
+  margin: auto;
+  padding: 32px 0;
+}
+.emptySurface .emptyState {
+  justify-items: center;
+  text-align: center;
+}
+.timelineAction {
+  display: flex;
+  justify-content: center;
+  padding: 2px 0 8px;
+}
+
+.messageRow { display: flex; gap: 10px; padding: 10px 0; }
+.messageRow[data-grouped] { padding-top: 2px; }
+.messageRow[data-grouped] .messageBody > :first-child,
+.messageRow[data-grouped] .messageBody > :first-child > :first-child { margin-top: 0; }
+.messageIdentity {
+  align-items: center;
+  background: hsl(var(--team-avatar-hue, 212) 42% 46%);
+  border-radius: 50%;
+  corner-shape: round;
+  color: #fff;
+  display: flex;
+  flex: 0 0 28px;
+  font-size: 12px;
+  font-weight: 600;
+  height: 28px;
+  justify-content: center;
+}
+.messageRow[data-human] .messageIdentity {
+  background: var(--dsw-alias-state-business-primary);
+}
+.messageRow[data-grouped] .messageIdentity { visibility: hidden; }
+.messageBody { min-width: 0; }
+.nameRow {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.nameRow strong {
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+}
+.messageTime {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 20px;
+}
+/* One entry's state, leading the entry row: who is on this work and where it
+   stands. It sits on the reading path the body and the door already share, and
+   at the same x on every entry, instead of trailing the identity line where the
+   reader would have to cross the column for it — and where a continuation row,
+   which carries no identity of its own, would leave it floating alone. Shipped
+   rows lead with their state the same way (a SkillRow's collapsed leading slot,
+   a JobListAction trigger's dot before its count). */
+.stateCluster {
+  align-items: center;
+  display: inline-flex;
+  flex: none;
+  gap: 6px;
+}
+.statusWord {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 18px;
+}
+/* The entry's one line: state first, then the door. The state sits outside the
+   button, because a labeled button prunes its descendants from the accessibility
+   tree — the owner stack would lose the roster it names — and because the
+   control's name should say exactly what clicking it does. A 390 column can wrap
+   the door under the state rather than push the line past the reading column. */
+.entryLine {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 0;
+  max-width: 100%;
+}
+.entryRow {
+  align-items: center;
+  background: none;
+  border: 0;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 12px;
+  gap: 6px;
+  line-height: 18px;
+  padding: 2px 0;
+}
+.entryRow:hover,
+.entryRow:focus-visible { color: var(--dsw-alias-label-primary); }
+.entryRow:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 2px;
+}
+.entryArrow {
+  align-items: center;
+  display: inline-flex;
+  transition: transform 120ms ease;
+}
+.entryRow:hover .entryArrow,
+.entryRow:focus-visible .entryArrow { transform: translateX(2px); }
+/* Literal human text: the shared MessageText primitive, or segmented mention
+   spans — both need the same pre-wrap metrics from this container. */
+.messageText {
+  font-size: 14px;
+  line-height: 22px;
+  margin: 6px 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+/* Clamped preview of an over-long body: fixed height with an alpha fade so
+   the cutoff reads as "there is more", not a rendering fault. The mask fades
+   transparency instead of painting a surface color, staying theme-agnostic. */
+.messageClamp {
+  -webkit-mask-image: linear-gradient(#000 72%, transparent 100%);
+  mask-image: linear-gradient(#000 72%, transparent 100%);
+  max-height: 176px;
+  overflow: hidden;
+}
+/* The clamp's expand/collapse toggle: quiet text link under the preview.
+   Block-level and shrink-wrapped so the control owns its line instead of
+   flowing beside a trailing entry row; feedback stays text-scoped — color
+   and underline only, no background box past the characters. */
+.messageExpand {
+  background: transparent;
+  border: 0;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  display: block;
+  font-size: 12px;
+  line-height: 20px;
+  margin-top: 4px;
+  padding: 0;
+  width: fit-content;
+}
+.messageExpand:hover,
+.messageExpand:focus-visible {
+  color: var(--dsw-alias-label-primary);
+  outline: none;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+/* Compact timeline typography over the shared Markdown primitive; the root
+   font shorthand is reset so Agent and Human bodies share one text grid.
+   Heading sizes are chat-tuned: the page h1 stays the loudest element. */
+.messageBody .messageMarkdown { font-size: 14px; line-height: 22px; }
+/* Descendant (not child) on .messageBody: the clamp wrapper may sit between
+   them, and a broken reset would let the primitive's own root font shorthand
+   render the clamped preview larger than the expanded body. */
+.messageBody .messageMarkdown > div:first-child { color: var(--dsw-alias-label-primary); font: inherit; }
+.messageBody .messageMarkdown p { margin: 6px 0; }
+.messageBody .messageMarkdown :where(ul, ol) { margin: 6px 0; padding-left: 22px; }
+.messageBody .messageMarkdown li + li { margin-top: 2px; }
+.messageBody .messageMarkdown strong { font-weight: 600; }
+.messageBody .messageMarkdown :where(h1, h2, h3, h4, h5, h6) { margin: 12px 0 4px; }
+.messageBody .messageMarkdown :where(h1) { font-size: 17px; line-height: 26px; }
+.messageBody .messageMarkdown :where(h2) { font-size: 16px; line-height: 24px; }
+.messageBody .messageMarkdown :where(h3, h4, h5, h6) { font-size: 15px; line-height: 22px; }
+.messageBody .messageMarkdown pre { margin: 8px 0; padding: 10px 12px; font-size: 13px; }
+.messageBody .messageMarkdown blockquote { margin: 6px 0; }
+.messageBody .messageMarkdown :where(th, td) { padding-block: 5px; }
+.emptyState,
+.loadingState {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 20px;
+  margin: 0;
+  padding: 14px 0;
+}
+.emptyState {
+  display: grid;
+  gap: 3px;
+}
+.emptyState strong {
+  color: var(--dsw-alias-label-secondary);
+  font-weight: 500;
+}
+.emptyState span {
+  font-size: 12px;
+}
+.loadingState { align-items: center; display: flex; gap: 8px; }
+.loadingMark {
+  animation: pulse 1.2s ease-in-out infinite;
+  background: var(--dsw-alias-bg-skeleton);
+  border-radius: 50%;
+  corner-shape: round;
+  height: 8px;
+  width: 8px;
+}
+
+/* An inline failure line stays in the content column, under the rows it
+   belongs to. */
+.error {
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 12px;
+  line-height: 18px;
+  margin: 0;
+  max-width: 880px;
+  padding-top: 6px;
+}
+/* A failure that replaces the whole surface rides the same free space as the
+   loading and empty surfaces it stands in for, instead of hugging the top
+   edge: `margin: auto` also takes the box off stretch and centers it. */
+.errorState {
+  align-items: center;
+  color: var(--dsw-alias-state-error-primary);
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+  justify-content: space-between;
+  line-height: 18px;
+  margin: auto;
+  max-width: 880px;
+  padding: 32px 0;
+}
+
+.welcomeSurface {
+  align-items: center;
+  display: flex;
+  height: 100%;
+  justify-content: center;
+  min-width: 0;
+  padding: 32px;
+}
+.welcome { max-width: 420px; text-align: center; }
+.welcomeEyebrow {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  text-transform: uppercase;
+}
+.welcome h1 {
+  color: var(--dsw-alias-label-primary);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 32px;
+  margin: 8px 0;
+}
+.welcome p {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 20px;
+  margin: 0;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+@media (max-width: 600px) {
+  .surfaceHeader { padding: 12px 12px 10px; }
+  .headerRow { align-items: stretch; flex-direction: column; gap: 8px; }
+  .headerActions { flex-wrap: wrap; }
+  .backRow { margin-bottom: 6px; }
+  .timeline { padding: 8px 12px 16px; scrollbar-gutter: auto; }
+  .messageRow { padding: 8px 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loadingMark { animation: none; }
+  .entryArrow { transition: none; }
+  .entryRow:hover .entryArrow,
+  .entryRow:focus-visible .entryArrow { transform: none; }
+}
+
+/* One run = one same-sender reply turn (message + its Thread gate). It is a
+   pure grouping block: no hover border or fill — block boundaries are carried
+   by the turn divider, day anchors, and the unread line instead. The 2px
+   vertical gap keeps adjacent runs visually separate. */
+.messageRun {
+  margin: 2px 0;
+  padding: 3px 0;
+}
+
+/* Inside one run, consecutive messages that carry their own Thread entry get a
+   hairline separator; plain same-sender continuations stay seamless. The entry
+   line is identified by its own data attribute rather than by any button in the
+   body, so neither the expand/collapse control nor a Task ref link rendered
+   inside a body can read as an entry boundary.
+   The line hugs the text column — inset past the hidden avatar (28px + 10px
+   gap, level with the run divider label) and flush with the body's right
+   edge — because it separates entries inside a run; structural boundaries
+   (turn divider, day anchor, unread line) stay full-width. */
+.messageRow[data-grouped]:has([data-thread-entry]) {
+  margin-top: 3px;
+  padding-top: 7px;
+  position: relative;
+}
+
+.messageRow[data-grouped]:has([data-thread-entry])::before {
+  background: var(--dsw-alias-border-l2);
+  content: '';
+  height: 1px;
+  inset: 0 0 auto 38px;
+  position: absolute;
+}
+
+/* Turn divider inside one run: same-sender messages separated by a real
+   waiting gap (isRunGap) are separate turns — the hairline restores their
+   block boundary and the label below it shows the later message's instant,
+   which the suppressed identity chrome would have carried. The line hugs the
+   text column (avatar 28px + gap 10px), the same geometry as the task-chip
+   hairline: run-level boundaries inset, structural ones (day anchor, unread
+   line) full-width with centered labels. The divider replaces the following
+   row's own chip hairline so the lines never stack. The line stays on
+   border-l2 — the standard structural hairline level; l3 is the
+   focus/attention tier and an always-on divider must not outrank page chrome. */
+.runDivider {
+  border-top: 1px solid var(--dsw-alias-border-l2);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+  margin: 2px 0 0 38px;
+  padding: 5px 0 0;
+}
+.runDivider + .messageRow[data-grouped]:has([data-thread-entry]) {
+  margin-top: 0;
+}
+
+.runDivider + .messageRow[data-grouped]:has([data-thread-entry])::before {
+  content: none;
+}
+
+/* Mention chip for @Member references in Human literal messages, and for the
+   structured mention fallback row present on every message kind. */
+.mention {
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 12%, transparent);
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+  color: var(--dsw-alias-state-business-primary);
+  font-weight: 500;
+  padding: 0 4px;
+}
+
+/* Trailing row for structured mentions that the body text does not carry:
+   names omitted by the sender and all chips of Markdown agent bodies. */
+.mentionsRow {
+  display: flex;
+  font-size: 0.85em;
+  gap: 4px;
+  margin-top: 3px;
+  width: fit-content;
+}
+
+/* Attachment strip under one message body: thumbnails open the large view,
+   chips carry name + size, and GC'd bytes degrade to a name-only chip. */
+.attachmentStrip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.attachmentThumb {
+  border: 0;
+  border-radius: 8px;
+  cursor: zoom-in;
+  padding: 0;
+}
+.attachmentThumb img {
+  border-radius: 8px;
+  display: block;
+  height: 96px;
+  object-fit: cover;
+  width: 128px;
+}
+.attachmentThumb:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary, currentColor);
+  outline-offset: 1px;
+}
+
+.confirmBody {
+  margin: 0 0 8px;
+}
+
+.confirmList {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.refLink {
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: var(--dsw-alias-state-business-primary);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.refLink:hover {
+  text-decoration-thickness: 2px;
+}
+
+.refLink:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+/* The shared dialog card is form-sized (380px); the image preview needs a
+   wide card so the zoomed screenshot stays readable. */
+.attachmentModal {
+  width: min(1100px, 92vw);
+}
+
+.attachmentZoom {
+  display: block;
+  margin: 0 auto;
+  max-height: 78vh;
+  max-width: 100%;
+  object-fit: contain;
+  border-radius: 12px;
+}
+
+.attachmentChip {
+  align-items: baseline;
+  background: var(--dsw-alias-interactive-bg-hover);
+  border-radius: 6px;
+  display: inline-flex;
+  gap: 6px;
+  max-width: 100%;
+  padding: 3px 8px;
+}
+
+.attachmentChipName {
+  font-size: 12px;
+  line-height: 17px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachmentChipSize {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 17px;
+  white-space: nowrap;
+}

@@ -1,0 +1,51 @@
+name: Bug report
+description: Report a defect that reproduces on an installed release.
+title: "[Bug] "
+labels: ["bug"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Report against the versions you are actually running — most "broken after install"
+        reports turn out to be a version mismatch. Compatibility is certified per DSH version:
+        [release compatibility matrix](https://github.com/wowyuarm/dsh-agent-team/blob/master/docs/dsh-release-compatibility.md).
+
+  - type: input
+    id: versions
+    attributes:
+      label: Version
+      description: "`dsh --version`, plus the version of `@wowyuarm/dsh-agent-team` (`dsh plugin --profile web ls @wowyuarm/dsh-agent-team`). If you upgraded DSH after installing the plugin, say so."
+      placeholder: "DSH 0.1.5-rc.1 · plugin 0.1.11"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: System
+      description: Operating system, and how the plugin was installed.
+      options:
+        - macOS · published package
+        - macOS · local checkout
+        - Linux (incl. WSL) · published package
+        - Linux (incl. WSL) · local checkout
+        - Windows · published package
+        - Windows · local checkout
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and how to reproduce it
+      description: What you expected, what actually happened, and the shortest sequence that shows it. Screenshots and logs go below.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: "Terminal output from `dsh web`, browser console errors, or screenshots. Remove tokens and personal paths first."
