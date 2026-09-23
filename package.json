@@ -1,6 +1,6 @@
 {
   "name": "@wowyuarm/dsh-agent-team",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "license": "MIT",
   "description": "A persistent agent team for long-running collaboration in DeepSeek Harness",
   "repository": {
@@ -27,7 +27,8 @@
     "check:docs": "node scripts/check-docs.mjs",
     "check:core-skills": "node scripts/check-core-skills.mjs",
     "check:boundaries": "node scripts/check-package-boundaries.mjs",
-    "test": "npm run generate:typert && npm run check:docs && npm run check:core-skills && npm run check:boundaries && vitest run",
+    "check:versions": "node scripts/check-version-consistency.mjs",
+    "test": "npm run generate:typert && npm run check:docs && npm run check:core-skills && npm run check:boundaries && npm run check:versions && vitest run",
     "test:browser": "npm run build && node scripts/run-browser-test.mjs",
     "preview": "node scripts/check-preview-credentials.mjs && npm run build && node scripts/run-preview.mjs",
     "preview:ui": "npm run build && node scripts/run-ui-preview.mjs",
@@ -58,6 +59,7 @@
     }
   },
   "dependencies": {
+    "@wowyuarm/dsh-context-continuity": "^0.1.3",
     "zod": "^4.4.3"
   },
   "devDependencies": {

@@ -7,18 +7,17 @@
 }
 .titleLine h1 { margin: 0; }
 
+/* The header band closes with its own rule, so the sections inside it
+   separate by space alone — a rule here would draw a second line around
+   nothing. */
 .workSection {
-  border-top: 1px solid var(--dsw-alias-border-l2);
-  margin: 12px auto 0;
+  margin: 14px auto 0;
   max-width: 880px;
-  padding-top: 8px;
 }
 
 .riskSection {
-  border-top: 1px solid var(--dsw-alias-border-l2);
-  margin: 12px auto 0;
+  margin: 14px auto 0;
   max-width: 880px;
-  padding-top: 10px;
 }
 
 .riskSection h2 {
@@ -26,42 +25,70 @@
   font-size: 12px;
   font-weight: 600;
   line-height: 18px;
-  margin: 0 0 5px;
+  margin: 0 0 6px;
 }
 
+/* One risk is one line: the localized class label leads, and the Host's own
+   English diagnostic rides the row's title instead of the line box. */
 .riskRow {
   align-items: center;
   color: var(--dsw-alias-label-secondary);
   display: flex;
-  font-size: 12px;
-  gap: 8px;
-  line-height: 18px;
-  margin: 3px 0;
+  flex-wrap: nowrap;
+  font-size: 11px;
+  gap: 6px;
+  line-height: 16px;
+  margin: 0 0 2px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.riskRow > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.riskClass {
+  color: var(--dsw-alias-state-error-primary);
+  font-weight: 600;
 }
 
 .claimList {
   display: grid;
-  gap: 4px;
-  padding: 4px 0 2px 22px;
+  gap: 0;
+  padding: 4px 0 0 22px;
 }
 
+/* Identity and its state share the first line; the direction owns the second.
+   The dot column plus the row's left padding put every dot on the same spine
+   as the disclosure row's title. */
 .claimRow {
   align-items: center;
   border-radius: 6px;
+  column-gap: 8px;
   display: grid;
-  gap: 4px 8px;
-  grid-template-columns: 14px minmax(96px, auto) minmax(0, 1fr) auto auto;
-  min-height: 36px;
-  padding: 4px 6px;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  min-height: 30px;
+  padding: 3px 6px 5px;
 }
 
 .claimRow:hover { background: var(--dsw-alias-interactive-bg-hover); }
 
+/* The presence dot in the first track is the row's only liveness signal: a
+   second badge beside the handle would say "available" twice. */
 .claimOwner {
+  align-items: center;
   color: var(--dsw-alias-label-secondary);
+  display: inline-flex;
   font-size: 11px;
   font-weight: 500;
-  line-height: 18px;
+  gap: 4px;
+  grid-column: 2;
+  grid-row: 1;
+  line-height: 16px;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -70,14 +97,21 @@
 .claimDirection {
   color: var(--dsw-alias-label-primary);
   font-size: 12px;
+  grid-column: 2;
+  grid-row: 2;
   line-height: 18px;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
+/* A finished Claim stops competing with the live ones for the eye. */
+.claimRowDone .claimDirection { color: var(--dsw-alias-label-secondary); }
+
 .claimState {
   color: var(--dsw-alias-label-tertiary);
   font-size: 11px;
+  grid-column: 3;
+  grid-row: 1;
   line-height: 18px;
   white-space: nowrap;
 }
@@ -225,13 +259,16 @@
   outline-offset: 2px;
 }
 
-/* Task openers run long and embed unbreakable refs, so clamp to two lines
-   instead of one hard truncate; the full text rides the title attribute. */
+/* The opener is one line in every Thread kind: a Task's title runs long and
+   embeds unbreakable refs, and a discussion repeats its anchor message in full
+   right below, so a second line here would only spend the band's height on text
+   the reader can already see. The full text rides the title attribute. */
 .taskTitle {
   color: var(--dsw-alias-label-secondary);
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
   font-size: 13px;
   line-height: 20px;
   margin: 2px 0 0;
@@ -259,22 +296,10 @@
 }
 
 @media (max-width: 600px) {
-  .claimRow {
-    align-items: start;
-    grid-template-columns: 14px minmax(0, 1fr) auto;
-  }
-
-  /* Auto-placement would cursor past the spanning direction and drop the
-     state into the 14px dot column; pin it to the owner row's right seat. */
-  .claimState {
-    grid-column: 3;
-    grid-row: 1;
-    justify-self: end;
-  }
-
-  .claimDirection {
-    grid-column: 2 / -1;
-  }
+  /* The claim row keeps its desktop template: identity and state share the
+     first line and the direction owns the second at every width, so only the
+     vertical alignment changes here. */
+  .claimRow { align-items: start; }
 
   .activityRow { padding-inline: 0; }
   .newUpdates { max-width: calc(100% - 16px); }

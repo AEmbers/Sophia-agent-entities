@@ -15,7 +15,7 @@ import { mintRequestId } from './requests.ts'
 import { diagnosticText, restartOffered } from './TeamPresenceDot.tsx'
 import { TeamRowMenu } from './TeamRowMenu.tsx'
 import { TeamSidebarSection } from './TeamSidebarSection.tsx'
-import { AgentEditorDialog, ModelPickerField, sameModel } from './TeamMemberEditor.tsx'
+import { AgentEditorDialog, ModelPickerField, sameModel, warmModelCatalog } from './TeamMemberEditor.tsx'
 import { TeamAgentImport } from './TeamAgentImport.tsx'
 import createCss from './create.module.css'
 import css from './sidebar.module.css'
@@ -135,6 +135,10 @@ export function TeamAgentsPanel({ workspaceId, loadMembers, subscribeChanges, ad
   }, [loadMembers, workspaceId, followRollover])
 
   useEffect(() => { void refresh() }, [refresh])
+  // Warm the Host model catalog while the roster loads, so the create and
+  // edit pickers open with rows instead of paying the first read on open.
+  // Mount-scoped (not per refresh): presence wakes must not refetch it.
+  useEffect(() => { warmModelCatalog(loadModels) }, [loadModels])
   useEffect(() => subscribeChanges({ kind: 'workspace', workspaceId }, update => {
     if (update.type === 'failed') {
       setError(update.message)
@@ -168,7 +172,7 @@ export function TeamAgentsPanel({ workspaceId, loadMembers, subscribeChanges, ad
     try {
       const result = await addMember(request)
       if (result.ok) {
-        const committed = { ...result.value.status, workspaceIds: [result.value.status.member.workspaceId] }
+        const committed = { ...result.value.status, workspaceIds: result.value.workspaceIds }
         setMembers(current => {
           const retained = current.filter(status => status.member.memberId !== committed.member.memberId)
           return committed.member.state === 'inactive' || committed.member.state === 'archived' ? retained : [...retained, committed]

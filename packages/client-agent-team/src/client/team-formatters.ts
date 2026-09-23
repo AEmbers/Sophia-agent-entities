@@ -1,5 +1,6 @@
-import type { AgentTeamActivity, AgentTeamClaim, AgentTeamClientMemberStatus, AgentTeamMemberId, AgentTeamTask, AgentTeamTaskRef } from '@wowyuarm/dsh-agent-team/types'
+import type { AgentTeamActivity, AgentTeamClaim, AgentTeamClientMemberStatus, AgentTeamMemberDiagnosticClass, AgentTeamMemberId, AgentTeamTask, AgentTeamTaskRef, AgentTeamThreadRef } from '@wowyuarm/dsh-agent-team/types'
 import { hasAllMarker, resolveBodyMentions, scanBodyHandles } from '@wowyuarm/dsh-agent-team/mentions'
+import type { TeamKey } from './locales.ts'
 import type { TeamConversationProps } from './slots.ts'
 import type { TeamStateDotState } from './TeamStateDot.tsx'
 
@@ -20,6 +21,44 @@ export function formatClaimState(state: AgentTeamClaim['state'], t: TeamConversa
     released: 'claimStateReleased',
   } as const)[state])
 }
+
+const RISK_CLASS_KEYS = {
+  'session-refused': ['riskClassSessionRefused', 'riskSessionRefused'],
+  'session-unreadable': ['riskClassSessionUnreadable', 'riskSessionUnreadable'],
+  'preset-composition': ['riskClassPresetComposition', 'riskPresetComposition'],
+  'rollover': ['riskClassRollover', 'riskRollover'],
+  'runtime': ['riskClassRuntime', 'riskRuntime'],
+  'activation': ['riskClassActivation', 'riskActivation'],
+} as const satisfies Record<AgentTeamMemberDiagnosticClass, readonly [TeamKey, TeamKey]>
+
+/**
+ * The two localized halves of one runtime-risk statement: the class label names
+ * what kind of problem this is, and the sentence key states it of the Member
+ * (it keeps its `{member}` placeholder so the caller supplies the handle). The
+ * Host's own diagnostic stays English and belongs in the row's title, so the
+ * visible line reads in the interface language.
+ */
+export function formatRiskClass(
+  status: Pick<AgentTeamClientMemberStatus, 'diagnostic'>,
+  t: TeamConversationProps['t'],
+): { readonly label: string, readonly sentenceKey: TeamKey } {
+  const [labelKey, sentenceKey] = RISK_CLASS_KEYS[status.diagnostic?.class ?? 'runtime']
+  return { label: t(labelKey), sentenceKey }
+}
+
+/**
+ * The first sentence of a Host diagnostic: risk rows read one line, and the
+ * Host writes the reason as its first sentence with recovery context after it.
+ * A terminator the Host used mid-sentence becomes a full stop so the clamped
+ * line reads as a sentence; the untouched text stays in the row's title.
+ */
+export function firstSentence(detail: string): string {
+  const trimmed = detail.trim()
+  const end = trimmed.search(/[.。;；]/)
+  if (end === -1) return trimmed
+  // A terminator that already ends a sentence stays; a separator the Host used
+  // mid-sentence becomes a full stop.
+  return trimmed[end] === '.' || trimmed[end] === '。' ? trimmed.slice(0, end + 1) : `${trimmed.slice(0, end)}.`}
 
 /**
  * Status indicator for a Task status, the dot every Task surface renders.
@@ -47,14 +86,15 @@ export function memberHue(memberId: string): number {
 /** One branded-ref occurrence inside a literal body segment. */
 export interface RefSegment {
   readonly text: string
-  /** The full `task:`/`channel:`/`thread:` ref when this segment is a link. */
+  /** The full `task:`/`channel:`/`thread:`/`member:` ref when this segment is a link. */
   readonly ref?: string
 }
 
 // Full UUIDs and abbreviated forms (prefix plus the first 6+ hex chars, with
 // or without the original hyphens) both match; resolution decides whether an
-// abbreviation is real, so unresolvable matches stay plain text.
-const BRANDED_REF_PATTERN = /\b(task|channel|thread):{1,2}[0-9a-f]{6,}(?:-[0-9a-f]{1,})*\b/gi
+// abbreviation is real, so unresolvable matches stay plain text. Member refs
+// match the same shape; the roster map decides whether one names a member.
+const BRANDED_REF_PATTERN = /\b(task|channel|thread|member):{1,2}[0-9a-f]{6,}(?:-[0-9a-f]{1,})*\b/gi
 
 /**
  * Canonical form of one matched ref: models occasionally double the colon or
@@ -105,27 +145,57 @@ export interface MentionSegment {
   readonly name?: string
 }
 
+/** The Human's handle before they could rename themselves; the Host keeps it as an alias. */
+export const HUMAN_HISTORIC_HANDLE = 'human'
+
+/**
+ * One mentioned Member as a Message renders them: the display name the seat
+ * prints, plus every older handle that still addresses the same person. A
+ * rename must not orphan the mentions written before it — the bodies say
+ * `@human`, the roster says the new name, and both are the Human.
+ */
+export type MentionHandle = string | { readonly name: string; readonly also: readonly string[] }
+
+/** Normalize one mention entry into its printed name and every handle that matches it. */
+function mentionHandlesOf(mention: MentionHandle): { name: string; handles: readonly string[] } {
+  return typeof mention === 'string' ? { name: mention, handles: [mention] } : { name: mention.name, handles: [mention.name, ...mention.also] }
+}
+
+/** The printed name of one mention entry; its aliases follow that name, never the body. */
+export function mentionNameOf(mention: MentionHandle): string {
+  return typeof mention === 'string' ? mention : mention.name
+}
+
 /**
  * Locate one Message's delivered mention names inside its literal body. Matching
  * is the shared Host delivery scan — an authored `@`, case-insensitive on Unicode
  * word boundaries, longest handle first, code quoted rather than called — so a chip
- * never lands where delivery would not reach. Mention segments render the canonical
- * `@Handle`; names absent from the body come back unmatched so the consumer can
- * append them as a fallback chip row.
+ * never lands where delivery would not reach. A chip names the person by their
+ * current name, the way member refs do: a body that wrote an older handle of a
+ * renamed Human chips as the name they answer to today. A person whose entry
+ * matched through any of their handles counts as matched, so the fallback row
+ * never repeats someone already chipped inline; names absent from the body come
+ * back unmatched so the consumer can append them as a fallback chip row.
  */
-export function splitMentionNames(text: string, names: readonly string[]): { segments: MentionSegment[]; unmatched: readonly string[] } {
-  if (names.length === 0) return { segments: [{ text, mention: false }], unmatched: [] }
+export function splitMentionNames(text: string, mentions: readonly MentionHandle[]): { segments: MentionSegment[]; unmatched: readonly string[] } {
+  if (mentions.length === 0) return { segments: [{ text, mention: false }], unmatched: [] }
+  const entries = mentions.map(mentionHandlesOf)
   const segments: MentionSegment[] = []
   const matched = new Set<string>()
   let cursor = 0
-  for (const match of scanBodyHandles(text, names)) {
+  for (const match of scanBodyHandles(text, entries.flatMap(entry => entry.handles))) {
     if (match.start > cursor) segments.push({ text: text.slice(cursor, match.start), mention: false })
-    segments.push({ text: `@${match.handle}`, mention: true, name: match.handle })
-    matched.add(match.handle.toLowerCase())
+    const handle = match.handle.toLowerCase()
+    const owner = entries.find(entry => entry.handles.some(candidate => candidate.toLowerCase() === handle))
+    // The scan hands back the entry's own spelling; only an entry matched
+    // through another handle prints the name it answers to today.
+    const printed = owner === undefined || owner.name.toLowerCase() === handle ? match.handle : owner.name
+    segments.push({ text: `@${printed}`, mention: true, name: printed })
+    if (owner !== undefined) matched.add(owner.name.toLowerCase())
     cursor = match.end
   }
   if (cursor < text.length) segments.push({ text: text.slice(cursor), mention: false })
-  return { segments, unmatched: names.filter(name => !matched.has(name.toLowerCase())) }
+  return { segments, unmatched: entries.map(entry => entry.name).filter(name => !matched.has(name.toLowerCase())) }
 }
 
 /**
@@ -174,13 +244,27 @@ export function mentionedMemberIds(body: string, members: readonly AgentTeamClie
   return resolveBodyMentions(body, candidates, 'member:human' as AgentTeamMemberId).memberIds
 }
 
-/** Canonical chip handles for one Message's structured mention refs. */
-export function mentionNamesOf(mentions: readonly AgentTeamMemberId[], handles: ReadonlyMap<AgentTeamMemberId, string>): string[] {
+/**
+ * Canonical chip handles for one Message's structured mention refs. The Human
+ * is Team authority, not an Agent projection, so `members()` does not include
+ * it: the caller hands over the profile name every seat names them by, so a
+ * rename reaches old mention chips the same way it reaches the roster.
+ *
+ * A renamed Human also keeps the historic `human` handle, because the Host
+ * accepts it as an alias and Message bodies written before the rename say
+ * exactly that: without the alias those mentions would stop chipping inline and
+ * reappear as a trailing chip under a name the body never used.
+ */
+export function mentionNamesOf(
+  mentions: readonly AgentTeamMemberId[],
+  handles: ReadonlyMap<AgentTeamMemberId, string>,
+  humanName: string,
+): MentionHandle[] {
   return mentions
-    // The Human is Team authority, not an Agent projection, so `members()` does
-    // not include it. Keep its stable public handle available for rendering.
-    .map(memberId => memberId === 'member:human' ? 'human' : handles.get(memberId))
-    .filter((name): name is string => name !== undefined)
+    .map((memberId): MentionHandle | undefined => memberId === 'member:human'
+      ? (humanName.toLowerCase() === HUMAN_HISTORIC_HANDLE ? humanName : { name: humanName, also: [HUMAN_HISTORIC_HANDLE] })
+      : handles.get(memberId))
+    .filter((name): name is MentionHandle => name !== undefined)
 }
 
 /** Accessible label for one "who is on this work" stack: its owners' handles, comma-separated. */
@@ -312,6 +396,8 @@ export interface PlannedMessageBody {
   readonly fallbackRefs: readonly string[]
   /** Task refs authored in a literal body; resolved labels replace them in place. */
   readonly taskRefs: readonly AgentTeamTaskRef[]
+  /** Thread refs authored in a literal body; resolved titles replace them in place. */
+  readonly threadRefs: readonly AgentTeamThreadRef[]
 }
 
 /**
@@ -324,7 +410,7 @@ export interface PlannedMessageBody {
  */
 export function planMessageBody(body: string, options: {
   readonly human: boolean
-  readonly mentionNames?: readonly string[]
+  readonly mentionNames?: readonly MentionHandle[]
   readonly canOpenRefs: boolean
 }): PlannedMessageBody {
   const stripped = stripAttachmentLines(body)
@@ -336,7 +422,7 @@ export function planMessageBody(body: string, options: {
   const fallbackNames = inline !== undefined ? inline.unmatched
     : richAgentBody && options.canOpenRefs && options.mentionNames !== undefined
       ? splitMentionNames(displayBody, options.mentionNames).unmatched
-      : options.mentionNames ?? []
+      : (options.mentionNames ?? []).map(mentionNameOf)
   const refs = splitBrandedRefs(displayBody).flatMap(segment => segment.ref === undefined ? [] : [segment.ref])
   const render: MessageBodyRender = inline !== undefined ? 'inline'
     : options.human || (options.canOpenRefs && !richAgentBody && refs.length > 0) ? 'literal'
@@ -353,6 +439,9 @@ export function planMessageBody(body: string, options: {
     fallbackRefs: richAgentBody && !options.canOpenRefs ? refs : [],
     taskRefs: options.canOpenRefs && !richAgentBody
       ? refs.filter(ref => ref.startsWith('task:')).map(ref => ref as AgentTeamTaskRef)
+      : [],
+    threadRefs: options.canOpenRefs && !richAgentBody
+      ? refs.filter(ref => ref.startsWith('thread:')).map(ref => ref as AgentTeamThreadRef)
       : [],
   }
 }

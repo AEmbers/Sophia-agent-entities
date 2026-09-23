@@ -34,6 +34,7 @@ npm run typecheck
 npm run check:docs
 npm run check:core-skills
 npm run check:boundaries
+npm run check:versions
 npm test
 npm run build
 npm run lint
@@ -46,10 +47,11 @@ git diff --check
 
 - `npm run generate:typert`：从 `packages/agent-team/src/` 的 Host face 生成 Typert Host/Remote artifacts。
 - `npm run typecheck`：先生成 Typert，再检查 Host、tools 和 Client 三个源码目录。
-- `npm run check:docs`：把 [`AGENTS.md`](AGENTS.md) 的规则变成机械检查——每份维护文档都有双语配对且切换器双向指对、所有相对链接可解析、两个索引与现存文档集完全一致；同时覆盖四组 README 配对（仓库根与每个 package 各一份，各自使用自己的切换器写法）。只改文档时单独跑它即可。
+- `npm run check:docs`：把 [`AGENTS.md`](AGENTS.md) 的规则变成机械检查——每份维护文档都有双语配对且切换器双向指对、所有相对链接可解析、两个索引与现存文档集完全一致；同时覆盖四组 README 配对与仓库根的贡献指南配对（仓库根与每个 package 各一份 README，各自使用自己的切换器写法）。只改文档时单独跑它即可。
 - `npm run check:core-skills`：把随包 skill 的出厂契约变成机械检查——front matter 的 `name` 与目录同名、`description` 说明真实触发场景、整个 skill 不超过 `scripts/check-core-skills.mjs` 中的审定字符预算、所有相对链接都不越出 skill 目录（安装器只复制该目录）、`references/` 下的每个文件都被 `SKILL.md` 链接。
 - `npm run check:boundaries`：把下文的 package 接缝变成机械检查——`packages/*/src/` 下的文件不得用相对 specifier 跨越自己所在的 package 目录去引用另一个 package。`import type` 豁免（运行时已被擦除），测试文件不在范围内（它们本就要把目录接起来）。跨接缝的正确方式是用声明的 subpath，例如 `@wowyuarm/dsh-agent-team/remote`。
-- `npm test`：先生成 Typert、跑 `check:docs`、`check:core-skills` 与 `check:boundaries`，再运行 Vitest。Vitest 通过 `scripts/isolate-dsh-home.setup.ts` 给每个测试文件一个一次性的 `DSH_HOME`，隔离 Member activation 创建或复用的 `$DSH_HOME/agent-team/members/member:*` 私有 memory。需要特定 home 的测试自行设置并保存/恢复该变量（见 `member-lifecycle.spec.ts`）。启动不会自动清理账本不认识的 Member 目录；显式 Member remove 才删除该 Member 的私有 memory，因此介质重置后如需清理旧目录，由操作者手动删除对应 `member:` 目录。
+- `npm run check:versions`：把已认证版本一致性变成机械检查——CI tag、setup tag、开发指南、README、架构文档、兼容性基线、bug 报告占位符必须声明同一个 DSH 基线（双语都要），且该基线必须是每个 `@deepseek-ai/dsh-*` peer 区间的下界。它只断言互相一致，从不写死版本号，因此在任何 release lane 上都不用改门。动过任何版本字符串后单独跑它。
+- `npm test`：先生成 Typert、跑 `check:docs`、`check:core-skills`、`check:boundaries` 与 `check:versions`，再运行 Vitest。Vitest 通过 `scripts/isolate-dsh-home.setup.ts` 给每个测试文件一个一次性的 `DSH_HOME`，隔离 Member activation 创建或复用的 `$DSH_HOME/agent-team/members/member:*` 私有 memory。需要特定 home 的测试自行设置并保存/恢复该变量（见 `member-lifecycle.spec.ts`）。启动不会自动清理账本不认识的 Member 目录；显式 Member remove 才删除该 Member 的私有 memory，因此介质重置后如需清理旧目录，由操作者手动删除对应 `member:` 目录。
 - `npm run build`：先由受限 Node cleaner 清空 Host、tools 与 Client 三个 package 的 `lib/`，再生成 Typert、构建三个源码目录，并用 Harness 的 `tsdown` 构建 Client bundle；这样删除源码后遗留的旧产物不会进入 pack。最终发布物仍是一个根 npm 包。
 - `npm run lint`：运行 oxlint。
 - `npm run duplication`：用 `.jscpd.json` 对 `packages` 与 `scripts` 跑 jscpd。它的输出只是"值得看一眼的地方"，不是结论——移动或重构过的代码同样会被报成重复。
@@ -122,6 +124,8 @@ node scripts/sync-paths.mjs
 
 `tsconfig*.json` path facades 不应添加 `include` 或 `files`；它们需要保持对当前仓库文件和相邻 Harness source/declaration 的匹配行为。
 
+`generate:typert` 分析的是 Harness checkout 内的一份 Host face 副本，因此它自己准备那个临时包的外部依赖：context-continuity 引擎的已构建声明被复制进去，而 `zod` 从本仓库根安装链接过去——POSIX 上是 symlink，Windows 上是目录 junction（那里真正的 symlink 需要特权）。`zod` 必须保持为链接：复制会把 zod 自己的声明放进被分析的包内，分析器的 reachable-files 遍历会因此排入一个 program 从未加载的声明文件，以 `TypeError` 而非可诊断错误终止；反之链接若解析不到，才会以每个引用文件都报 `TS2307: Cannot find module 'zod'` 的形式暴露。
+
 ## Package 接缝与模块布局
 
 发布物是一个根 npm 包 `@wowyuarm/dsh-agent-team`，由根 `package.json` 及其 `exports` map 声明。三个 `packages/*` 目录没有自己的 manifest：它们是这个单一包的构建与导出接缝，各自有构建目标和 `exports` 条目。
@@ -185,7 +189,7 @@ invariant companion 是"被覆盖"而不是"要扩展"：`invariant.ts` 注册�
 1. 先 `corepack enable pnpm` 落地 shim，再 clone `../deepseek-harness`，checkout 最新认证 release tag（当前 `dsh-v0.1.5-rc.1`，随认证前进），然后 `corepack pnpm install`（workspace 全量一次到位）、`corepack pnpm build:lib` 与 `corepack pnpm build:native-system`。shim 是必需的：认证 Harness 自身的 script 内部会调裸 `pnpm`（`build:lib`、`build:web`），而 `corepack pnpm` 只在自己进程内解析；缺了 shim 这些步骤会以 `pnpm: not found` 失败。两个仓库的 `packageManager` 都锁 `pnpm@11.7.0`，shim 因此解析到该版本，而非环境预装的任意版本。native 这一步是独立的构建，不会由别处替我们完成：host addon 被 gitignore，Harness 的 `test` script 会在自己的 Vitest 之前用 `build:native-system` 构建它，而本仓库是直接对那个 checkout 跑 Vitest——全新 clone 缺了它会表现为宿主 Team 激活失败（`Agent is not an active Team Member`），而不是缺模块报错。`--host-addon-only` 在非 Linux/macOS 上直接退出、不构建，因此该步骤在所有平台都安全。不要复用上一次构建遗留的 `lib/` 或 `node_modules/`——旧产物可能掩盖声明或运行时不兼容。
 2. 工作流需要 `test:browser` 时，用 `corepack pnpm build:web` 构建 Harness `apps/web` dist；workspace install 已备好其依赖。
 3. 在本仓库内用 `corepack pnpm install` 安装依赖。绝不能运行 `npm install`：它会静默破坏指向相邻 checkout vendor 包的 workspace 符号链接，故障随后才以误导性的 `Cannot find module 'zod'` 暴露。
-4. 用 `node scripts/link-harness-packages.mjs` 把 Harness 的 workspace 与 vendor 包链接进本仓库 `node_modules`，再 `npm run build` 构建 bundle。宿主测试从本仓库根按真实 `node_modules` 查找解析 preset row 与 bundle 自身的未发布 row（如 `@wowyuarm/dsh-agent-team/member-context`）——与已发布 bundle 的 profile 安装布局一致。
+4. 用 `node scripts/link-harness-packages.mjs` 把 Harness 的 workspace、其 vendor 包与相邻的 context-continuity 引擎链接进本仓库 `node_modules`，再 `npm run build` 构建 bundle。引擎按 `scripts/continuity-dir.mjs` 的解析结果提供：相邻 checkout（日常开发对引擎工作树）会被链接进 `node_modules`，此时该 checkout 必须已构建（`npm run build`）；干净 checkout/CI 则直接用根 `dependencies` 从 registry 装好的那份，不再链接；`DSH_CONTEXT_CONTINUITY_DIR` 可把解析指向另一个 checkout。宿主测试从本仓库根按真实 `node_modules` 查找解析 preset row 与 bundle 自身的未发布 row（如 `@wowyuarm/dsh-agent-team/member-context`）——与已发布 bundle 的 profile 安装布局一致。
 5. 用 `node scripts/sync-paths.mjs` 对准全新 checkout 重新生成 TypeScript path facades。全新 clone 不能信任仓库里已提交的 facades：`sync-paths` 不属于任何 npm script，跳过它 facades 指向的仍是生成时固化的旧路径。`sync-paths` 同时生成测试 harness 需要的 `@deepseek-ai/dsh-client-locale/src/*` 通配映射。
 6. 冒烟验证：`npm run typecheck && npm test`。全绿 = 环境正确；大面积假挂（见下）= 环境不对——先修环境，再查 diff。
 
@@ -194,14 +198,19 @@ invariant companion 是"被覆盖"而不是"要扩展"：`invariant.ts` 注册�
 | 变量 | 何时需要 | 说明 |
 | --- | --- | --- |
 | `CHROME_PATH` | `test:browser`（可选） | 默认 `/usr/bin/google-chrome`；仅当沙箱 Chrome 不在默认位置时设置 |
+| `DSH_CONTEXT_CONTINUITY_DIR` | 仅隔离 checkout 场景 | 把引擎解析指向另一个 `dsh-context-continuity` checkout；日常保持未设——先找相邻目录，再退回 registry 装好的那份 |
 | `DSH_HARNESS_DIR` | 仅认证场景 | 指向带 tag 后缀的相邻 checkout；日常保持未设——默认名即契约 |
 | `DEEPSEEK_API_KEY` | `npm run preview` | 真实模型预览缺它即刻失败；测试与浏览器路径从不需要 |
 
-**环境错误而非代码错误的症状**：大面积 `TypeError ... reading 'UNLOADING'` / `FiberState` undefined 失败 = Vitest 解析到了缺失或过期的 Harness checkout；`Cannot find module 'zod'` = npm 破坏了 pnpm 链接。先修环境，再查 diff。
+**环境错误而非代码错误的症状**：大面积 `TypeError ... reading 'UNLOADING'` / `FiberState` undefined 失败 = Vitest 解析到了缺失或过期的 Harness checkout；`Cannot find module 'zod'` = npm 破坏了 pnpm 链接——但若来自 `generate:typert`，那是它自己配置的那条链接出了问题（见 生成文件）。先修环境，再查 diff。
 
 **工作树上方不得有遗留 `node_modules`。** TypeScript `typeRoots` 与 Node 模块解析都会沿祖先目录上爬，home 目录下一次误跑 `npm install` 留下的 `node_modules\@types` 会把它的类型静默注入每次编译——实测表现为 harness 构建报出 lockfile 解释不了的 React 19 类型错误（实际锁的是 18）。全新 checkout typecheck 报出 lockfile 无法解释的类型错误时，先逐级检查祖先目录有无遗留 `node_modules`，再查代码。
 
 **checkout 指针集中化且 fail-fast。** `scripts/harness-dir.mjs` 是所有消费方（Vitest、`sync-paths`、`build-client`、`generate-typert`、浏览器/预览 runner）共同解析的单一事实源：`DSH_HARNESS_DIR` 设定时优先；其次读 `sync-paths` 写下的 `.generated-harness` 标记（测试自动跟随 facade 生成时的同一 checkout——认证轮生成后忘了带 env 也不会让两者劈叉）；最后落到默认相邻名。解析出的目录不存在时立即中止，列出相邻真实存在的 Harness checkout 与修复指引，而不是等到跑测才炸出上面那些远端症状。
+
+**引擎指针：checkout 或已安装的包。** `scripts/continuity-dir.mjs` 是 `@wowyuarm/dsh-context-continuity` 的唯一解析源：`DSH_CONTEXT_CONTINUITY_DIR` 优先，其次是相邻的 `dsh-context-continuity` checkout（对着引擎工作树开发——`link-harness-packages.mjs` 会把它链接进 `node_modules`，`generate-typert.mjs` 会把它预置进分析包），最后是根 `dependencies` 装到 `node_modules/@wowyuarm/dsh-context-continuity` 的那份（干净 checkout/CI，无需链接）。解析不到任何包布局时立即 fail-fast，并列出尝试过的候选与修法。
+
+**引擎的安装契约。** 引擎以 `@wowyuarm/dsh-context-continuity` 发布；根 manifest 将它声明为常规 dependency——profile 安装会把它随 bundle 一起装进来：profile 的 pnpm 以 `autoInstallPeers: false` 运行，没人提供的 peer 对谁都解析不到，而 `shipping.spec.ts` 的 boot-critical closure 关卡把 dependencies 也算作可达 root。因此 CI 不需要任何引擎步骤：`pnpm install` 会把已构建好的包装进来，链接脚本也会跳过那次会指向自身的链接。引擎前进时改这一个条目并提交 `pnpm-lock.yaml`；本地若解析到相邻 checkout，必须保证那份已构建（在其目录里 `npm run build`）。
 
 **CI lanes。** [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) 在干净的 `ubuntu-latest` 与 `windows-latest` runner 上运行 typecheck 加完整测试套件——pull request、push 到 `master`、手动 `workflow_dispatch` 都会触发。两条 lane 执行上面相同的六步环境契约；Windows lane 的每一步经 git bash（`shell: bash`）运行，因为默认 pwsh 会破坏反斜杠续行；harness 包经目录 junction 链接，无需 symlink 权限。范围护栏：无 coverage matrix、无发布自动化、无 `test:browser`——浏览器验收始终是本地步骤。Windows lane 是文件系统标识符类 bug（issue #7/#8）的回归防线。唯一可调变量是 `DSH_HARNESS_TAG`；认证推进该 tag 时，workflow 的 env、本文档与 [`.hoplite/settings.json`](../.hoplite/settings.json) 三处同步更新——三处靠手工保持一致。若该次 tag 推进同时移动了 DSH peers，必须在同一改动里提交 `pnpm-lock.yaml`：CI 以 `frozen-lockfile` 安装，而本地装一次就会就地重写 lockfile，把这个不一致一直掩盖到 CI 上才暴露。开发脚本（`build-client`、`run-browser-test`、`run-preview`、`run-ui-preview`）已做 Windows 硬化，在该平台经 git bash 运行，本地 Windows 开发遵循同一环境契约。
 

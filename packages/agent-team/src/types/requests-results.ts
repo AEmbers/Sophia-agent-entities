@@ -152,6 +152,12 @@ export interface AgentTeamMemberResult {
   readonly status: AgentTeamAgentMemberStatus
 }
 
+/** Result of creating a Member: lifecycle status plus the participation set the Host seeded at creation. */
+export interface AgentTeamAddMemberResult extends AgentTeamMemberResult {
+  /** Workspaces the new Member participates in — creation always seeds exactly the creation Workspace. */
+  readonly workspaceIds: readonly WorkspaceId[]
+}
+
 /** Operator intent to nudge one error-stopped Member into continuing its work. */
 export interface AgentTeamRecoverMemberRequest {
   readonly requestId: AgentTeamRequestId
@@ -321,6 +327,64 @@ export interface AgentTeamGetAttachmentResult {
   readonly mediaType: string
   readonly byteSize: number
   readonly bytesBase64: string
+}
+
+/** Human profile read: name + avatar reference + version footnote facts. */
+export interface AgentTeamHumanProfileRequest {
+}
+
+export interface AgentTeamHumanProfileResult {
+  readonly name: string
+  readonly avatarRef?: string | undefined
+  /** Bundle version shown in the settings footnote. */
+  readonly version: string
+  /** Repository home the footnote links to. */
+  readonly repoUrl: string
+  /**
+   * Whether a newer release is known. Best-effort and cached Host-side
+   * (npm `latest`, 12 h TTL, silent on any failure), so this stays false
+   * until a background refresh actually observes one; the footnote shows
+   * only the version + link until then.
+   */
+  readonly updateAvailable: boolean
+  readonly latestVersion?: string | undefined
+}
+
+/** Upload one human avatar image into the persistent avatar store. */
+export interface AgentTeamPutHumanAvatarRequest {
+  readonly name: string
+  readonly mediaType?: string | undefined
+  readonly bytesBase64: string
+}
+
+export interface AgentTeamPutHumanAvatarResult {
+  readonly avatarRef: string
+  /** Absolute path members read the bytes from; stable until removed. */
+  readonly path: string
+  readonly name: string
+  readonly byteSize: number
+  readonly mediaType: string
+}
+
+/** Read one human avatar back for client-side display. */
+export interface AgentTeamGetHumanAvatarRequest {
+  readonly avatarRef: string
+}
+
+export interface AgentTeamGetHumanAvatarResult {
+  readonly name: string
+  readonly mediaType: string
+  readonly byteSize: number
+  readonly bytesBase64: string
+}
+
+/** Remove one human avatar entry; the profile falls back to hue/initial. */
+export interface AgentTeamRemoveHumanAvatarRequest {
+  readonly avatarRef: string
+}
+
+export interface AgentTeamRemoveHumanAvatarResult {
+  readonly removed: boolean
 }
 
 /** Intent to append one public Message to an existing Thread. */
@@ -607,6 +671,14 @@ export interface AgentTeamInboxItem {
 }
 
 export interface AgentTeamInbox {
+  /**
+   * The ledger's Human Member id — the durable identity a row matches to know
+   * which of its actors is the reader, so a seat can draw that one actor from
+   * its own Human identity (name and avatar) instead of the row's initials
+   * fallback. The same id `AgentTeamView` carries, from the same initialization
+   * record.
+   */
+  readonly humanMemberId: AgentTeamMemberId
   /** The unread queue: every Thread holding at least one unread fact for this reader. */
   readonly items: readonly AgentTeamInboxItem[]
   /**

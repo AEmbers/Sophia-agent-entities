@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { chromium, type Browser, type Locator, type Page } from 'playwright'
@@ -18,6 +18,7 @@ const UI05_SHOTS = join(BROWSER_ARTIFACTS, 'ui-05')
 const UI06_SHOTS = join(BROWSER_ARTIFACTS, 'ui-06')
 const UI07_SHOTS = join(BROWSER_ARTIFACTS, 'ui-07')
 const UI08_SHOTS = join(BROWSER_ARTIFACTS, 'ui-08')
+const UI09_SHOTS = join(BROWSER_ARTIFACTS, 'ui-09')
 let scaffold: WebScaffold | undefined
 let browser: Browser | undefined
 
@@ -215,13 +216,26 @@ async function installLocalBundle(clearArtifacts = true): Promise<void> {
       return !normalized.includes('/node_modules') && !normalized.includes('/src') && !normalized.includes('/artifacts') && !normalized.includes('/.hoplite')
     },
   })
-  // The routed ledger backend in its installed position. A real `dsh plugin
-  // add` installs this bundle's dependencies under the profile tree; this
-  // lane emulates the layout, so the dependency links beside the copied
-  // bundle instead of relying on the harness app's own dependency closure.
-  const storageSqliteLink = join(HOME, 'profiles/node_modules/@deepseek-ai/dsh-storage-sqlite')
-  await mkdir(join(storageSqliteLink, '..'), { recursive: true })
-  await symlink(join(process.cwd(), 'packages/storage/storage-sqlite'), storageSqliteLink, 'junction')
+  // Production installs the bundle's regular dependencies with it (pnpm,
+  // hoisted); this manual staging runs no installer, so stage the same
+  // closure or a boot-time bare import resolves nowhere — before this, zod
+  // passed only because the installation fallback heals its own copy. Stage
+  // them INSIDE the bundle dir: the shared profiles/node_modules root is
+  // dsh-managed healed state, and the healer rejects foreign real entries.
+  const { dependencies } = JSON.parse(await readFile(join(TEAM_ROOT, 'package.json'), 'utf8')) as { dependencies: Record<string, string> }
+  const bundleModules = join(scope, 'dsh-agent-team', 'node_modules')
+  for (const name of Object.keys(dependencies)) {
+    // No filter: the source root itself lives under node_modules (the
+    // bundle filter above would reject it), and a store package never nests
+    // its own node_modules — pnpm keeps siblings beside it instead.
+    await cp(join(TEAM_ROOT, 'node_modules', name), join(bundleModules, ...name.split('/')), {
+      recursive: true,
+      dereference: true,
+    })
+  }
+  // The routed ledger backend travels inside the staged copy: it is vendored
+  // under this bundle's own package name (see cordis.patch.yml), so no host
+  // node_modules link is staged here.
   await mkdir(UI01_SHOTS, { recursive: true })
   await mkdir(UI02_SHOTS, { recursive: true })
   await mkdir(UI03_SHOTS, { recursive: true })
@@ -230,6 +244,7 @@ async function installLocalBundle(clearArtifacts = true): Promise<void> {
   await mkdir(UI06_SHOTS, { recursive: true })
   await mkdir(UI07_SHOTS, { recursive: true })
   await mkdir(UI08_SHOTS, { recursive: true })
+  await mkdir(UI09_SHOTS, { recursive: true })
 }
 
 it('drives the complete opt-in Agent Team journey in real Web', async () => {
@@ -483,13 +498,36 @@ it('drives the complete opt-in Agent Team journey in real Web', async () => {
   await channelsToggle.click()
   await page.getByRole('button', { name: '# engineering' }).waitFor()
 
-  // The workspace list folds behind the same quiet section header as the
-  // panels: rows vanish on collapse and return on the second toggle.
-  const workspacesToggle = page.getByRole('button', { name: '工作区', exact: true })
-  await workspacesToggle.click()
-  await expect.poll(() => page.getByRole('button', { name: 'team-workspace' }).count()).toBe(0)
-  await workspacesToggle.click()
-  await page.getByRole('button', { name: 'team-workspace' }).waitFor()
+  // The Workspace is one selector line, not a list: its own text names where
+  // the reader is, its accessible name states that same Workspace, and the
+  // other Workspaces exist only inside its menu.
+  const workspaceTrigger = page.getByRole('button', { name: '工作区，team-workspace', exact: true })
+  await expect.poll(async () => (await workspaceTrigger.textContent())?.trim() ?? '').toBe('team-workspace')
+  await expect.poll(() => workspaceTrigger.getAttribute('aria-haspopup')).toBe('menu')
+  await expect.poll(() => workspaceTrigger.getAttribute('aria-expanded')).toBe('false')
+  await workspaceTrigger.click()
+  await expect.poll(() => workspaceTrigger.getAttribute('aria-expanded')).toBe('true')
+  await page.getByRole('menuitem', { name: 'team-workspace' }).waitFor()
+  await page.keyboard.press('Escape')
+  await expect.poll(() => workspaceTrigger.getAttribute('aria-expanded')).toBe('false')
+  // The menu is the only way to switch Workspaces, so its rows have to be
+  // reachable without a pointer: opening from the keyboard puts focus on the
+  // first row, and Escape hands focus back to the trigger.
+  await workspaceTrigger.focus()
+  await page.keyboard.press('Enter')
+  await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute('role') ?? '')).toBe('menuitem')
+  await page.keyboard.press('Escape')
+  await expect.poll(() => page.evaluate(() => document.activeElement?.matches('[data-team-workspace-trigger]') ?? false)).toBe(true)
+  // The Inbox is the one entry that crosses Workspaces — its total sums every
+  // one of them — so it stands above the selector that scopes the sections
+  // below it rather than inside that scope.
+  const [workspaceTriggerBox, inboxCardBox] = await Promise.all([
+    workspaceTrigger.boundingBox(),
+    page.locator('button[class*="inboxCard"]').boundingBox(),
+  ])
+  expect(workspaceTriggerBox).not.toBeNull()
+  expect(inboxCardBox).not.toBeNull()
+  expect(workspaceTriggerBox!.y).toBeGreaterThan(inboxCardBox!.y)
 
   const builderRow = page.locator('[class*="agentRow"]').filter({ hasText: 'builder' }).first()
   await builderRow.hover()
@@ -1097,6 +1135,10 @@ it('drives the complete opt-in Agent Team journey in real Web', async () => {
     .toBe(`打开 Task #1（${unreadTotal} 条新动态）`)
   await expect.poll(async () => (await entryUnreadCapsule(page, unreadLineSelector))?.text ?? 'missing', { timeout: 10_000 })
     .toBe(unreadTotal > 99 ? '99+' : String(unreadTotal))
+  // The Task is still live, so its door keeps reporting when the work last
+  // moved — the one thing the feed's own order cannot say, since that order
+  // follows each anchor Message rather than the Thread.
+  await expect.poll(async () => (await unreadEntryRow.textContent())?.trim() ?? '').toContain('最近活动')
   const unreadCapsule = await entryUnreadCapsule(page, unreadLineSelector)
   // The capsule is decoration inside a labeled control, and it is a capsule:
   // a filled 18px pill whose radius covers its own height.
@@ -1309,6 +1351,26 @@ it('drives the complete opt-in Agent Team journey in real Web', async () => {
   await page.getByRole('heading', { name: '# delivery' }).waitFor()
   await expect.poll(() => page.getByText('Human 已检查 Thread', { exact: true }).count()).toBe(0)
   await expect.poll(() => page.getByText('验收后继续讨论', { exact: true }).count()).toBe(0)
+  // A resolved Task's door stops printing when the work last moved: a done or
+  // closed status word says nothing is moving, and the instant would only repeat
+  // the moment it resolved on every finished row. The Thread has follow-up facts
+  // either way, so the precise instant stays on the control's title, one hover
+  // away.
+  const closedEntry = taskEntryRow(page, 1)
+  await expect.poll(async () => (await closedEntry.textContent())?.trim() ?? '').toBe('Task #1')
+  await expect.poll(async () => await closedEntry.getAttribute('title') ?? '').toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/)
+  await closedEntry.scrollIntoViewIfNeeded()
+  await settleAnimations(page)
+  await page.screenshot({ path: join(UI05_SHOTS, 'resolved-task-entry.png'), fullPage: true })
+  // The door got shorter, so the narrow column has strictly less to wrap: the
+  // same row must still fit without a horizontal scrollbar.
+  await page.setViewportSize({ width: 390, height: 844 })
+  await settleLayout(page)
+  await closedEntry.scrollIntoViewIfNeeded()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+  await page.screenshot({ path: join(UI05_SHOTS, 'narrow-resolved-task-entry.png'), fullPage: true })
+  await page.setViewportSize({ width: 1440, height: 960 })
+  await settleLayout(page)
   await page.getByRole('button', { name: '成员', exact: true }).click()
   await page.getByRole('dialog', { name: '成员' }).screenshot({ path: join(UI01_SHOTS, 'global-members.png') })
   await page.getByRole('button', { name: '关闭', exact: true }).click()
@@ -1621,8 +1683,12 @@ it('drives the complete opt-in Agent Team journey in real Web', async () => {
   expect(await namedCapsule.textContent()).toBe('2')
   expect(await plainCapsule.textContent()).toBe('1')
   // A squeezed seat: the provenance shortens with an ellipsis instead of folding
-  // one row into three lines, the clock keeps the identity's own line, nothing
-  // spills out of a row, and the page still does not scroll sideways.
+  // one row into three lines, nothing spills out of a row, and the page still
+  // does not scroll sideways. The clock keeps the identity's own line wherever
+  // the line has the room to draw it: a line too narrow for the count and the
+  // clock together yields the clock entirely (inbox.module.css), and that face
+  // of the row is asserted where the seat has the room again — the collapsed
+  // rail below.
   const narrowFit = await inboxPage.evaluate(root => {
     const rows = [...root.querySelectorAll('button[class*="row"]')] as HTMLElement[]
     const crumbs = rows.map(row => row.querySelector('[class*="rowCrumb"]') as HTMLElement)
@@ -1633,7 +1699,12 @@ it('drives the complete opt-in Agent Team journey in real Web', async () => {
       rowSpill: Math.max(...rows.map(row => row.scrollWidth - row.clientWidth)),
       crumbNowrap: crumbStyle.whiteSpace,
       crumbEllipsis: crumbStyle.textOverflow,
-      clockOnIdentityLine: rows.every((_, index) => Math.abs(crumbs[index]!.getBoundingClientRect().top - times[index]!.getBoundingClientRect().top) < 4),
+      clockOnIdentityLine: rows.every((_, index) => {
+        // A yielded clock draws no box at all, which is this row's own answer to
+        // a line that cannot hold it; a drawn one shares the identity's line.
+        if (times[index]!.getBoundingClientRect().width === 0) return true
+        return Math.abs(crumbs[index]!.getBoundingClientRect().top - times[index]!.getBoundingClientRect().top) < 4
+      }),
       rowHeight: Math.round(rows[0]!.getBoundingClientRect().height),
     }
   })
@@ -2205,3 +2276,212 @@ it('keeps four same-origin Team pages responsive and independently subscribed', 
   await settleLayout(pages[1]!)
   await pages[1]!.screenshot({ path: join(BROWSER_ARTIFACTS, 'multi-web-mobile.png'), fullPage: true })
 }, 120_000)
+
+/**
+ * Taskless-thread ref chips must navigate, not just render (task #17): one
+ * taskless Thread cites another's abbreviated ref in plain prose, the reader
+ * clicks the chip, and the Thread page of the cited Thread opens. The chip is
+ * located by its raw-ref title so the assertion survives label redesigns, and
+ * arrival is proven by the Thread page marker carrying the cited full ref.
+ */
+it('opens a taskless thread from its ref chip in real Web', async () => {
+  await installLocalBundle()
+  // Same install flow as the other journeys: installLocalBundle stages the
+  // bundle, so no extra install anchor is needed (an undefined anchor
+  // identifier here failed the whole journey with a ReferenceError).
+  scaffold = await launchWebScaffold({ extraOverlayPath: OVERLAY, harnessHome: HOME })
+  browser = await chromium.launch({ headless: true, executablePath: CHROME })
+  const page = await browser.newPage({ viewport: { width: 1440, height: 960 }, locale: 'zh-CN' })
+  const consoleWatch = watchConsole(page)
+  await page.goto(scaffold.authenticatedUrl)
+  await connectFreshWorkspaceZh(page, scaffold.workspaceCwd, 'team-workspace')
+  await page.getByRole('button', { name: '团队', exact: true }).click()
+  await page.getByRole('button', { name: '新建频道' }).click()
+  const channelDialog = page.getByRole('dialog', { name: '新建频道' })
+  await channelDialog.getByLabel('名称').fill('ref-repro')
+  await channelDialog.getByLabel('说明').fill('thread ref chips')
+  await channelDialog.getByRole('button', { name: '创建频道' }).click()
+  await page.getByRole('button', { name: '# ref-repro', exact: true }).click()
+  await page.getByRole('heading', { name: '# ref-repro', exact: true }).waitFor()
+  const channelComposer = page.getByRole('textbox', { name: '消息内容' })
+  await channelComposer.fill('ALPHA-ROOT-MARKER alpha discussion opens here')
+  await page.getByRole('button', { name: '发送', exact: true }).click()
+  await page.locator('[data-team-channel] article').filter({ hasText: 'ALPHA-ROOT-MARKER' }).waitFor()
+  // The cited form is the abbreviated spelling from the report (8 hex chars):
+  // resolution, not spelling, must decide linkability.
+  const workspaceId = scaffold.ctx.workspaceRegistry.list()[0]!.id
+  const projection = scaffold.ctx.agentTeam.view({ workspaceId })
+  const alphaThread = projection.threads.find((thread: { taskRef?: string }) => thread.taskRef === undefined)!
+  const alphaRef = alphaThread.threadRef as string
+  const alphaShort = `thread:${(alphaRef.slice('thread:'.length) as string).replaceAll('-', '').slice(0, 8).toLowerCase()}`
+  await channelComposer.fill(`BETA-ROOT-MARKER citing ${alphaShort} for the chip`)
+  await page.getByRole('button', { name: '发送', exact: true }).click()
+  const betaArticle = page.locator('[data-team-channel] article').filter({ hasText: 'BETA-ROOT-MARKER' })
+  await betaArticle.waitFor()
+  const chip = betaArticle.locator(`button[title="${alphaShort}"]`)
+  await chip.waitFor()
+  // Chip titles cap at 40 characters (boundedThreadTitle): the 43-char
+  // anchor below renders truncated, and navigation still proves identity.
+  await expect.poll(() => chip.textContent()).toMatch(/ALPHA-ROOT-MARKER alpha discussion open…/)
+  await page.screenshot({ path: join(UI02_SHOTS, 'thread-ref-chip.png'), fullPage: true })
+  await chip.click()
+  // Split "never navigated" from "navigated but failed to render": the
+  // persisted snapshot answers the first without waiting on the second.
+  await expect.poll(() => page.evaluate(() => (JSON.parse(localStorage.getItem('dsh.agent-team.navigation') ?? '{}') as { threadRef?: string }).threadRef), { timeout: 10_000 }).toBe(alphaRef)
+  // Arrival at the cited Thread (not just any navigation): the Thread page
+  // marker carries the cited full ref, and the persisted snapshot agrees.
+  await page.locator(`[data-team-thread="${alphaRef}"]`).waitFor({ timeout: 20_000 })
+  await expect.poll(() => page.evaluate(() => (JSON.parse(localStorage.getItem('dsh.agent-team.navigation') ?? '{}') as { threadRef?: string }).threadRef)).toBe(alphaRef)
+  await page.screenshot({ path: join(UI02_SHOTS, 'thread-ref-chip-opened.png'), fullPage: true })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await settleLayout(page)
+  await page.screenshot({ path: join(UI02_SHOTS, 'thread-ref-chip-opened-narrow.png'), fullPage: true })
+  expect(consoleWatch).toEqual({ warnings: [], pageErrors: [] })
+}, 180_000)
+
+/** One real 1×1 RGBA PNG: the avatar store validates the payload as an image and
+ * the page must decode it, so a placeholder byte string would prove nothing. The
+ * single pixel is opaque amber rather than white so the screenshot shows the
+ * uploaded avatar filling the identity seat instead of a blank circle. */
+const ONE_PIXEL_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP4Oo/7PwAGyAKe4yFCTgAAAABJRU5ErkJggg=='
+
+/**
+ * The Human's own settings page: display name, avatar, version footnote. It is
+ * an ordinary-mode settings section — Team mode's sidebar takeover makes the
+ * panel unreachable by design — so this journey does its panel work first and
+ * only then enters Team mode, to prove the same rename reaches the timeline.
+ */
+it('configures the Human profile from Settings in real Web', async () => {
+  await installLocalBundle()
+  scaffold = await launchWebScaffold({ extraOverlayPath: OVERLAY, harnessHome: HOME })
+  browser = await chromium.launch({ headless: true, executablePath: CHROME })
+  const page = await browser.newPage({ viewport: { width: 1440, height: 960 }, locale: 'zh-CN' })
+  const consoleWatch = watchConsole(page)
+  await page.goto(scaffold.authenticatedUrl)
+  await connectFreshWorkspaceZh(page, scaffold.workspaceCwd, 'team-workspace')
+
+  await page.getByRole('button', { name: '设置', exact: true }).click()
+  const panel = page.getByRole('dialog')
+  await panel.getByRole('button', { name: '我的资料' }).click()
+  const nameField = panel.getByLabel('名字')
+  await nameField.waitFor()
+  // The Host has no override stored yet, so the page shows the historic default
+  // and the version footnote's two facts: the bundle version and the repo link.
+  expect(await nameField.inputValue()).toBe('human')
+  // The page states what owns it before anything else: among the Harness's own
+  // settings pages, a bare 「我的资料」 leaves the reader guessing.
+  expect(await panel.textContent()).toContain('这是 Agent Team 的资料页')
+  expect(await panel.textContent()).toMatch(/版本 \d+\.\d+\.\d+/)
+  expect(await panel.getByRole('link', { name: 'GitHub' }).getAttribute('href')).toBe('https://github.com/wowyuarm/dsh-agent-team')
+  expect(await panel.getByRole('button', { name: '移除头像' }).count()).toBe(0)
+
+  // Keyboard rename, no pointer involved: typing makes the field dirty, Tab
+  // hands focus to the Save button that owns the form, and Enter activates it.
+  await nameField.fill('Ada')
+  await nameField.press('Tab')
+  const saveRing = await focusRing(page, '[role="dialog"] form button[type="submit"]')
+  expect(saveRing?.focusVisible).toBe(true)
+  expect(saveRing?.outlineStyle).not.toBe('none')
+  await page.keyboard.press('Enter')
+  await expect.poll(() => scaffold!.ctx.agentTeam.humanHandle()).toBe('Ada')
+  await expect.poll(async () => await panel.getByRole('button', { name: '保存' }).isDisabled()).toBe(true)
+
+  // Avatar upload: bytes go to the persistent store, the reference into
+  // settings, and the page draws what the browser can decode.
+  const avatarPath = join(HOME, 'ada-avatar.png')
+  await writeFile(avatarPath, Buffer.from(ONE_PIXEL_PNG, 'base64'))
+  await panel.locator('input[type="file"]').setInputFiles(avatarPath)
+  const preview = panel.locator('img').first()
+  await preview.waitFor()
+  await expect.poll(async () => await preview.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBe(1)
+  expect(await preview.getAttribute('src')).toMatch(/^data:image\/png;base64,/)
+  await expect.poll(() => scaffold!.ctx.agentTeam.humanProfile().avatarRef !== undefined).toBe(true)
+  await page.screenshot({ path: join(UI09_SHOTS, 'human-profile.png'), fullPage: true })
+
+  // A refused name is refused before the round trip: the field keeps what the
+  // reader typed and the notice states the rule.
+  await nameField.fill('   ')
+  await panel.getByText('名字不能为空。').waitFor()
+  expect(await panel.getByRole('button', { name: '保存' }).isDisabled()).toBe(true)
+  await page.screenshot({ path: join(UI09_SHOTS, 'human-profile-empty-name.png'), fullPage: true })
+  await nameField.fill('Ada')
+  await expect.poll(async () => await panel.getByRole('button', { name: '保存' }).isDisabled()).toBe(true)
+
+  // 390×844: the shipped panel keeps its 188px nav rail at every viewport, so
+  // the question this answers is whether OUR column survives the squeeze.
+  await page.setViewportSize({ width: 390, height: 844 })
+  await settleLayout(page)
+  await page.screenshot({ path: join(UI09_SHOTS, 'human-profile-narrow.png'), fullPage: true })
+  const narrow = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    clientWidth: document.documentElement.clientWidth,
+  }))
+  expect(narrow.scrollWidth).toBeLessThanOrEqual(narrow.clientWidth)
+  expect((await panel.boundingBox())!.width).toBeLessThanOrEqual(390)
+  await page.setViewportSize({ width: 1440, height: 960 })
+  await settleLayout(page)
+
+  // Bytes this browser cannot decode fall back to the initial, exactly like a
+  // removed avatar. The Host accepts them — it checks the declared media type,
+  // not the payload — so this is also the state a phone photo in HEIC lands in,
+  // and the page's own copy promises the initial for it.
+  await panel.locator('input[type="file"]').setInputFiles([{ name: 'broken.png', mimeType: 'image/png', buffer: Buffer.from('this is not a PNG') }])
+  await expect.poll(() => scaffold!.ctx.agentTeam.humanProfile().avatarRef !== undefined).toBe(true)
+  await expect.poll(async () => await panel.locator('[data-avatar="initial"]').textContent()).toBe('A')
+  expect(await panel.locator('img').count()).toBe(0)
+  await page.screenshot({ path: join(UI09_SHOTS, 'human-profile-undecodable-avatar.png'), fullPage: true })
+
+  // Removal returns the identity to the initial while the rename stands.
+  await panel.getByRole('button', { name: '移除头像' }).click()
+  await expect.poll(async () => await panel.locator('img').count()).toBe(0)
+  await expect.poll(() => scaffold!.ctx.agentTeam.humanProfile().avatarRef).toBeUndefined()
+  await expect.poll(async () => await panel.getByRole('button', { name: '上传头像' }).count()).toBe(1)
+  // The readable bytes go back in: the Inbox leg below draws the compact stack
+  // from the same profile, and a seat can only prove that with a picture.
+  await panel.locator('input[type="file"]').setInputFiles(avatarPath)
+  await expect.poll(async () => await panel.locator('img').count()).toBe(1)
+  await panel.getByRole('button', { name: '关闭' }).click()
+
+  // The rename is not page-local: the Team timeline names the Human by it.
+  await page.getByRole('button', { name: '团队', exact: true }).click()
+  await page.getByRole('button', { name: '新建频道' }).click()
+  const channelDialog = page.getByRole('dialog', { name: '新建频道' })
+  await channelDialog.getByLabel('名称').fill('profile-check')
+  await channelDialog.getByLabel('说明').fill('renamed human')
+  await channelDialog.getByRole('button', { name: '创建频道' }).click()
+  await page.getByRole('button', { name: '# profile-check', exact: true }).click()
+  const composer = page.getByRole('textbox', { name: '消息内容' })
+  await composer.fill('PROFILE-NAME-MARKER hello from the renamed human')
+  await page.getByRole('button', { name: '发送', exact: true }).click()
+  const row = page.locator('[data-team-channel] article').filter({ hasText: 'PROFILE-NAME-MARKER' })
+  await row.waitFor()
+  await expect.poll(async () => await row.textContent()).toContain('Ada')
+  expect(await row.textContent()).not.toContain('Human')
+  // The picture lands on the row the profile describes: the Human's own message
+  // draws it in the assembled bundle (the Agent row keeping its initial is
+  // pinned by the component suite, which seeds both authors into one feed).
+  const humanPicture = row.locator('[data-avatar="image"]')
+  await expect.poll(async () => await humanPicture.count()).toBe(1)
+  expect(await humanPicture.getAttribute('src')).toMatch(/^data:image\/png;base64,/)
+  await page.screenshot({ path: join(UI09_SHOTS, 'renamed-human-in-timeline.png'), fullPage: true })
+
+  // The identity is not page-local either. The Inbox row that names the Human
+  // leads with the profile picture in the very circle an Agent's initial fills
+  // — the same seat, the same 18px geometry — and the row reads the display
+  // name rather than the durable `member:human` id no Agent roster holds.
+  await page.locator('button[class*="inboxCard"]').click()
+  const identityRow = page.locator('[data-team-inbox] button').filter({ hasText: 'PROFILE-NAME-MARKER' })
+  await expect.poll(async () => await identityRow.count(), { timeout: 30_000 }).toBe(1)
+  const identityStack = identityRow.locator('[class*="rowActor"] [role="img"]')
+  const identityPicture = identityStack.locator('img')
+  await expect.poll(async () => await identityPicture.count()).toBe(1)
+  expect(await identityPicture.getAttribute('src')).toMatch(/^data:image\/png;base64,/)
+  expect(await identityStack.getAttribute('aria-label')).toContain('@Ada')
+  const identityGeometry = await identityStack.evaluate(cluster => {
+    const rect = cluster.getBoundingClientRect()
+    return { width: Math.round(rect.width), height: Math.round(rect.height), radius: getComputedStyle(cluster.firstElementChild!).borderTopLeftRadius }
+  })
+  expect(identityGeometry).toEqual({ width: 18, height: 18, radius: '50%' })
+  await page.screenshot({ path: join(UI09_SHOTS, 'human-identity-in-inbox-stack.png'), fullPage: true })
+  expect(consoleWatch).toEqual({ warnings: [], pageErrors: [] })
+}, 180_000)

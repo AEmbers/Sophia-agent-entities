@@ -262,7 +262,7 @@ const GEOMETRY = [
   ['composer.module.css', '.sendButton', [['height', '34px'], ['width', '34px'], ['border-radius', '999px'], ['transform', 'translateY(-2px)']], 'primary round action is 34×34 with the -2px seat compensation'],
   ['sidebar.module.css', '.channelRow', [['border-radius', '8px']], 'list row radius is 8px'],
   ['sidebar.module.css', '.agentRow', [['border-radius', '8px']], 'list row radius is 8px'],
-  ['sidebar.module.css', '.workspaceRow', [['border-radius', '8px']], 'list row radius is 8px'],
+  ['sidebar.module.css', '.workspaceTrigger', [['border-radius', '8px'], ['min-height', '34px']], 'the Workspace selector keeps the sidebar row geometry: 8px radius, 34px line'],
   ['sidebar.module.css', '.inboxCard', [['border-radius', '8px'], ['height', '34px']], 'the Inbox entry is a sidebar row: 8px radius, 34px height'],
   ['countBadge.module.css', '.badge', [['height', '18px'], ['min-width', '18px'], ['border-radius', '999px'], ['box-sizing', 'border-box'], ['line-height', '18px'], ['flex', 'none']], 'every count is one 18px capsule in one place; border-box keeps one digit a circle instead of a padded oval, the line box is the capsule\'s own height so a surface inheriting `normal` cannot move the digit, and `flex: none` keeps a squeezed row from shrinking it'],
   ['inbox.module.css', '.row', [['border-radius', '8px']], 'the mention queue row shares the shipped 8px list-row radius'],
@@ -402,6 +402,25 @@ for (const file of readdirSync(clientDir).filter(name => name.endsWith('.module.
       const bare = rule.selector.replace(/^[\s\S]*\*\//, '').replace(/\s+/g, ' ').trim().slice(0, 60)
       note('error', `${file} ${bare}`, 'full-round radius without `corner-shape: round`; the platform superellipse squares capsule ends off')
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 12. Popup roles: a trigger that opens the shared Menu renders `role="menu"`
+//     with `role="menuitem"` rows — the primitive owns that markup — so a
+//     trigger announcing `aria-haspopup="listbox"` promises the reader a popup
+//     they will never get, and a screen reader voices the wrong control class.
+//     Every `aria-haspopup` in the Team Client opens either that Menu or a
+//     dialog; the composer's mention picker is a genuine listbox, but it is
+//     driven from the textarea through `aria-activedescendant` and carries no
+//     haspopup attribute at all, so it is not in this rule's path.
+// ---------------------------------------------------------------------------
+
+for (const file of readdirSync(clientDir).filter(name => name.endsWith('.tsx'))) {
+  const source = readFileSync(join(clientDir, file), 'utf8')
+  for (const match of source.matchAll(/aria-haspopup="listbox"/g)) {
+    const line = source.slice(0, match.index).split('\n').length
+    note('error', `${file}:${line}`, 'aria-haspopup="listbox" on a trigger whose popup is the shared Menu (role="menu", menuitem rows); declare aria-haspopup="menu"')
   }
 }
 

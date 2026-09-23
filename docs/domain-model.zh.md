@@ -64,7 +64,7 @@ Claim 的自由文本工作方向。比较时执行 Unicode 规范化、首尾�
 
 ## Thread Inbox
 
-Team ledger 从 Thread Attention 与 direct mention 派生的成员级未读投影。普通 Message、Claim 变化和 Task resolution 变化只对当前 follower 形成 ordinary unread；structured mention 形成 direct unread。`team_inbox` 返回跨 Thread 摘要，`team_thread.read` 原子返回连续未读批次并推进 watermark，`team_thread.history` 只回看历史。Inbox 是 Host 权威，不是 Agent Session queue、浏览器状态或 per-message read 表。Human Web 不提供 Inbox 界面；它从 Channel 直接浏览和打开 Thread。
+Team ledger 从 Thread Attention 与 direct mention 派生的成员级未读投影。普通 Message、Claim 变化和 Task resolution 变化只对当前 follower 形成 ordinary unread；structured mention 形成 direct unread。`team_inbox` 返回跨 Thread 摘要，`team_thread.read` 原子返回连续未读批次并推进 watermark，`team_thread.history` 只回看历史。Inbox 是 Host 权威，不是 Agent Session queue、浏览器状态或 per-message read 表。Human Web 从 Channel 与 Inbox 页面浏览和打开 Thread。
 
 ## Follow
 
@@ -76,7 +76,7 @@ Follow 是 Thread Attention 的一个操作语义，不是独立的持久对象�
 
 ## Inbox Hint
 
-Host 由 durable Thread Inbox 状态派生给 Agent 的安全边界提示。Ticket 01 只实现 durable Inbox projection；Agent runtime wake hint 属于 Ticket 03，尚未实现。提示最多合并为每个 Member 一个无正文 Inbox hint；它不是 Message/Activity 正文投递，也不表示模型已读取、处理、回复或验收。普通更新可唤醒 idle Member，running Member 在安全 next-step 边界收到提示；恢复时从 durable unread 重新派生。
+Host 由 durable Thread Inbox 状态派生给 Agent 的安全边界提示。提示有界，可唤醒 idle Agent，也可在 running Agent 的下一个安全步骤送达；它不表示模型已读取、处理、回复或验收。恢复后从 durable unread 重新派生。
 
 ## Operation
 
@@ -90,13 +90,9 @@ Agent Team ledger 中一次不可变的原子业务提交。每个 Operation 有
 
 跨重启稳定、带对象类型且不可由调用者拼接的标识。Member、Channel、Task、Thread、Message、Claim 和 Operation 使用不同的 branded refs；Attention 由 Member 与 Thread 的组合标识，不暴露为可伪造的调用者对象。
 
-## Team DM
-
-未来可能增加的私有 Place 类型，具有独立 participant set、visibility、Message、Thread、Attention 与 Inbox 语义。M2 第一阶段不实现 DM；后续方向是把 Human-visible DM transcript 与 Agent 内部 append-only session 分开持久化，具体 authority 与通知语义待单独设计。
-
 ## Runtime Presence
 
-Agent Member 的进程内可用性投影，不是 ledger 事实。M2 UI 使用 available（live idle）、working（Agent loop running）、error（当前 loop/tool failure，保留到下一次 loop 启动）与 unavailable（无可用 AgentHandle 或 lifecycle/setup/resume 阻止调用，也包括 context rollover 的短暂窗口——ledger 绑定已迁移、新 Session 尚未就绪）；列表以状态点呈现，和 Claim 状态分离。
+Agent Member 的进程内可用性投影，不是 ledger 事实。它使用 available（live idle）、working（Agent loop running）、error（当前 loop/tool failure，保留到下一次 loop 启动）与 unavailable（无可用 AgentHandle 或 lifecycle/setup/resume 阻止调用，也包括 context rollover 的短暂窗口——ledger 绑定已迁移、新 Session 尚未就绪）；列表以状态点呈现，和 Claim 状态分离。
 
 ## Member Diagnostic（成员诊断）
 

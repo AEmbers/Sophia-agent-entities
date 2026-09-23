@@ -17,7 +17,7 @@
 
 本节只列尚未结束的工作项；已结束的见 `archive/YYYY-MM/`。
 
-- [Member Session 架构](active/member-session-architecture/README.md)：统一读取 seam、历史召回与安全回返；spec 已定稿，ticket 03 为当前 frontier。
+当前没有进行中的工作项。已归档的两项（2026-09）：[Member Session 架构](archive/2026-09/member-session-architecture/README.md)、[Context continuity](archive/2026-09/context-continuity/README.md)。
 
 ## 临时材料和 UI 证据
 

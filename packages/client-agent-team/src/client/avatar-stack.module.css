@@ -6,14 +6,20 @@
 
 /* One overlapping circle. The 2px ring is what separates neighbours, and the hue
    is the shared Member hash, so an owner reads the same here as their timeline
-   avatar. The ring is the surface the stack is laid on — not a fixed page color —
-   because a row that darkens on hover or focus would otherwise show the ring as a
-   halo of empty space around the faces. */
+   avatar. The ring paints the surface the stack is laid on rather than a fixed
+   page color, because a row that darkens on hover or focus would otherwise show
+   the ring as a halo of empty space around the faces. That surface takes two
+   shadow layers — the wash such a row hands over, over the page fill — because
+   the wash is translucent: painting it alone would darken the already-darkened
+   row a second time and ring the chip with a halo it wears on no other row. */
 .avatar,
+.avatarImage,
 .overflow {
   align-items: center;
   border-radius: 50%;
-  box-shadow: 0 0 0 2px var(--team-mark-ring, var(--dsw-alias-bg-base));
+  box-shadow:
+    0 0 0 2px var(--team-mark-ring, var(--dsw-alias-bg-base)),
+    0 0 0 2px var(--dsw-alias-bg-base);
   corner-shape: round;
   display: inline-flex;
   font-size: 9px;
@@ -28,11 +34,20 @@
   color: #fff;
 }
 
+/* The Human's picture in the same circle, replacing the initial it falls back
+   to: the hue stays behind it as the ground a slow decode shows, and the bytes
+   cover it once they land. */
+.avatarImage {
+  background: hsl(var(--team-avatar-hue, 212) 42% 46%);
+  object-fit: cover;
+}
+
 /* The overflow chip keeps the circle geometry without claiming an identity. */
 .overflow {
   background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-secondary);
 }
 
-.avatar + .avatar,
-.avatar + .overflow { margin-left: -6px; }
+/* Every chip after the first overlaps its neighbour, whatever it is drawn from:
+   a picture takes the same slot as the initial it replaces. */
+.stack > :not(:first-child) { margin-left: -6px; }

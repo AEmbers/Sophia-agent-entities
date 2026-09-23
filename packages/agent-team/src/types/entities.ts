@@ -205,6 +205,26 @@ export interface AgentTeamResolveTaskRefsResult {
   readonly resolved: readonly AgentTeamResolvedTaskRef[]
 }
 
+/** Look up navigation facts for branded Thread refs found in message bodies. */
+export interface AgentTeamResolveThreadRefsRequest {
+  readonly workspaceId: WorkspaceId
+  readonly threadRefs: readonly AgentTeamThreadRef[]
+}
+
+/** One resolved Thread; refs that do not exist in the workspace are omitted. */
+export interface AgentTeamResolvedThreadRef {
+  readonly threadRef: AgentTeamThreadRef
+  readonly channelRef: AgentTeamChannelRef
+  readonly taskRef?: AgentTeamTaskRef
+  readonly taskNumber?: number
+  /** Opening-line gist distinguishing one Thread chip from another: first line, trimmed, capped at 40 characters. */
+  readonly title: string
+}
+
+export interface AgentTeamResolveThreadRefsResult {
+  readonly resolved: readonly AgentTeamResolvedThreadRef[]
+}
+
 export interface AgentTeamOperationBase {
   readonly sequence: number
   readonly operationId: AgentTeamOperationId

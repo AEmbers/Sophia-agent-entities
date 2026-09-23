@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentTeamClientMemberStatus, AgentTeamChannelRef, AgentTeamInbox, AgentTeamMemberId, AgentTeamSendMessageRequest, AgentTeamTask, AgentTeamView, AgentTeamViewItem,
   AgentTeamTaskRef, AgentTeamThreadRef,
 } from '@wowyuarm/dsh-agent-team/types'
@@ -10,14 +10,16 @@ import type { TeamDraftKey, TeamDraftStore } from './drafts.ts'
 import { TeamComposer } from './TeamComposer.tsx'
 import { TeamMemberRow } from './TeamMemberRow.tsx'
 import { TeamMessage } from './TeamMessage.tsx'
-import { TeamAvatarStack, type TeamAvatarOwner } from './TeamAvatarStack.tsx'
+import { namedAvatarOwners, TeamAvatarStack, type TeamAvatarHuman, type TeamAvatarOwner } from './TeamAvatarStack.tsx'
 import { TeamCountBadge } from './TeamCountBadge.tsx'
 import { TeamRunDivider } from './TeamRunDivider.tsx'
 import { claimersLabel, formatAbsoluteTime, formatInboxTime, formatTaskStatus, taskStatusDot, mentionNamesOf } from './team-formatters.ts'
 import { TeamStateDot } from './TeamStateDot.tsx'
 import { useChannelMembership } from './team-membership.ts'
 import { useTimelineScroll } from './timeline-scroll.ts'
-import { hostTaskRefLookup, jumpToTaskThread } from './task-refs.ts'
+import { hostTaskRefLookup, jumpToTaskThread } from './refs.ts'
+import { hostThreadRefLookup, jumpToThread } from './refs.ts'
+import { rosterChannelName, rosterMember } from './refs.ts'
 import { chunkRunsWithDays, isRunGap } from './team-separators.ts'
 import channelCss from './channel.module.css'
 import css from './conversation.module.css'
@@ -26,6 +28,9 @@ import threadCss from './thread.module.css'
 interface TeamChannelPageProps {
   readonly workspaceId: WorkspaceId
   readonly channelRef: AgentTeamChannelRef
+  /** The Human's own display name and avatar, from the shared identity projection. */
+  readonly humanName: string
+  readonly humanAvatarUrl?: string | undefined
   readonly loadChannels: TeamConversationProps['loadChannels']
   readonly subscribeChanges: TeamConversationProps['subscribeChanges']
   readonly loadMembers: TeamConversationProps['loadMembers']
@@ -40,6 +45,8 @@ interface TeamChannelPageProps {
   readonly selectThread: TeamConversationProps['selectThread']
   readonly selectChannel: TeamConversationProps['selectChannel']
   readonly resolveTaskRefs: TeamConversationProps['resolveTaskRefs']
+  readonly resolveThreadRefs: TeamConversationProps['resolveThreadRefs']
+  readonly openMemberSession: TeamConversationProps['openMemberSession']
   readonly backToChannels: TeamConversationProps['backToChannels']
   readonly t: TeamConversationProps['t']
 }
@@ -73,12 +80,26 @@ function followUpAt(item: AgentTeamViewItem): string | undefined {
   return lastActivityAt === undefined || lastActivityAt === item.message.occurredAt ? undefined : lastActivityAt
 }
 
+/**
+ * What the door prints about follow-up activity, or nothing. A resolved Task
+ * stops printing it: the status word beside the door already says nothing is
+ * moving, and the instant it would print is the moment it resolved — repeated
+ * on every finished row. The precise instant stays on the control's title, one
+ * hover away. A taskless Thread never resolves, so a discussion keeps the
+ * recency that is the whole of its state line: it wears no status word, dot, or
+ * owner stack.
+ */
+function printedActivityAt(item: AgentTeamViewItem): string | undefined {
+  const status = item.task?.status
+  return status === 'done' || status === 'closed' ? undefined : followUpAt(item)
+}
+
 /** Host unread per Thread, keyed for the feed's rows: zero unread is the absence of a badge, not a row. */
 function unreadCounts(inbox: AgentTeamInbox): ReadonlyMap<AgentTeamThreadRef, number> {
   return new Map(inbox.items.filter(item => item.unreadCount > 0).map(item => [item.thread.threadRef, item.unreadCount]))
 }
 
-export function TeamChannelPage({ workspaceId, channelRef, loadChannels, subscribeChanges, loadMembers, loadInbox, drafts, putAttachment, getAttachment, sendMessage, joinChannel, removeChannelMember, selectThread, selectChannel, backToChannels, resolveTaskRefs, t }: TeamChannelPageProps) {
+export function TeamChannelPage({ workspaceId, channelRef, humanName, humanAvatarUrl, loadChannels, subscribeChanges, loadMembers, loadInbox, drafts, putAttachment, getAttachment, sendMessage, joinChannel, removeChannelMember, selectThread, selectChannel, backToChannels, resolveTaskRefs, resolveThreadRefs, openMemberSession, t }: TeamChannelPageProps) {
   const [view, setView] = useState<AgentTeamView>()
   const [members, setMembers] = useState<readonly AgentTeamClientMemberStatus[]>([])
   const [unreadByThread, setUnreadByThread] = useState<ReadonlyMap<AgentTeamThreadRef, number>>(new Map())
@@ -106,8 +127,10 @@ export function TeamChannelPage({ workspaceId, channelRef, loadChannels, subscri
   const refreshSequenceRef = useRef(0)
   const channelLastItem = view?.items[view.items.length - 1]
   // Branded-ref navigation for message bodies: channel refs hop directly,
-  // task refs resolve against this Channel's loaded timeline and degrade to a
-  // no-op when the target is not reachable from here.
+  // task and thread refs resolve against this Channel's loaded timeline and
+  // fall back to the Host resolver, which also accepts abbreviated spellings.
+  // Unresolvable refs never become links (see TeamMessage), so this path only
+  // fires for refs the Host already confirmed.
   const openRef = (ref: string): void => {
     if (ref.startsWith('channel:')) {
       if (ref !== channelRef) selectChannel(ref as AgentTeamChannelRef)
@@ -119,16 +142,9 @@ export function TeamChannelPage({ workspaceId, channelRef, loadChannels, subscri
         selectThread(match.thread.threadRef, channelRef, match.task?.taskRef, match.taskNumber)
         return
       }
-      // A ref may point outside the currently loaded Channel window. Ask the
-      // Host for the bounded Thread view so it can provide the home Channel.
-      void loadChannels({ workspaceId, threadRef: ref as AgentTeamThreadRef, includeActivities: false, limit: 1 }).then(result => {
-        if (!result.ok) return
-        const target = result.value.items[0]
-        if (target !== undefined) {
-          const targetChannel = result.value.channels.find(channel => channel.channelRef === target.message.channelRef)
-          if (targetChannel !== undefined) selectThread(target.thread.threadRef, targetChannel.channelRef, target.task?.taskRef, target.taskNumber)
-        }
-      })
+      // Not in the loaded timeline (or cited by abbreviation): resolve through
+      // the Host and jump to the Thread's home Channel.
+      jumpToThread(resolveThreadRefs, workspaceId, ref as AgentTeamThreadRef, selectThread)
       return
     }
     if (ref.startsWith('task:')) {
@@ -144,6 +160,33 @@ export function TeamChannelPage({ workspaceId, channelRef, loadChannels, subscri
   }
 
   const lookupTaskRefs = hostTaskRefLookup(resolveTaskRefs, workspaceId)
+  const lookupThreadRefs = hostThreadRefLookup(resolveThreadRefs, workspaceId)
+  // Roster chips resolve synchronously from loaded data: channel names from
+  // the loaded feed windows, member facts from the member list. Anything
+  // outside stays plain text — the same rule unresolvable refs follow. The
+  // lookups key on roster content, not array identity: every refresh hands
+  // over fresh arrays, and the memoized rows must survive change bursts that
+  // leave the roster itself untouched.
+  const rosterKey = useMemo(() => [
+    (view?.channels ?? []).map(channel => `${channel.channelRef}=${channel.name}=${channel.state}`).join(','),
+    members.map(status => `${status.member.memberId}=${status.member.handle}=${status.member.sessionId}=${status.availability}`).join(','),
+    view?.humanMemberId ?? '',
+  ].join(';'), [view, members])
+  const channelNameOf = useMemo(() => {
+    const channels = view?.channels ?? []
+    return (ref: AgentTeamChannelRef): string | undefined => rosterChannelName(channels, ref)
+  }, [rosterKey])
+  const memberOf = useMemo(() => {
+    const humanMemberId = view?.humanMemberId
+    return (ref: AgentTeamMemberId) => rosterMember(members, humanMemberId, humanName, ref)
+  }, [rosterKey, humanName])
+  // The Thread entry row's owner stack speaks the same grammar as the Inbox
+  // row's, Human included: the Host names which actor is the reader, the
+  // Client's identity projection says what that actor looks like.
+  const humanMemberId = view?.humanMemberId
+  const humanIdentity: TeamAvatarHuman | undefined = humanMemberId === undefined
+    ? undefined
+    : { memberId: humanMemberId, name: humanName, ...(humanAvatarUrl === undefined ? {} : { avatarUrl: humanAvatarUrl }) }
 
   const timeline = useTimelineScroll(`${view?.items.length ?? 0}:${channelLastItem?.message.messageRef ?? ''}`)
   const channel = view?.channels.find(item => item.channelRef === channelRef)
@@ -388,7 +431,7 @@ export function TeamChannelPage({ workspaceId, channelRef, loadChannels, subscri
           {block.items.map((item, index) => {
             const senderStatus = members.find(member => member.member.memberId === item.message.sender)
             const human = item.message.sender === view!.humanMemberId
-            const sender = human ? t('human') : senderStatus?.member.handle ?? item.message.sender
+            const sender = human ? humanName : senderStatus?.member.handle ?? item.message.sender
             const turnGap = isRunGap(index > 0 ? block.items[index - 1]!.message.occurredAt : undefined, item.message.occurredAt)
             const task = item.task
             // The entry's own line is the gate under the body, and its state
@@ -403,14 +446,19 @@ export function TeamChannelPage({ workspaceId, channelRef, loadChannels, subscri
                 senderName={sender}
                 memberId={item.message.sender}
                 human={human}
+                {...(humanAvatarUrl === undefined ? {} : { avatarUrl: humanAvatarUrl })}
                 body={item.message.body}
                 attachments={item.message.attachments}
                 loadAttachment={getAttachment}
                 t={t}
                 occurredAt={item.message.occurredAt}
-                mentionNames={mentionNamesOf(item.mentions, handleByMember)}
+                mentionNames={mentionNamesOf(item.mentions, handleByMember, humanName)}
                 onOpenRef={openRef}
                 onResolveTaskRefs={lookupTaskRefs}
+                onResolveThreadRefs={lookupThreadRefs}
+                channelNameOf={channelNameOf}
+                memberOf={memberOf}
+                onOpenMemberSession={openMemberSession}
                 grouped={index > 0}
                 showGroupedTime={item.message.topLevel === true && !turnGap}
                 {...(senderStatus === undefined ? {} : { senderTitle: senderStatus.member.description })}
@@ -419,6 +467,7 @@ export function TeamChannelPage({ workspaceId, channelRef, loadChannels, subscri
                   item={item}
                   owners={item.claimOwners}
                   unread={unread}
+                  human={humanIdentity}
                   t={t}
                   onOpen={() => { selectThread(item.thread.threadRef, channelRef, task?.taskRef, item.taskNumber) }}
                 />}
@@ -457,15 +506,17 @@ export function TeamChannelPage({ workspaceId, channelRef, loadChannels, subscri
  * carried nothing else. The unread capsule is the only member a taskless
  * discussion can carry: it needs no Task.
  */
-function ThreadStateCluster({ task, owners, unread, t }: {
+function ThreadStateCluster({ task, owners, unread, human, t }: {
   readonly task: AgentTeamTask | undefined
   readonly owners: readonly TeamAvatarOwner[]
   readonly unread: number
+  readonly human: TeamAvatarHuman | undefined
   readonly t: TeamConversationProps['t']
 }) {
   if (task === undefined && unread === 0) return null
+  const namedOwners = namedAvatarOwners(owners, human)
   return <span className={css.stateCluster}>
-    {task !== undefined && <TeamAvatarStack owners={owners} label={claimersLabel(owners, t)} />}
+    {task !== undefined && <TeamAvatarStack owners={namedOwners} label={claimersLabel(namedOwners, t)} human={human} />}
     {task !== undefined && <TeamStateDot size={8} state={taskStatusDot(task.status)} />}
     {task !== undefined && <span className={css.statusWord}>{formatTaskStatus(task.status, t)}</span>}
     {/* The capsule is decoration inside the control whose label already carries
@@ -479,24 +530,27 @@ function ThreadStateCluster({ task, owners, unread, t }: {
  * The gate under one top-level Message: the single row that opens its Thread,
  * and the one line that says what stands there. State leads it, then what the
  * entry is: a Task entry keeps its number so the status word never floats free
- * of the Task it describes, follow-up activity adds when the work last moved,
- * and an unanswered Thread says only 回复. The instant uses the Inbox's own
- * 今天/昨天 form with the precise local time on the control's title, and an
- * unread Thread says so in the control's label rather than only in pixels.
+ * of the Task it describes, follow-up activity adds when the work last moved —
+ * while the work is still unfinished — and an unanswered Thread says only 回复.
+ * The instant uses the Inbox's own 今天/昨天 form with the precise local time on
+ * the control's title, and an unread Thread says so in the control's label
+ * rather than only in pixels.
  */
-function ThreadEntryRow({ item, owners, unread, t, onOpen }: {
+function ThreadEntryRow({ item, owners, unread, human, t, onOpen }: {
   readonly item: AgentTeamViewItem
   readonly owners: readonly TeamAvatarOwner[]
   readonly unread: number
+  readonly human: TeamAvatarHuman | undefined
   readonly t: TeamConversationProps['t']
   readonly onOpen: () => void
 }) {
   const taskNumber = item.taskNumber
   const followUp = followUpAt(item)
+  const printedActivity = printedActivityAt(item)
   const label = taskNumber !== undefined
     ? t('taskLabel', { number: taskNumber })
     : followUp === undefined ? t('replyAction') : t('threadLabel')
-  const text = followUp === undefined ? label : `${label} · ${t('recentActivity', { time: formatInboxTime(followUp, t) })}`
+  const text = printedActivity === undefined ? label : `${label} · ${t('recentActivity', { time: formatInboxTime(printedActivity, t) })}`
   const openLabel = taskNumber === undefined
     ? unread > 0 ? t('openThreadUnread', { count: unread }) : t('openThread')
     : unread > 0 ? t('openTaskUnread', { number: taskNumber, count: unread }) : t('openTask', { number: taskNumber })
@@ -505,7 +559,7 @@ function ThreadEntryRow({ item, owners, unread, t, onOpen }: {
   // descendants from the accessibility tree — and so the control's name says
   // exactly what clicking it does.
   return <span className={css.entryLine} data-thread-entry="">
-    <ThreadStateCluster task={item.task} owners={owners} unread={unread} t={t} />
+    <ThreadStateCluster task={item.task} owners={owners} unread={unread} human={human} t={t} />
     <button
       type="button"
       className={css.entryRow}

@@ -4,6 +4,11 @@
   height: 42px;
   margin: 8px 0 0;
   width: 100%;
+  /* The band is a flex row sized by its tallest registrant, and the footer is
+     bottom-anchored, so a taller entry from another plugin grows it upward.
+     Bottom-aligning this stack keeps our row seated directly above Settings
+     instead of leaving the growth as a gap between the two. */
+  align-self: flex-end;
 }
 
 .footerAction,

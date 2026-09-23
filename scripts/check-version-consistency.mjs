@@ -1,0 +1,139 @@
+// Mechanical gate for the certified-version consistency rule.
+//
+// The certified DSH baseline is written in many places: the CI tag, the setup
+// script tag, the development guide, the READMEs, the architecture doc, the
+// compatibility doc, and the bug-report placeholder — each in both languages
+// where a pair exists. Humans advance those spots one by one and forget one
+// silently; this script reads them all back and refuses a split baseline.
+//
+// It asserts two lane-agnostic facts, never a hardcoded version, so both the
+// blocking lane and the alpha lane pass unchanged:
+// (a) every named spot states the same certified version (the `dsh-v` prefix
+//     the machine files carry is normalized away), and
+// (b) that version is the lower bound of every `@deepseek-ai/dsh-*`
+//     peer range in the root manifest — the line we certify is the
+//     line users can install.
+// The bug-report placeholder also names our own plugin version, which must
+// equal the root manifest version.
+//
+// Deliberately excluded: CHANGELOG (history), `.scratch/` (work history), the
+// history paragraphs inside the compatibility doc (only its baseline sentence
+// is read), and the vendored sqlite fork pin (intentionally off-baseline).
+//
+// It deliberately runs standalone — no Harness checkout, no Vitest config — so
+// a version-touching change can be checked in a second:
+// `npm run check:versions`, which is also part of `npm test`.
+// `--root <dir>` points the same checks at another tree (used to run the gate
+// against the extracted alpha lane without switching branches).
+import { readFileSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const argvRoot = argvValue('--root')
+const root = argvRoot ? resolve(argvRoot) : repositoryRoot
+
+function argvValue(flag) {
+  const index = process.argv.indexOf(flag)
+  return index === -1 ? undefined : process.argv[index + 1]
+}
+
+function read(relativePath) {
+  return readFileSync(join(root, relativePath), 'utf8')
+}
+
+function extract(relativePath, pattern) {
+  const text = read(relativePath)
+  const match = text.match(pattern)
+  return match ? match[1] : undefined
+}
+
+const failures = []
+// The tag spots carry the `dsh-v` prefix the prose spots omit.
+const normalize = (version) => version.replace(/^dsh-v/u, '')
+
+// (a) Every named spot states the same certified version. Each pattern anchors
+// on the sentence that declares the current baseline, so history paragraphs
+// that mention older versions never participate.
+const spots = [
+  { file: '.github/workflows/ci.yml', pattern: /DSH_HARNESS_TAG:\s*dsh-v(\S+)/u },
+  { file: '.hoplite/settings.json', pattern: /HARNESS_TAG=\\"dsh-v([^\\]+)\\"/u },
+  { file: 'docs/development.md', pattern: /currently `dsh-v([^`]+)`; advance it per certification/u },
+  { file: 'docs/development.md', pattern: /minimum compatible DSH version is `([^`]+)`/u },
+  { file: 'docs/development.zh.md', pattern: /当前 `dsh-v([^`]+)`/u },
+  { file: 'docs/development.zh.md', pattern: /最低兼容版本是 DSH `([^`]+)`/u },
+  { file: 'README.md', pattern: /certified against DSH `([^`]+)`/u },
+  { file: 'README.zh.md', pattern: /针对 DSH `([^`]+)` 完成认证/u },
+  { file: 'docs/architecture.md', pattern: /targets DSH `([^`]+)`/u },
+  { file: 'docs/architecture.zh.md', pattern: /目标为 DSH `([^`]+)`/u },
+  { file: 'docs/dsh-release-compatibility.md', pattern: /current certified baseline is DSH `([^`]+)`/u },
+  { file: 'docs/dsh-release-compatibility.zh.md', pattern: /已认证基线是 DSH `([^`]+)`/u },
+]
+
+// One file can own two spots (the development guide states both the setup
+// tag and the minimum compatible version), so findings are a list, not a
+// file-keyed map.
+const stated = []
+for (const { file, pattern } of spots) {
+  const found = extract(file, pattern)
+  if (found === undefined) {
+    failures.push(`${file}: baseline declaration not found (pattern stopped matching — update the pattern with the prose)`)
+  } else {
+    stated.push({ file, version: normalize(found) })
+  }
+}
+
+// The CI tag is the machine source: it is what the setup script checks out.
+const reference = stated.find((entry) => entry.file === '.github/workflows/ci.yml')?.version
+if (reference !== undefined) {
+  for (const { file, version } of stated) {
+    if (version !== reference) {
+      failures.push(`${file} states ${version} but the certified baseline is ${reference} (from .github/workflows/ci.yml)`)
+    }
+  }
+}
+
+// The bug-report placeholder names both versions: the DSH line under test and
+// our own plugin version, which must equal the root manifest version.
+const manifest = JSON.parse(read('package.json'))
+const placeholderMatch = read('.github/ISSUE_TEMPLATE/bug_report.yml')
+  .match(/placeholder:\s*"DSH ([^·]+) · plugin ([^"]+)"/u)
+if (placeholderMatch === null) {
+  failures.push('.github/ISSUE_TEMPLATE/bug_report.yml: version placeholder not found (pattern stopped matching — update the pattern with the prose)')
+} else {
+  const [, placeholderDsh, placeholderPlugin] = placeholderMatch
+  if (normalize(placeholderDsh.trim()) !== reference) {
+    failures.push(`.github/ISSUE_TEMPLATE/bug_report.yml states DSH ${placeholderDsh.trim()} but the certified baseline is ${reference} (from .github/workflows/ci.yml)`)
+  }
+  if (placeholderPlugin.trim() !== manifest.version) {
+    failures.push(`.github/ISSUE_TEMPLATE/bug_report.yml states plugin ${placeholderPlugin.trim()} but package.json is ${manifest.version}`)
+  }
+}
+
+// (b) The certified version is the lower bound of every DSH peer range:
+// the line we certify is the line users can install. (The vendored sqlite
+// fork lives in devDependencies as an exact off-baseline pin on purpose and
+// never enters peerDependencies, so there is nothing to exclude here.)
+const peerRanges = Object.entries(manifest.peerDependencies ?? {})
+  .filter(([name]) => name.startsWith('@deepseek-ai/dsh-'))
+if (peerRanges.length === 0) {
+  failures.push('package.json: no @deepseek-ai/dsh-* peerDependencies found (the lower-bound check would pass vacuously)')
+}
+for (const [name, range] of peerRanges) {
+  const lower = typeof range === 'string' ? range.match(/^>=(\S+)\s+</u)?.[1] : undefined
+  if (lower === undefined) {
+    failures.push(`package.json peer ${name} has range ${range}, expected >=<certified> <...`)
+  } else if (lower !== reference) {
+    failures.push(`package.json peer ${name} admits from ${lower} but the certified baseline is ${reference} (from .github/workflows/ci.yml)`)
+  }
+}
+
+if (failures.length > 0) {
+  console.error(`Version consistency check failed (${failures.length}):`)
+  for (const failure of failures) console.error(`- ${failure}`)
+  process.exit(1)
+}
+console.log(
+  `Version consistency check OK: ${stated.length + 1} version spots agree on ${reference}, `
+    + `${peerRanges.length} DSH ranges admit from it, plugin ${manifest.version}.`,
+)

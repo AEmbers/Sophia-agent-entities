@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { AgentTeamInboxItem } from '@wowyuarm/dsh-agent-team/types'
+import type { AgentTeamInboxItem, AgentTeamMemberId } from '@wowyuarm/dsh-agent-team/types'
 import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TeamConversationProps } from './slots.ts'
 import { claimersLabel, formatAbsoluteTime, formatInboxTime } from './team-formatters.ts'
-import { TeamAvatarStack } from './TeamAvatarStack.tsx'
+import { namedAvatarOwners, TeamAvatarStack, type TeamAvatarHuman } from './TeamAvatarStack.tsx'
 import { TeamCountBadge } from './TeamCountBadge.tsx'
 import css from './conversation.module.css'
 import inboxCss from './inbox.module.css'
@@ -22,6 +22,9 @@ interface TeamInboxPageProps {
   readonly subscribeChanges: TeamConversationProps['subscribeChanges']
   readonly selectWorkspace: TeamConversationProps['selectWorkspace']
   readonly selectThread: TeamConversationProps['selectThread']
+  /** The Human's display name, from the Client's one identity projection. */
+  readonly humanName: string
+  readonly humanAvatarUrl?: string | undefined
   readonly t: TeamConversationProps['t']
 }
 
@@ -61,10 +64,14 @@ function compareInboxRows(left: TeamInboxRow, right: TeamInboxRow): number {
  * holding unread is only ever in the queue: the Host already excludes it from
  * the tail, and this page never re-derives that judgement.
  */
-export function TeamInboxPage({ useWorkspaces, loadInbox, subscribeChanges, selectWorkspace, selectThread, t }: TeamInboxPageProps) {
+export function TeamInboxPage({ useWorkspaces, loadInbox, subscribeChanges, selectWorkspace, selectThread, humanName, humanAvatarUrl, t }: TeamInboxPageProps) {
   const workspaces = useWorkspaces(state => state.items)
   const [rows, setRows] = useState<readonly TeamInboxRow[]>()
   const [recentRows, setRecentRows] = useState<readonly TeamInboxRow[]>([])
+  // The Host names the Human's Member id on every Inbox row's payload; the
+  // page keeps it so a row can draw that one actor from the Client's own
+  // Human identity instead of the initials the stack gives every Agent.
+  const [humanMemberId, setHumanMemberId] = useState<AgentTeamMemberId>()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string>()
   // Only the first refresh owns the loading surface; later wakes refresh the
@@ -76,10 +83,11 @@ export function TeamInboxPage({ useWorkspaces, loadInbox, subscribeChanges, sele
     const results = await Promise.all(workspaces.map(async workspace => {
       const result = await loadInbox({ workspaceId: workspace.workspaceId, limit: 100 })
       return result.ok
-        ? { ok: true as const, workspaceId: workspace.workspaceId, workspaceTitle: workspace.title, items: result.value.items, recent: result.value.recent }
+        ? { ok: true as const, workspaceId: workspace.workspaceId, workspaceTitle: workspace.title, items: result.value.items, recent: result.value.recent, humanMemberId: result.value.humanMemberId }
         : { ok: false as const, message: result.error.message }
     }))
     const failure = results.find(result => !result.ok)
+    setHumanMemberId(results.find(result => result.ok)?.humanMemberId)
     const asRows = (items: readonly AgentTeamInboxItem[], workspaceId: WorkspaceId, workspaceTitle: string): TeamInboxRow[] =>
       items.map(item => ({ workspaceId, workspaceTitle, item }))
     setRows(results.flatMap(result => result.ok ? asRows(result.items, result.workspaceId, result.workspaceTitle) : []).sort(compareInboxRows))
@@ -123,6 +131,12 @@ export function TeamInboxPage({ useWorkspaces, loadInbox, subscribeChanges, sele
   for (const row of rows ?? []) shownWorkspaces.add(row.workspaceTitle)
   for (const row of recentRows) shownWorkspaces.add(row.workspaceTitle)
   const showWorkspace = shownWorkspaces.size > 1
+  // One identity for every row on the page: the Host tells the rows which
+  // actor is the reader, the Client's identity projection says what that actor
+  // looks like. Either half missing leaves the stack on its initials fallback.
+  const human = humanMemberId === undefined
+    ? undefined
+    : { memberId: humanMemberId, name: humanName, ...(humanAvatarUrl === undefined ? {} : { avatarUrl: humanAvatarUrl }) } satisfies TeamAvatarHuman
   return <main className={css.surface} data-team-inbox>
     <div className={css.surfaceHeader}>
       <header className={css.headerRow}>
@@ -153,13 +167,13 @@ export function TeamInboxPage({ useWorkspaces, loadInbox, subscribeChanges, sele
               {rows.length > 0 && <section className={inboxCss.section}>
                 <h2 className={inboxCss.sectionTitle}>{t('inboxSectionNeedsMe')}<span className={inboxCss.sectionCount}>{rows.length}</span></h2>
                 <div className={inboxCss.list}>
-                  {rows.map(row => <InboxQueueRow key={`${row.workspaceId} ${row.item.thread.threadRef}`} row={row} t={t} showWorkspace={showWorkspace} onOpen={() => { open(row) }} />)}
+                  {rows.map(row => <InboxQueueRow key={`${row.workspaceId} ${row.item.thread.threadRef}`} row={row} t={t} showWorkspace={showWorkspace} human={human} onOpen={() => { open(row) }} />)}
                 </div>
               </section>}
               {recentRows.length > 0 && <section className={inboxCss.section}>
                 <h2 className={inboxCss.sectionTitle}>{t('inboxSectionRecent')}<span className={inboxCss.sectionCount}>{recentRows.length}</span></h2>
                 <div className={inboxCss.list}>
-                  {recentRows.map(row => <InboxQueueRow key={`${row.workspaceId} ${row.item.thread.threadRef}`} row={row} t={t} showWorkspace={showWorkspace} onOpen={() => { open(row) }} />)}
+                  {recentRows.map(row => <InboxQueueRow key={`${row.workspaceId} ${row.item.thread.threadRef}`} row={row} t={t} showWorkspace={showWorkspace} human={human} onOpen={() => { open(row) }} />)}
                 </div>
               </section>}
             </>)}
@@ -191,15 +205,20 @@ export function TeamInboxPage({ useWorkspaces, loadInbox, subscribeChanges, sele
  * because a second visible count beside the first would cost the row the one
  * thing it needs to stay scannable.
  */
-function InboxQueueRow({ row, t, showWorkspace, onOpen }: {
+function InboxQueueRow({ row, t, showWorkspace, human, onOpen }: {
   readonly row: TeamInboxRow
   readonly t: TeamConversationProps['t']
   readonly showWorkspace: boolean
+  readonly human: TeamAvatarHuman | undefined
   readonly onOpen: () => void
 }) {
   const { item } = row
   const actor = item.newestActor
   const owners = item.claimOwners
+  // The row's names come from the Client's Human identity where it applies, so
+  // the chip's letter and the label's name move together on a rename.
+  const namedOwners = namedAvatarOwners(owners, human)
+  const namedActor = namedAvatarOwners([actor], human)[0]!
   const named = item.directCount > 0
   const countLabel = named
     ? t('inboxRowUnreadMentions', { count: item.unreadCount, mentions: item.directCount })
@@ -219,8 +238,8 @@ function InboxQueueRow({ row, t, showWorkspace, onOpen }: {
         the row's visible text is the Thread, not the queue. */}
     <span className={inboxCss.rowActor}>
       {owners.length > 0
-        ? <TeamAvatarStack owners={owners} label={claimersLabel(owners, t)} />
-        : <TeamAvatarStack owners={[actor]} label={t('inboxRowActor', { name: `@${actor.name}` })} />}
+        ? <TeamAvatarStack owners={namedOwners} label={claimersLabel(namedOwners, t)} human={human} />
+        : <TeamAvatarStack owners={[namedActor]} label={t('inboxRowActor', { name: `@${namedActor.name}` })} human={human} />}
     </span>
     <span className={inboxCss.rowLine}>
       <span className={inboxCss.rowCrumb}>

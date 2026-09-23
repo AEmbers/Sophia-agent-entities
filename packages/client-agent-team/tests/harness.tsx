@@ -3,7 +3,7 @@ import type { AgentTeamChangesRequest } from '@wowyuarm/dsh-agent-team/types'
 import { vi } from 'vitest'
 import { useState } from 'react'
 import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/client'
-import type { AgentTeamAddMemberRequest, AgentTeamCreateChannelRequest, AgentTeamMemberDiagnostic, AgentTeamReplyRequest, AgentTeamSendMessageRequest } from '@wowyuarm/dsh-agent-team/types'
+import type { AgentTeamAddMemberRequest, AgentTeamCreateChannelRequest, AgentTeamMemberDiagnostic, AgentTeamReplyRequest, AgentTeamSendMessageRequest, AgentTeamTask } from '@wowyuarm/dsh-agent-team/types'
 import { COMMON_NS, LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { en as commonEn, zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/index.ts'
 import { SlotTestRuntime, stubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
@@ -33,6 +33,15 @@ function Frame({ renderSlot }: FrameProps) {
 
 function BaselineWorkspace() { return <div data-baseline-workspaces>普通工作区</div> }
 function BaselineSettings() { return <div data-baseline-settings>设置</div> }
+interface HumanProfileSeed {
+  readonly name?: string
+  readonly avatarRef?: string
+  readonly version?: string
+  readonly repoUrl?: string
+  readonly updateAvailable?: boolean
+  readonly latestVersion?: string
+}
+
 interface SeededMessage {
   readonly body: string
   readonly occurredAt: string
@@ -40,7 +49,7 @@ interface SeededMessage {
   readonly mentions?: readonly string[]
 }
 
-export async function runtimeWithTeam(options?: { mode?: 'team'; workspaceId?: string; initialChannels?: boolean; remainingUnreadCounts?: readonly number[]; seededMessages?: readonly SeededMessage[]; seedTaskRef?: string; seedThreadRef?: string; seedTaskStatus?: 'in_progress'; seedFollowers?: readonly string[] }) {
+export async function runtimeWithTeam(options?: { mode?: 'team'; workspaceId?: string; initialChannels?: boolean; remainingUnreadCounts?: readonly number[]; seededMessages?: readonly SeededMessage[]; seedTaskRef?: string; seedThreadRef?: string; seedTaskStatus?: AgentTeamTask['status']; seedFollowers?: readonly string[]; humanProfile?: HumanProfileSeed; humanProfileFailure?: string }) {
   if (options?.mode !== undefined) {
     localStorage.setItem('dsh.agent-team.navigation', JSON.stringify({ mode: options.mode, ...(options.workspaceId === undefined ? {} : { workspaceId: options.workspaceId }) }))
   }
@@ -107,6 +116,7 @@ export async function runtimeWithTeam(options?: { mode?: 'team'; workspaceId?: s
       },
       availability: 'active', presence: 'available',
     },
+    workspaceIds: [request.workspaceId],
   } }))
   let channels: Array<Record<string, unknown>> = options?.initialChannels === true
     ? [{ channelRef: 'channel:engineering', workspaceId: 'w1', name: 'engineering', description: 'Engineering work', createdAtSequence: 1 }]
@@ -347,7 +357,7 @@ export async function runtimeWithTeam(options?: { mode?: 'team'; workspaceId?: s
     const recent = scoped.filter(row => !holdsUnread(row)).map(row => row.item)
     const unread = items.reduce((sum, item) => sum + ((item as { unreadCount?: number }).unreadCount ?? 0), 0)
     const direct = items.reduce((sum, item) => sum + ((item as { directCount?: number }).directCount ?? 0), 0)
-    return { ok: true as const, value: { items, recent, totalUnreadCount: unread, totalDirectCount: direct } }
+    return { ok: true as const, value: { humanMemberId: 'member:human', items, recent, totalUnreadCount: unread, totalDirectCount: direct } }
   })
   const seedInbox = (rows: ReadonlyArray<{ readonly workspaceId: string } & Record<string, unknown>>): void => {
     inboxRows = rows.map(row => ({ workspaceId: row.workspaceId, item: row as Record<string, unknown> }))
@@ -402,9 +412,65 @@ export async function runtimeWithTeam(options?: { mode?: 'team'; workspaceId?: s
   /** Simulates an externally driven channel/membership commit reaching every workspace waiter. */
   const seedChannel = (channel: Record<string, unknown>) => { channels = [...channels, channel] }
   const publishChannelUpdate = () => { wakeAll() }
+  // The Human profile doubles: the profile page and every seat that names or
+  // draws the Human read the same two Remotes, and the settings writes the
+  // page makes land in the same seeded value — so one rename visibly moves the
+  // page, the timeline, and the member refs together.
+  let humanProfileValue: { name: string; avatarRef?: string; version: string; repoUrl: string; updateAvailable: boolean; latestVersion?: string } = {
+    name: 'human',
+    version: '0.1.13',
+    repoUrl: 'https://github.com/wowyuarm/dsh-agent-team',
+    updateAvailable: false,
+    ...options?.humanProfile,
+  }
+  // Both seeded before the Team Client mounts, so the first demand-driven read
+  // answers with exactly what the test asked for.
+  let humanProfileFailure: string | undefined = options?.humanProfileFailure
+  let settingsWriteFailure: string | undefined
+  const humanProfile = vi.fn(async () => humanProfileFailure === undefined
+    ? { ok: true as const, value: { ...humanProfileValue } }
+    : { ok: false as const, error: { message: humanProfileFailure } })
+  const getHumanAvatar = vi.fn(async (_request: { avatarRef: string }) => ({
+    ok: true as const,
+    value: { name: 'avatar.png', mediaType: 'image/png', byteSize: 3, bytesBase64: 'AAAA' },
+  }))
+  const putHumanAvatar = vi.fn(async (_request: { name: string; mediaType?: string; bytesBase64: string }) => ({
+    ok: true as const,
+    value: { avatarRef: 'avatar:1', path: '/human/v1/avatar:1/avatar.png', name: 'avatar.png', byteSize: 3, mediaType: 'image/png' },
+  }))
+  const removeHumanAvatar = vi.fn(async (_request: { avatarRef: string }) => ({ ok: true as const, value: { removed: true } }))
+  const settingsUpdate = vi.fn(async (_ns: string, patch: Record<string, unknown>) => {
+    if (settingsWriteFailure !== undefined) return { ok: false as const, error: { message: settingsWriteFailure } }
+    if (typeof patch.name === 'string') humanProfileValue = { ...humanProfileValue, name: patch.name }
+    if (typeof patch.avatarRef === 'string') humanProfileValue = { ...humanProfileValue, avatarRef: patch.avatarRef }
+    return { ok: true as const, value: { namespace: 'agent-team-human' } }
+  })
+  const settingsMutate = vi.fn(async (_ns: string, ops: readonly { op: string; path: readonly string[] }[]) => {
+    if (settingsWriteFailure !== undefined) return { ok: false as const, error: { message: settingsWriteFailure } }
+    for (const op of ops) {
+      if (op.op !== 'unset' || op.path[0] !== 'avatarRef') continue
+      const { avatarRef: _avatarRef, ...rest } = humanProfileValue
+      humanProfileValue = rest
+    }
+    return { ok: true as const, value: { namespace: 'agent-team-human' } }
+  })
+  /** Seed the Human profile every identity read answers with. */
+  const seedHumanProfile = (next: Partial<typeof humanProfileValue>): void => {
+    humanProfileValue = { ...humanProfileValue, ...next }
+  }
+  /** Make the next profile reads fail, or clear the failure. */
+  const failHumanProfile = (message?: string): void => {
+    humanProfileFailure = message
+  }
+  /** Make the next settings writes fail, or clear the failure. */
+  const failSettingsWrite = (message?: string): void => {
+    settingsWriteFailure = message
+  }
+
   // rc.1: the client injects the model-catalog sub-namespace explicitly.
   runtime.ctx.provide('remote.session', { modelCatalog })
-  runtime.ctx.provide('remote', { session: { modelCatalog }, agentTeam: { members, joinWorkspace, leaveWorkspace, addMember, view: viewChannels, inbox, readThread, threadHistory: loadThreadHistory, threadObservations, putAttachment, getAttachment, createChannel, updateChannel, archiveChannel, updateMember, recoverMember, clearMemberContext, archiveMember, joinChannel, removeChannelMember, sendMessage, reply, changeTask, promoteThread, resolveTaskRefs, changes }, $stream: <T,>(options: ConstructorParameters<typeof RemoteStream<T>>[1]) => new RemoteStream(connection, options), $mount: async () => async () => {} } as never)
+  runtime.ctx.provide('remote.settings', { update: settingsUpdate, mutate: settingsMutate })
+  runtime.ctx.provide('remote', { session: { modelCatalog }, agentTeam: { members, joinWorkspace, leaveWorkspace, addMember, view: viewChannels, inbox, readThread, threadHistory: loadThreadHistory, threadObservations, putAttachment, getAttachment, createChannel, updateChannel, archiveChannel, updateMember, recoverMember, clearMemberContext, archiveMember, joinChannel, removeChannelMember, sendMessage, reply, changeTask, promoteThread, resolveTaskRefs, changes, humanProfile, putHumanAvatar, getHumanAvatar, removeHumanAvatar }, $stream: <T,>(options: ConstructorParameters<typeof RemoteStream<T>>[1]) => new RemoteStream(connection, options), $mount: async () => async () => {} } as never)
   runtime.ctx.provide('remote.agentTeam', {})
   runtime.ctx.provide('connection', { isLoopback: true, generation: { getSnapshot: () => ({}) }, state: { getSnapshot: () => ({}) }, rpc: {}, reconnect: vi.fn(), registerGenerationSource: vi.fn(), start: vi.fn(), stop: vi.fn() })
   await runtime.sessions.add({ id: 'ordinary-session', summary: { title: 'Ordinary', cwd: '/work/alpha' } })
@@ -428,5 +494,5 @@ export async function runtimeWithTeam(options?: { mode?: 'team'; workspaceId?: s
   const disposeSettings = runtime.slots.register({ name: 'sidebar.settings', priority: 0 }, BaselineSettings as never)
   const team = await runtime.mount({ inject: [...inject], apply })
   const view = runtime.renderRoot()
-  return { runtime, team, view, disposeWorkspace, disposeSettings, members, joinWorkspace, leaveWorkspace, addMember, status, viewChannels, createChannel, updateChannel, archiveChannel, putAttachment, getAttachment, updateMember, recoverMember, clearMemberContext, archiveMember, modelCatalog, joinChannel, removeChannelMember, sendMessage, reply, changeTask, promoteThread, resolveTaskRefs, publishAgentReply, publishPresence, seedChannel, publishChannelUpdate, failChanges, recoverChanges, readThread, loadThreadHistory, threadObservations, changes, inbox, seedInbox }
+  return { runtime, team, view, disposeWorkspace, disposeSettings, members, humanProfile, getHumanAvatar, putHumanAvatar, removeHumanAvatar, settingsUpdate, settingsMutate, seedHumanProfile, failHumanProfile, failSettingsWrite, joinWorkspace, leaveWorkspace, addMember, status, viewChannels, createChannel, updateChannel, archiveChannel, putAttachment, getAttachment, updateMember, recoverMember, clearMemberContext, archiveMember, modelCatalog, joinChannel, removeChannelMember, sendMessage, reply, changeTask, promoteThread, resolveTaskRefs, publishAgentReply, publishPresence, seedChannel, publishChannelUpdate, failChanges, recoverChanges, readThread, loadThreadHistory, threadObservations, changes, inbox, seedInbox }
 }

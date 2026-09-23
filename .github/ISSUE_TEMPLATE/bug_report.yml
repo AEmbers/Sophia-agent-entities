@@ -16,7 +16,7 @@ body:
     attributes:
       label: Version
       description: "`dsh --version`, plus the version of `@wowyuarm/dsh-agent-team` (`dsh plugin --profile web ls @wowyuarm/dsh-agent-team`). If you upgraded DSH after installing the plugin, say so."
-      placeholder: "DSH 0.1.5-rc.1 · plugin 0.1.11"
+      placeholder: "DSH 0.1.5-rc.1 · plugin 0.1.14"
     validations:
       required: true
 
@@ -32,6 +32,19 @@ body:
         - Linux (incl. WSL) · local checkout
         - Windows · published package
         - Windows · local checkout
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: startup
+    attributes:
+      label: How DSH was started
+      description: "The launch form decides which modules load: a published `dsh` runs built artifacts, while a checkout `pnpm dsh` runs source through tsx. Mixing the two forms loads two copies of the Harness modules, and members then stop activating."
+      options:
+        - Published `dsh` (global install or npx)
+        - Checkout `pnpm dsh` (runs from source)
+        - DSH Desktop app
         - Other / not sure
     validations:
       required: true

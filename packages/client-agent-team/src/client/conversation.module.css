@@ -102,7 +102,17 @@
 .messageRow[data-human] .messageIdentity {
   background: var(--dsw-alias-state-business-primary);
 }
-.messageRow[data-grouped] .messageIdentity { visibility: hidden; }
+/* The Human's uploaded avatar takes the same 28px identity seat as the
+   initial it replaces, cropped to the circle. */
+.messageIdentityImage {
+  border-radius: 50%;
+  corner-shape: round;
+  flex: 0 0 28px;
+  height: 28px;
+  object-fit: cover;
+}
+.messageRow[data-grouped] .messageIdentity,
+.messageRow[data-grouped] .messageIdentityImage { visibility: hidden; }
 .messageBody { min-width: 0; }
 .nameRow {
   align-items: baseline;

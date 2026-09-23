@@ -2,9 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { IconAgentPresetOutline16, IconListPenOutline16, IconQueueOutline14, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { AgentTeamAddMemberRequest } from '@wowyuarm/dsh-agent-team/types'
 import type { TeamSidebarProps } from './slots.ts'
-import { TeamWorkspaceRow } from './TeamWorkspaceRow.tsx'
-import { TeamSidebarSection } from './TeamSidebarSection.tsx'
-import { useSidebarSectionOpen, setSidebarSectionOpen } from './sidebar-sections.ts'
+import { TeamWorkspaceSelector } from './TeamWorkspaceSelector.tsx'
 import { TeamAgentsPanel } from './TeamAgentsPanel.tsx'
 import { TeamChannelsPanel } from './TeamChannelsPanel.tsx'
 import css from './sidebar.module.css'
@@ -47,7 +45,6 @@ export function TeamWorkspaceBrowser({ wide, expandSidebar, navigation, selectWo
   const [pendingSection, setPendingSection] = useState<SidebarSection>()
   const channelsRef = useRef<HTMLDivElement>(null)
   const agentsRef = useRef<HTMLDivElement>(null)
-  const workspacesOpen = useSidebarSectionOpen(undefined, 'workspaces')
   // The cross-Workspace Inbox badge: one scope-less subscription while the
   // Team sidebar stands; every wake re-pulls each Workspace's unread total
   // (limit 1 — totals cover every row, never the list). Same-burst wakes
@@ -123,16 +120,14 @@ export function TeamWorkspaceBrowser({ wide, expandSidebar, navigation, selectWo
   }
 
   return <section className={css.workspaceBrowser} aria-label={t('workspaces')}>
+    {/* The Inbox is the one destination that crosses Workspaces — its total sums
+        every one of them — so it stands above the selector rather than inside
+        the scope that selector names. */}
     <button type="button" className={css.inboxCard} aria-label={inboxLabel} aria-current={inboxIsCurrent ? 'page' : undefined} onClick={selectInbox}>
       <InboxMark unread={inboxTotal} />
       <span className={css.inboxCardLabel}>{t('inboxTitle')}</span>
     </button>
-    <TeamSidebarSection title={t('workspaces')} open={workspacesOpen} onToggle={open => { setSidebarSectionOpen(undefined, 'workspaces', open) }}>
-      <div className={css.workspaceList}>
-        {workspaces.map(workspace => <TeamWorkspaceRow key={workspace.workspaceId} workspaceId={workspace.workspaceId} title={workspace.title} path={workspace.path} selected={workspace.workspaceId === selectedId} current={workspace.workspaceId === selectedId && overviewIsCurrent} onSelect={selectWorkspace} />)}
-        {workspaces.length === 0 && <p className={css.emptyState}>{t('empty')}</p>}
-      </div>
-    </TeamSidebarSection>
+    <TeamWorkspaceSelector workspaces={workspaces} selectedId={selectedId} current={overviewIsCurrent} onSelect={selectWorkspace} t={t} />
     {selectedId !== undefined && <div className={css.workspaceSection}>
       <div ref={channelsRef}>
         <TeamChannelsPanel key={selectedId} workspaceId={selectedId} loadMembers={loadMembers} loadChannels={loadChannels} subscribeChanges={subscribeChanges} createChannel={createChannel} updateChannel={updateChannel} archiveChannel={archiveChannel} joinChannel={joinChannel} removeChannelMember={removeChannelMember} creatingAgents={creatingAgents.filter(request => request.workspaceId === selectedId)} {...(navigationState.memberSessionId !== undefined || navigationState.channelRef === undefined ? {} : { selectedChannelRef: navigationState.channelRef })} selectChannel={selectChannel} t={t} />

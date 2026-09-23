@@ -20,14 +20,18 @@ import type {} from '@deepseek-ai/dsh-session-persistence'
 import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-tools'
+import type {} from '@deepseek-ai/dsh-settings'
 import type { Domain } from '@deepseek-ai/dsh-storage-domain'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import { ATTACHMENT_MAX_BYTES, attachmentPayloadPath, attachmentsRoot, copyPathAttachment, newAttachmentId, readAttachment, sanitizeMediaType, sweepAttachmentCache, validatePathAttachment, writeAttachment } from './attachments.ts'
+import { HUMAN_PROFILE_DEFAULT_NAME, HUMAN_PROFILE_REPO_URL, HUMAN_PROFILE_SETTINGS_NAMESPACE, HUMAN_PROFILE_SETTINGS_SCHEMA, HUMAN_PROFILE_VERSION, assertValidHumanName, normalizeHumanName, type HumanProfileSettings } from './human-profile.ts'
+import { humanAvatarsRoot, readHumanAvatar, removeHumanAvatar, writeHumanAvatar } from './human-avatar.ts'
+import { createHumanUpdateChecker } from './human-update-check.ts'
 import { PressurePolicyCoordinator } from './pressure-policy.ts'
-import { ContextManagementCoordinator, type TransitionPlan } from './context-management.ts'
-import { AGENT_TEAM_PLUGIN_ID, createHandoffMessage } from './context-source.ts'
-import { carriedInputOf, checkpointByRef, checkpointRefFor, contextProjectionFold, foldContextProjection, isReminderNoticeSummary, timelineCandidates, type AgentTeamContextProjectionState, type TimelineCandidate } from './context-projection.ts'
-import { advanceOwnedSessionEventCursor, type OwnedSessionEventCursor } from './session-event-cursor.ts'
+import { CONTEXT_CONTINUITY_PROJECTION_KEY, readContextTimeline, type ContextProjectionConfig, type ContextTimelineItem, type ContextTimelineSource, type TransitionPlan } from '@wowyuarm/dsh-context-continuity'
+import { createTeamContextManagement, TEAM_CONTEXT_CODEC } from './context-continuity-host.ts'
+import { AGENT_TEAM_PLUGIN_ID } from './context-source.ts'
+import { boundaryByRef, carriedInputOf, checkpointByRef, checkpointRefFor, createTeamContextProjectionConfig, createTeamContextProjectionDefinition, foldTeamContextProjection, retainedTopicsThrough, TeamContextProjectionHost } from './context-projection.ts'
 import { AGENT_TEAM_HUMAN_MEMBER_ID, AgentTeamLedger, agentTeamHumanActor, type AgentTeamDurableMemberResult } from './ledger.ts'
 import { AGENT_TEAM_TOOL_NAMES, deepCopyCapabilities, memberMemoryDirectoryName, MemberRuntime } from './member-runtime.ts'
 import type { MemberSkillSelectionRef } from './member-skills.ts'
@@ -38,6 +42,7 @@ import { agentTeamDomainSpec } from './spec.ts'
 import { formatTeamTimestamp } from './time-format.ts'
 import type {
   AgentTeamAddMemberRequest,
+  AgentTeamAddMemberResult,
   AgentTeamAgentMember,
   AgentTeamAgentMemberStatus,
   AgentTeamArchiveChannelRequest,
@@ -59,6 +64,14 @@ import type {
   AgentTeamCreateChannelResult,
   AgentTeamGetAttachmentRequest,
   AgentTeamGetAttachmentResult,
+  AgentTeamGetHumanAvatarRequest,
+  AgentTeamGetHumanAvatarResult,
+  AgentTeamHumanProfileRequest,
+  AgentTeamHumanProfileResult,
+  AgentTeamPutHumanAvatarRequest,
+  AgentTeamPutHumanAvatarResult,
+  AgentTeamRemoveHumanAvatarRequest,
+  AgentTeamRemoveHumanAvatarResult,
   AgentTeamInbox,
   AgentTeamInboxRequest,
   AgentTeamJoinChannelRequest,
@@ -75,6 +88,8 @@ import type {
   AgentTeamMembersRequest,
   AgentTeamResolveTaskRefsRequest,
   AgentTeamResolveTaskRefsResult,
+  AgentTeamResolveThreadRefsRequest,
+  AgentTeamResolveThreadRefsResult,
   AgentTeamTaskRef,
   AgentTeamThreadRef,
   AgentTeamOperationReceipt,
@@ -125,6 +140,8 @@ import type {
 export { agentTeamDomainSpec, agentTeamOperationSchema } from './spec.ts'
 export type * from './types.ts'
 export { AGENT_TEAM_HUMAN_HANDLE, AGENT_TEAM_HUMAN_MEMBER_ID, AGENT_TEAM_INITIALIZE_REQUEST_ID } from './ledger.ts'
+export { HUMAN_PROFILE_DEFAULT_NAME, HUMAN_PROFILE_REPO_URL, HUMAN_PROFILE_SETTINGS_NAMESPACE, HUMAN_PROFILE_SETTINGS_SCHEMA, HUMAN_PROFILE_VERSION, assertValidHumanName, normalizeHumanName } from './human-profile.ts'
+export { humanAvatarsRoot } from './human-avatar.ts'
 export { AGENT_TEAM_TOOL_NAMES } from './member-runtime.ts'
 
 /** Process-stable marker carried by the final Team message tool definition. */
@@ -152,7 +169,12 @@ const MAX_CHECKPOINT_NAME_CHARS = 120
 /** Default and maximum number of timeline items one query returns. */
 const DEFAULT_TIMELINE_LIMIT = 12
 const MAX_TIMELINE_LIMIT = 24
-/** Deepest ancestor lineage the timeline and seed resolution walk. */
+/**
+ * Archived generations the timeline and seed resolution walk: the timeline
+ * reads this many ancestors behind the current generation, and the seed guard
+ * resolves a cited ref through the same depth, so the two surfaces cannot
+ * disagree about where history ends.
+ */
 const MAX_TIMELINE_ANCESTORS = 8
 /** Product pressure budget constants (see docs/team-collaboration.md). */
 const CONTEXT_HARD_LIMIT_CAP = 256_000
@@ -338,6 +360,7 @@ export default class AgentTeam extends TypertRemoteService {
     'agentPresets',
     'tools',
     'sessionPersistence',
+    'sessionProjections',
   ]
 
   private domain?: Domain<typeof agentTeamDomainSpec>
@@ -386,6 +409,18 @@ export default class AgentTeam extends TypertRemoteService {
   private readonly pressurePolicy: PressurePolicyCoordinator
   private readonly notifiedInbox = new Map<AgentTeamMemberId, string>()
   private attachmentGcTimer?: ReturnType<typeof setInterval> | undefined
+  /**
+   * Current human profile source, wired to the `agent-team-human` settings
+   * namespace when a settings service is present. Falls back to the historic
+   * default so team_view and @ matching keep working without settings.
+   */
+  private humanProfileSource: () => HumanProfileSettings = () => ({ name: HUMAN_PROFILE_DEFAULT_NAME })
+  /**
+   * New-release check behind the settings footnote. Memory-only and
+   * background-refreshed, so the profile read path never waits on the
+   * network and every failure settles as "no update known".
+   */
+  private readonly humanUpdateCheck = createHumanUpdateChecker({ currentVersion: HUMAN_PROFILE_VERSION })
 
   private readonly recovery = new RecoveryCoordinator({
     wake: memberId => {
@@ -397,41 +432,34 @@ export default class AgentTeam extends TypertRemoteService {
     },
   })
   /**
-   * Incremental fold state for {@link contextManagement}'s projection lookup:
-   * one entry per Member, replaced when that Member's Session changes. Keying
-   * by Member rather than by Session id is what bounds the map — a rollover
-   * that leaves the previous generation's projection behind retains it for the
-   * life of the process, and only the current Session can ever read it.
+   * Team's domain half of the continuity projection: the durable ref naming,
+   * the Team-notice rule, and the boundary judgement (committed messages,
+   * claim changes, first Thread arrivals). Its claim attribution resolves the
+   * Task's Thread through the ledger, which is why the resolver reads
+   * `this.ledger` lazily — the fold may run before the domain is open, and an
+   * unattributed boundary is still a valid anchor.
    */
-  private readonly contextCursors = new Map<AgentTeamMemberId, OwnedSessionEventCursor<AgentTeamContextProjectionState>>()
+  private readonly contextProjectionHost = new TeamContextProjectionHost({
+    threadForTask: taskRef => this.ledger?.threadForTask(taskRef),
+  })
   /**
    * Context self-management: the one deep module that turns a Member's
    * successful `context_rollover` tool result into its next private context
-   * generation. The ledger owns the binding audit, the Session projection
-   * owns intent, and this coordinator owns only reconstructible process
+   * generation. The ledger owns the binding audit, the engine's projection
+   * unit owns intent, and this coordinator owns only reconstructible process
    * state. See docs/architecture.md and docs/team-collaboration.md.
    */
-  private readonly contextManagement = new ContextManagementCoordinator({
+  private readonly contextManagement = createTeamContextManagement({
     agentForMember: memberId => this.handles.get(memberId)?.agent,
     memberForAgent: agent => this.memberForAgent(agent),
     projectionForMember: (memberId, sessionId) => {
       const handle = this.handles.get(memberId)
       if (handle === undefined || handle.agent.session.id !== sessionId) return undefined
-      const session = handle.agent.session
-      // The projection is read on every successful tool result and turn end, so
-      // it folds incrementally. The entry is keyed by Member and carries the
-      // Session it was built from: this Session's log keeps growing, a rollover
-      // replaces the entry instead of resuming from its predecessor's cursor,
-      // and a rewritten log falls back to a cold fold inside the cursor.
-      const owned = advanceOwnedSessionEventCursor(
-        this.contextCursors.get(memberId),
-        session.id,
-        contextProjectionFold(session.id),
-        session.ownEvents(),
-        session.inheritedEventCount,
-      )
-      this.contextCursors.set(memberId, owned)
-      return owned.cursor.value
+      // The engine's registered unit folds this Session's durable log (replay
+      // on attach, then incrementally per committed event) and keys every ref
+      // to the Session that recorded it; the registry materializes the cell
+      // lazily, so a Member that has not folded yet is built on this read.
+      return this.ctx.sessionProjections.stateOf(handle.agent.session, CONTEXT_CONTINUITY_PROJECTION_KEY)
     },
     executeTransition: (memberId, plan) => this.executeMemberTransition(memberId, plan),
     log: message => { this.ctx.logger.warn(`agent-team: ${message}`) },
@@ -470,10 +498,76 @@ export default class AgentTeam extends TypertRemoteService {
       },
       log: message => { this.ctx.logger.warn(`agent-team: ${message}`) },
     })
+    // Human profile settings: the composition entry is the historic default;
+    // the settings provider overlays the user document section when present.
+    // Reads stay live through the source closure, so team_view and @ matching
+    // follow a rename without a Host restart.
+    this.ctx.inject(['settings'], settingsCtx => {
+      settingsCtx.settings.installSection(this.ctx, HUMAN_PROFILE_SETTINGS_NAMESPACE, HUMAN_PROFILE_SETTINGS_SCHEMA, { name: HUMAN_PROFILE_DEFAULT_NAME }, {
+        setSource: (current: () => HumanProfileSettings) => {
+          this.humanProfileSource = current
+          this.syncHumanHandle()
+        },
+        validate: (value: HumanProfileSettings) => {
+          this.validateHumanProfile(value)
+        },
+        onChange: () => {
+          this.syncHumanHandle()
+        },
+      })
+    })
+  }
+
+  /** Current human display name; the single source for team_view and @ matching. */
+  humanHandle(): string {
+    const name = normalizeHumanName(this.humanProfileSource().name)
+    return name === '' ? HUMAN_PROFILE_DEFAULT_NAME : name
+  }
+
+  /** Current human profile reference held in settings (name + avatarRef). */
+  humanProfile(): { readonly name: string; readonly avatarRef?: string | undefined } {
+    const current = this.humanProfileSource()
+    const name = this.humanHandle()
+    return Object.freeze({ name, ...(current.avatarRef === undefined ? {} : { avatarRef: current.avatarRef }) })
+  }
+
+  /** Push the current settings name into the ledger's runtime @ handle. */
+  private syncHumanHandle(): void {
+    try {
+      this.ledger?.setHumanDisplayHandle(this.humanHandle())
+    } catch {
+      // The ledger is absent before Service.init; the post-open sync covers it.
+    }
+  }
+
+  /**
+   * Settings-level validation for the human profile: same non-empty floor as
+   * Member handles plus global uniqueness against live Members. Runs inside
+   * the settings write path, so a colliding rename rejects before persisting.
+   */
+  private validateHumanProfile(value: HumanProfileSettings): void {
+    const name = assertValidHumanName(value.name)
+    const ledger = this.ledger
+    if (ledger === undefined) return
+    const normalized = name.normalize('NFKC').trim().toLowerCase()
+    for (const member of ledger.listMembers()) {
+      if (member.state === 'inactive' || member.state === 'archived') continue
+      if (member.handle.normalize('NFKC').trim().toLowerCase() === normalized) {
+        throw new Error(`human name '${name}' collides with an existing Member handle`)
+      }
+    }
   }
 
   /** Open the durable ledger and restore every enabled Member independently. */
   protected async [Service.init](): Promise<void> {
+    // The continuity projection registers once per Host: the framework keeps
+    // one unit per projection key and drives it for every Session, so Team's
+    // fold is session-agnostic and the state carries the identity it folds.
+    // The registration rides this plugin's fiber — unloading Team removes the
+    // key (and its cached cells) from later drives and snapshots.
+    this.ctx.effect(() => this.ctx.root.sessionProjections.register(
+      createTeamContextProjectionDefinition(this.contextProjectionHost),
+    ), 'agentTeam.contextProjection')
     this.ctx.on('agent/error', ({ agent, error }) => {
       const member = this.memberForAgent(agent)
       if (member === undefined) return
@@ -550,6 +644,9 @@ export default class AgentTeam extends TypertRemoteService {
     this.domain = domain
     const ledger = new AgentTeamLedger(domain.table('operations'))
     this.ledger = ledger
+    // The settings wiring in the constructor may have fired before the ledger
+    // existed; sync once here so @ matching starts from the stored name.
+    this.syncHumanHandle()
     const initialization = await ledger.initialize()
     if (initialization.committed) this.emitCommitted(initialization.value)
     this.startAttachmentGc(ledger)
@@ -633,6 +730,19 @@ export default class AgentTeam extends TypertRemoteService {
       return true
     })
     return Object.freeze({ resolved: Object.freeze(this.requireLedger().resolveTaskRefs(request.workspaceId, taskRefs)) })
+  }
+
+  /** Read-only navigation lookup for branded Thread refs found in message bodies. */
+  @Remote('resolveThreadRefs')
+  resolveThreadRefs(request: AgentTeamResolveThreadRefsRequest): AgentTeamResolveThreadRefsResult {
+    this.requireWorkspace(request.workspaceId)
+    const seen = new Set<AgentTeamThreadRef>()
+    const threadRefs = request.threadRefs.filter(threadRef => {
+      if (seen.has(threadRef)) return false
+      seen.add(threadRef)
+      return true
+    })
+    return Object.freeze({ resolved: Object.freeze(this.requireLedger().resolveThreadRefs(request.workspaceId, threadRefs)) })
   }
 
   /** Browser-safe Human roster, optionally filtered to one participation. */
@@ -724,7 +834,7 @@ export default class AgentTeam extends TypertRemoteService {
 
   /** Create a durable Member and atomically grant its declared initial Channels. */
   @Remote('addMember')
-  async addMember(request: AgentTeamAddMemberRequest): Promise<AgentTeamMemberResult> {
+  async addMember(request: AgentTeamAddMemberRequest): Promise<AgentTeamAddMemberResult> {
     return this.enqueueLifecycle(async () => {
       const workspace = this.requireWorkspace(request.workspaceId)
       await this.assertModelRoute(request.model)
@@ -741,11 +851,14 @@ export default class AgentTeam extends TypertRemoteService {
         privateMemoryPath: dshHomePath('agent-team', 'members', memberMemoryDirectoryName(memberId)),
         state: 'enabled',
       })
-      const result = await this.requireLedger().addMember({ ...request, actor: agentTeamHumanActor(), member })
+      const ledger = this.requireLedger()
+      const result = await ledger.addMember({ ...request, actor: agentTeamHumanActor(), member })
       if (result.committed) this.emitCommitted(result.value.receipt)
       const stored = result.value.member
       if (!this.handles.has(stored.memberId)) await this.activateMember(stored, workspace.path)
-      return Object.freeze({ receipt: result.value.receipt, status: this.memberStatus(stored) })
+      // Creation seeds exactly the creation Workspace participation; attach it
+      // here (like membersForClient) so the Client never synthesizes it.
+      return Object.freeze({ receipt: result.value.receipt, status: this.memberStatus(stored), workspaceIds: ledger.workspacesOf(stored.memberId) })
     })
   }
 
@@ -931,7 +1044,10 @@ export default class AgentTeam extends TypertRemoteService {
         throw new Error(`the context rollover is refused: this Member now owns jobs that would not survive the switch (${blockingJobs.join(', ')}); collect or stop them, then retry`)
       }
       const rolled = await this.rolloverSessionForAgent(active.agent, {
-        requestId: plan.requestId,
+        // The engine plan carries the host-derived request id as a plain
+        // string; Team's rollover operation vocabulary brands it, and the
+        // context-continuity host adapter is its only producer.
+        requestId: plan.requestId as AgentTeamRolloverSessionRequest['requestId'],
         workspaceId: stored.workspaceId,
         memberId,
         previousSessionId: plan.previousSessionId,
@@ -947,8 +1063,13 @@ export default class AgentTeam extends TypertRemoteService {
       // to override the fold.
       const preRetireCapture = this.contextManagement.drainCapturedInput(memberId)
       await this.retireMemberGeneration(memberId, active, plan.previousSessionId)
-      const finalState = foldContextProjection(active.agent.session.ownEvents(), active.agent.session.inheritedEventCount, active.agent.session.id)
-      const foldedCarried = carriedInputOf(finalState)
+      const finalEvents = active.agent.session.ownEvents()
+      const finalState = foldTeamContextProjection(
+        finalEvents,
+        { sessionId: active.agent.session.id, inheritedEventCount: active.agent.session.inheritedEventCount },
+        this.contextProjectionHost,
+      )
+      const foldedCarried = carriedInputOf(finalState, finalEvents)
       const carriedById = new Map(plan.carriedInput.map(message => [message.id, message]))
       for (const message of foldedCarried) carriedById.set(message.id, message)
       for (const message of preRetireCapture) if (!carriedById.has(message.id)) carriedById.set(message.id, message)
@@ -1235,6 +1356,57 @@ export default class AgentTeam extends TypertRemoteService {
     const stored = await readAttachment(attachmentsRoot(), request.attachmentId)
     if (stored === undefined) throw new Error(`attachment '${request.attachmentId}' is no longer cached`)
     return Object.freeze({ name: stored.name, mediaType: stored.mediaType, byteSize: stored.byteSize, bytesBase64: stored.bytes.toString('base64') })
+  }
+
+  /**
+   * Human profile read for the settings page and footnote: name + avatar
+   * reference from settings plus version facts. Human-scoped (the Web
+   * Client calls it); agent tools never receive avatar bytes, only the name
+   * through team_view. The new-release check stays best-effort and cached —
+   * `updateAvailable` is false until a background refresh actually observes a
+   * newer published release.
+   */
+  @Remote('humanProfile')
+  humanProfileForClient(_request: AgentTeamHumanProfileRequest): AgentTeamHumanProfileResult {
+    const profile = this.humanProfile()
+    const update = this.humanUpdateCheck.snapshot()
+    return Object.freeze({
+      name: profile.name,
+      ...(profile.avatarRef === undefined ? {} : { avatarRef: profile.avatarRef }),
+      version: HUMAN_PROFILE_VERSION,
+      repoUrl: HUMAN_PROFILE_REPO_URL,
+      updateAvailable: update.updateAvailable,
+      ...(update.latestVersion === undefined ? {} : { latestVersion: update.latestVersion }),
+    })
+  }
+
+  /**
+   * Upload one human avatar image into the persistent store. Human-only by
+   * construction: only the Web Client calls this Remote, never agent tools.
+   * The caller stores the returned ref in settings; bytes never enter the
+   * TTL-bound attachment cache.
+   */
+  @Remote('putHumanAvatar')
+  async putHumanAvatar(request: AgentTeamPutHumanAvatarRequest): Promise<AgentTeamPutHumanAvatarResult> {
+    this.requireAccepting()
+    const bytes = Buffer.from(request.bytesBase64, 'base64')
+    return Object.freeze(await writeHumanAvatar(humanAvatarsRoot(), request.name, request.mediaType ?? 'application/octet-stream', bytes))
+  }
+
+  /** Read one human avatar back; removed entries throw and the UI falls back to hue/initial. */
+  @Remote('getHumanAvatar')
+  async getHumanAvatar(request: AgentTeamGetHumanAvatarRequest): Promise<AgentTeamGetHumanAvatarResult> {
+    const stored = await readHumanAvatar(humanAvatarsRoot(), request.avatarRef)
+    if (stored === undefined) throw new Error(`human avatar '${request.avatarRef}' is no longer stored`)
+    return Object.freeze({ name: stored.name, mediaType: stored.mediaType, byteSize: stored.byteSize, bytesBase64: stored.bytes.toString('base64') })
+  }
+
+  /** Remove one human avatar entry; the UI falls back to hue/initial afterwards. */
+  @Remote('removeHumanAvatar')
+  async removeHumanAvatar(request: AgentTeamRemoveHumanAvatarRequest): Promise<AgentTeamRemoveHumanAvatarResult> {
+    this.requireAccepting()
+    await removeHumanAvatar(humanAvatarsRoot(), request.avatarRef)
+    return Object.freeze({ removed: true })
   }
 
   /** Human existing-Thread reply; unread and revision conflicts are business outcomes. */
@@ -1563,7 +1735,7 @@ export default class AgentTeam extends TypertRemoteService {
     let sessionId: SessionId | undefined = agent.session.id
     let live = true
     let guard = 0
-    while (sessionId !== undefined && guard++ < MAX_TIMELINE_ANCESTORS) {
+    while (sessionId !== undefined && guard++ <= MAX_TIMELINE_ANCESTORS) {
       let events: readonly SessionEvent[]
       let inheritedEventCount: SessionLogOffset
       let parentSession: SessionId | undefined
@@ -1587,19 +1759,19 @@ export default class AgentTeam extends TypertRemoteService {
       // Fold the source with its inherited cut respected: inherited events
       // are resolved history in that source, never fresh intent; checkpoints
       // recorded in this source's own span are the selectable targets.
-      const state = foldContextProjection(events, inheritedEventCount, sessionId)
+      const state = foldTeamContextProjection(events, { sessionId, inheritedEventCount }, this.contextProjectionHost)
       // A Team-boundary default checkpoint: the boundary's completed-turn
       // anchor is the seed cut, and it is selectable exactly when one
       // Thread's facts entered the context through it — the same proof the
       // timeline requires, revalidated here because the model may cite a
       // boundary the timeline never surfaced.
       const boundary = checkpointRef.startsWith('team-boundary-')
-        ? state.boundaries.find(entry => entry.key === checkpointRef)
+        ? boundaryByRef(state, checkpointRef)
         : undefined
       const entry = checkpointByRef(state, checkpointRef)
       const anchorTurnEndSeq = boundary !== undefined ? boundary.turnEndSeq : entry?.turnEndSeq
       if (anchorTurnEndSeq !== undefined && anchorTurnEndSeq !== -1) {
-        if (boundary !== undefined && boundary.source !== 'team-boundary') {
+        if (boundary !== undefined && boundary.kind !== 'team-boundary') {
           throw new Error(`checkpoint '${checkpointRef}' is not a restorable boundary`)
         }
         // The seed is the exact contiguous prefix through the anchor's
@@ -1607,7 +1779,12 @@ export default class AgentTeam extends TypertRemoteService {
         const throughSeq = anchorTurnEndSeq + 1
         const prefix = events.slice(0, throughSeq)
         if (boundary !== undefined) {
-          const threads = this.threadsEnteringContext(events, anchorTurnEndSeq)
+          // The seed must stay inside one Thread's context: the retained
+          // prefix through the anchor holds exactly one Thread's facts, read
+          // from the fold's own boundary attributions — the same accumulated
+          // set the timeline shows, so a ref the timeline offered is never
+          // refused here for a reason it did not state.
+          const threads = retainedTopicsThrough(state, anchorTurnEndSeq)
           if (threads.length !== 1) {
             throw new Error(threads.length === 0
               ? `boundary '${checkpointRef}' has no single attributable Thread; write a fresh handoff instead`
@@ -1668,10 +1845,14 @@ export default class AgentTeam extends TypertRemoteService {
       return
     }
     const inspection = previousRead.inspection
-    const state = foldContextProjection(inspection.events, inspection.inheritedEventCount, previousSessionId)
+    const state = foldTeamContextProjection(
+      inspection.events,
+      { sessionId: previousSessionId, inheritedEventCount: inspection.inheritedEventCount },
+      this.contextProjectionHost,
+    )
     if (state.pending === null) return
     const pending = state.pending
-    const message = createHandoffMessage({
+    const message = TEAM_CONTEXT_CODEC.createHandoffMessage({
       handoff: pending.handoff,
       previousSessionId,
       newSessionId: agent.session.id,
@@ -1706,9 +1887,13 @@ export default class AgentTeam extends TypertRemoteService {
     if (!Number.isSafeInteger(through) || through < 0 || through > inspection.events.length) {
       throw new Error(`the recorded checkpoint-return seed cut ${through} is not a valid prefix of Session '${seed.sourceSessionId}'`)
     }
-    const state = foldContextProjection(inspection.events, inspection.inheritedEventCount, seed.sourceSessionId)
+    const state = foldTeamContextProjection(
+      inspection.events,
+      { sessionId: seed.sourceSessionId, inheritedEventCount: inspection.inheritedEventCount },
+      this.contextProjectionHost,
+    )
     const anchorProven = checkpointByRef(state, seed.checkpointRef) !== undefined
-      || state.boundaries.some(boundary => boundary.key === seed.checkpointRef)
+      || boundaryByRef(state, seed.checkpointRef) !== undefined
     if (!anchorProven) {
       throw new Error(`the recorded checkpoint-return anchor '${seed.checkpointRef}' no longer resolves in Session '${seed.sourceSessionId}'`)
     }
@@ -1774,8 +1959,12 @@ export default class AgentTeam extends TypertRemoteService {
     }
     inspectionEvents = previousRead.inspection.events
     inspectionInherited = previousRead.inspection.inheritedEventCount
-    const state = foldContextProjection(inspectionEvents, inspectionInherited, transition.previousSessionId)
-    const carried = carriedInputOf(state)
+    const state = foldTeamContextProjection(
+      inspectionEvents,
+      { sessionId: transition.previousSessionId, inheritedEventCount: inspectionInherited },
+      this.contextProjectionHost,
+    )
+    const carried = carriedInputOf(state, inspectionEvents)
     if (carried.length === 0) return 0
     const known = new Set<string>()
     for (const event of agent.session.ownEvents()) {
@@ -1819,9 +2008,11 @@ export default class AgentTeam extends TypertRemoteService {
    * Agent-only bounded structural timeline: resolved checkpoints plus Team
    * delivery, handoff, and compaction boundaries across the current
    * generation and its archived ancestor lineage. Structural only — no
-   * transcript content. The meter prices retained/discarded tokens; entries
-   * the Host cannot prove restorable carry a rejection reason instead of
-   * silently disappearing.
+   * transcript content. The walk, the per-source folds, the pricing, and the
+   * anchor rules are the engine's `readContextTimeline`; Team contributes the
+   * fold configuration, the measurement, and the one judgement the engine
+   * leaves to its host — which Threads a boundary's retained prefix holds — so
+   * a ref this list offers is a ref `context_rollover` accepts.
    */
   async contextTimelineForAgent(agent: Agent, request: AgentTeamTimelineToolRequest): Promise<AgentTeamTimelineToolResult> {
     const member = this.memberForAgent(agent)
@@ -1834,65 +2025,109 @@ export default class AgentTeam extends TypertRemoteService {
     const limits = await this.routeLimitsForAgent(agent)
     const hardLimit = limits?.hardLimit ?? CONTEXT_HARD_LIMIT_CAP
     const handoffAt = limits?.handoffAt ?? CONTEXT_HANDOFF_AT_CAP
-    // Fold the current generation, then walk archived ancestors through their
-    // persisted logs; the same projection definition folds every source.
-    const items: AgentTeamTimelineItem[] = []
-    const seen = new Set<string>()
-    let incompleteFrom: { readonly sessionId: SessionId; readonly reason: string } | undefined
-    let sessionId: SessionId | undefined = member.sessionId
-    let live = true
-    let guard = 0
-    while (sessionId !== undefined && guard++ < MAX_TIMELINE_ANCESTORS) {
-      let state: AgentTeamContextProjectionState | undefined
-      let sourceSessionId = sessionId
-      let sourceEvents: readonly SessionEvent[] = []
-      // Capture this iteration's source identity BEFORE the branch advances
-      // the lineage flag: measurement and discard pricing both key on it.
-      const sourceIsCurrent = live
-      if (live) {
-        state = foldContextProjection(agent.session.ownEvents(), agent.session.inheritedEventCount, agent.session.id)
-        sourceEvents = agent.session.snapshotEvents()
-        sessionId = agent.session.header.parentSession
-        live = false
-      } else {
-        const read = await this.sessionReader.read(sessionId)
-        if (!read.ok) {
-          // An unreadable ancestor ends the lineage walk here — recorded in
-          // the result, never silent, and never a Member-availability fact.
-          incompleteFrom = { sessionId, reason: `${read.failure.kind}: ${read.failure.detail}` }
-          sessionId = undefined
-        } else {
-          state = foldContextProjection(read.inspection.events, read.inspection.inheritedEventCount, sessionId)
-          sourceEvents = read.inspection.events
-          sourceSessionId = sessionId
-          sessionId = read.inspection.header.parentSession
-        }
-      }
-      if (state === undefined) break
-      // Price every candidate of this source against the SOURCE's own
-      // replayed measurement — a small current generation never shrinks a
-      // large ancestor's real seed cost. An unmeasurable source (no meter,
-      // unreadable ancestor) prices as UNKNOWN, never as zero: the timeline
-      // marks its candidates unprovable and the return guard rejects them.
-      const sourceUsage = await this.sourceUsageTokens(sourceSessionId, sourceIsCurrent, agent)
-      for (const candidate of timelineCandidates(state, limit)) {
-        if (seen.has(candidate.ref)) continue
-        seen.add(candidate.ref)
-        items.push(this.timelineItemFor(candidate, sourceUsage, usageTokens, hardLimit, handoffAt, sourceSessionId, sourceIsCurrent, sourceEvents))
-        if (items.length >= limit) break
-      }
-      if (items.length >= limit) break
+    // One measurement per lineage source, memoized by Session: the engine
+    // measures a source once before pricing its anchors, and the boundary
+    // overlay below reads the same map to tell an unprovable budget (never
+    // priced as free) from a real budget rejection.
+    const measurements = new Map<string, number | undefined>()
+    const timeline = await readContextTimeline({
+      current: {
+        sessionId: agent.session.id,
+        header: agent.session.header,
+        inheritedEventCount: agent.session.inheritedEventCount,
+        events: agent.session.snapshotEvents(),
+      },
+      config: this.contextFoldConfig(),
+      readAncestor: sessionId => this.sessionReader.read(sessionId),
+      measureSource: source => {
+        const key = String(source.sessionId)
+        if (!measurements.has(key)) measurements.set(key, this.measureContextSourceForAgent(agent, source))
+        return measurements.get(key)
+      },
+      currentUsageTokens: usageTokens,
+      handoffAt,
+      limit,
+      // Archived ancestors the engine walks; the seed guard resolves a cited
+      // ref through the same depth, so the timeline never offers a ref the
+      // guard cannot reach.
+      maxAncestors: MAX_TIMELINE_ANCESTORS,
+    })
+    return {
+      usageTokens,
+      hardLimit,
+      handoffAt,
+      items: timeline.items.map(item => this.teamTimelineItemFor(item, agent.session.id, handoffAt, measurements)),
+      ...(timeline.incompleteFrom === undefined ? {} : { incompleteFrom: timeline.incompleteFrom }),
     }
-    return { usageTokens, hardLimit, handoffAt, items, ...(incompleteFrom === undefined ? {} : { incompleteFrom }) }
+  }
+
+  /**
+   * Map one engine timeline item onto the model-facing Team item. The engine
+   * decided the walk, the fold, the pricing, and the head, checkpoint, and
+   * measurable-source verdicts; Team restates exactly one policy of its own: a
+   * Team boundary is selectable only when the RETAINED PREFIX through it stays
+   * inside one Thread — the same proof the seed guard revalidates before it
+   * swaps a generation. The engine judges a boundary by its OWN attribution
+   * instead, so a boundary that arrived after a second Thread's facts would be
+   * offered here and refused by `context_rollover`; Team's stricter rule is
+   * what keeps the two surfaces answering one question.
+   */
+  private teamTimelineItemFor(item: ContextTimelineItem, currentSessionId: SessionId, handoffAt: number, measurements: ReadonlyMap<string, number | undefined>): AgentTeamTimelineItem {
+    const source: AgentTeamTimelineItem['source'] = item.source === 'boundary'
+      ? item.kind === 'handoff' || item.kind === 'compaction' ? item.kind : 'team-boundary'
+      : item.source === 'checkpoint' ? 'agent' : 'head'
+    const affectedThreads = item.affectedTopics
+    let restorable = item.restorable
+    let reason = item.reason
+    // A boundary's verdict is Team's to make, but only once its source is
+    // measurable: "the budget cannot be proven" is the engine's first
+    // rejection and stays first — an unmeasurable boundary is not selectable
+    // even when its prefix holds exactly one Thread.
+    if (item.source === 'boundary' && measurements.get(String(item.sourceSessionId ?? currentSessionId)) !== undefined) {
+      if (source === 'handoff' || source === 'compaction') {
+        // A handoff opens a generation and a compaction rewrites the visible
+        // surface: rewinding into either is not a proven-safe target. The
+        // engine has no vocabulary for that and would answer "no single topic
+        // is attributable", which misdescribes why.
+        restorable = false
+        reason = `source '${source}' is not a restorable checkpoint`
+      } else if (affectedThreads.length !== 1) {
+        restorable = false
+        reason = affectedThreads.length === 0
+          ? 'no single Thread is attributable to this boundary'
+          : 'multiple Threads entered the context through this boundary; write a fresh handoff instead'
+      } else if (item.retainedTokens >= handoffAt) {
+        restorable = false
+        reason = 'retained context would not materially shrink the working set'
+      } else {
+        restorable = true
+        reason = undefined
+      }
+    }
+    return {
+      checkpointRef: item.ref,
+      name: item.label,
+      source,
+      retainedTokens: item.retainedTokens,
+      discardedTokens: item.discardedTokens,
+      affectedThreads,
+      restorable,
+      ...(reason === undefined ? {} : { reason }),
+      // Team's field semantics, unchanged: every item that is not a
+      // checkpoint names the Session it anchors in — an ancestor generation's
+      // boundary is how a lineage reads — and a checkpoint is keyed to its own
+      // Session by its ref already.
+      ...(source === 'agent' ? {} : { sourceSessionId: item.sourceSessionId ?? currentSessionId }),
+    }
   }
 
   /**
    * Replayed measurement of one lineage source: the live current Session
-   * measures directly; an archived ancestor measures through a borrowed
-   * prepared Session, so a seed's retained cost is priced in the SOURCE's
-   * own tokens — never the current generation's. Returns undefined when no
-   * meter is available or the source cannot be borrowed; callers fail
-   * closed on the unknown.
+   * measures directly; an archived ancestor measures through a detached
+   * Session rebuilt from the source's own log, so a seed's retained cost is
+   * priced in the SOURCE's own tokens — never the current generation's.
+   * Returns undefined when no meter is available or the source cannot be
+   * replayed; callers fail closed on the unknown.
    */
   private async sourceUsageTokens(sessionId: SessionId, live: boolean, agent: Agent): Promise<number | undefined> {
     const meter = agent.ctx.get('tokenMeter')
@@ -1904,12 +2139,50 @@ export default class AgentTeam extends TypertRemoteService {
     // failing meter is unmeasurable and prices as UNKNOWN.
     const read = await this.sessionReader.read(sessionId)
     if (!read.ok) return undefined
+    return this.measureDetachedSource(agent, {
+      sessionId,
+      header: read.inspection.header,
+      inheritedEventCount: read.inspection.inheritedEventCount,
+      events: read.inspection.events,
+    })
+  }
+
+  /**
+   * One already-read source's replayed measurement: an archived generation is
+   * rebuilt as a detached Session and measured in its own tokens. Undefined
+   * means unmeasurable, never free.
+   */
+  private measureDetachedSource(agent: Agent, source: ContextTimelineSource): number | undefined {
+    const meter = agent.ctx.get('tokenMeter')
+    if (meter === undefined) return undefined
     try {
-      const session = Session.create(sessionId, read.inspection.events, read.inspection.header, read.inspection.inheritedEventCount)
+      const session = Session.create(source.sessionId, source.events, source.header, source.inheritedEventCount)
       return meter.measure(session)?.totalTokens
     } catch {
       return undefined
     }
+  }
+
+  /**
+   * One source's replayed measurement, in that source's own tokens, for a
+   * caller that already holds the source: the live generation measures
+   * directly, an archived one is rebuilt from the log it came with. Undefined
+   * means unmeasurable — a caller must never price an unknown source as free.
+   */
+  measureContextSourceForAgent(agent: Agent, source: ContextTimelineSource): number | undefined {
+    if (String(source.sessionId) === String(agent.session.id)) {
+      return agent.ctx.get('tokenMeter')?.measure(agent.session)?.totalTokens
+    }
+    return this.measureDetachedSource(agent, source)
+  }
+
+  /**
+   * The one fold configuration the registered projection unit and every cold
+   * fold use, so a generation read back for the timeline reads exactly as the
+   * projection folded it — same codec, same boundary attribution.
+   */
+  contextFoldConfig(): ContextProjectionConfig {
+    return createTeamContextProjectionConfig(this.contextProjectionHost)
   }
 
   /**
@@ -1925,138 +2198,6 @@ export default class AgentTeam extends TypertRemoteService {
     if (sourceLength <= 0) return sourceUsageTokens
     const share = Math.min(1, Math.max(0, (anchorTurnEndSeq + 1) / sourceLength))
     return Math.round(sourceUsageTokens * share)
-  }
-
-  /**
-   * Threads whose facts entered this Session's model context by the given
-   * seq: delivered Team notices (their bodies quote `Thread: <ref>`
-   * structurally) and successful Team-claim mutations (their task overlays
-   * resolve to Threads through the ledger). Never from unread ledger
-   * activity — a Thread the Member never saw did not enter its context.
-   * Order-stable, deduplicated.
-   */
-  private threadsEnteringContext(events: readonly SessionEvent[], throughSeq: number): readonly AgentTeamThreadRef[] {
-    const refs: AgentTeamThreadRef[] = []
-    const openAttributions = new Map<string, { readonly name: string; readonly arguments: string }>()
-    const push = (ref: AgentTeamThreadRef | undefined): void => {
-      if (ref !== undefined && !refs.includes(ref)) refs.push(ref)
-    }
-    for (const event of events) {
-      if (event.seq > throughSeq) break
-      if (event.type === 'tool/call' && (event.data.name === 'team_claim' || event.data.name === 'team_message')) {
-        openAttributions.set(event.data.callId, { name: event.data.name, arguments: event.data.arguments })
-      } else if (event.type === 'tool/result') {
-        const block = (event.data.message as { content?: Array<{ type?: string; toolCallId?: string; isError?: boolean }> }).content?.[0]
-        if (block !== undefined && block.toolCallId !== undefined) {
-          const recorded = openAttributions.get(block.toolCallId)
-          if (recorded !== undefined && block.isError !== true) {
-            openAttributions.delete(block.toolCallId)
-            try {
-              const args = JSON.parse(recorded.arguments) as { taskRef?: unknown; threadRef?: unknown }
-              // A claim mutation resolves its Task overlay through the ledger;
-              // a team_message committed reply names its Thread in its call
-              // arguments; a committed start's Thread is born in the result
-              // and is read from the durable presentation meta.
-              if (recorded.name === 'team_claim' && typeof args.taskRef === 'string' && args.taskRef !== '') {
-                push(this.requireLedger().threadForTask(args.taskRef as AgentTeamTaskRef))
-              } else if (recorded.name === 'team_message') {
-                const meta = (event.data as { meta?: unknown }).meta
-                if (meta !== undefined && typeof meta === 'object' && (meta as { kind?: unknown }).kind === 'committed') {
-                  const metaThreadRef = (meta as { threadRef?: unknown }).threadRef
-                  if (typeof metaThreadRef === 'string' && metaThreadRef !== '') push(metaThreadRef as AgentTeamThreadRef)
-                } else if (typeof args.threadRef === 'string' && args.threadRef !== '') {
-                  push(args.threadRef as AgentTeamThreadRef)
-                }
-              }
-            } catch {
-              // Malformed call arguments contribute no attribution.
-            }
-          }
-        }
-      } else if (event.type === 'user/message') {
-        const source = event.data.source as { kind?: string; plugin?: string; form?: string; summary?: string } | undefined
-        if (source?.kind !== 'plugin') continue
-        // Reminder notices never enter attribution — a recovery instruction
-        // (or a historical progress-nudge notice, kept decodable in session
-        // logs recorded before that system was removed) is not a Team fact.
-        if (source.form === 'notice' && source.summary !== undefined && isReminderNoticeSummary(source.summary)) continue
-        const text = event.data.content.filter(block => block.type === 'text').map(block => block.text ?? '').join('\n')
-        for (const match of text.matchAll(/Thread: (thread:[0-9a-f-]{6,})/g)) {
-          push(match[1] as AgentTeamThreadRef)
-        }
-      }
-    }
-    return refs
-  }
-
-  /**
-   * Price and annotate one timeline candidate without mutating anything.
-   * Retained prices in the SOURCE Session's own replayed measurement (the
-   * monotonic anchor-share of the source log); discarded is what a return
-   * replaces — for a current-generation anchor, the measured usage beyond
-   * the anchor; for an ancestor anchor, the current generation's whole
-   * usage (an approximation: the ancestor's own suffix is not part of this
-   * generation). A small current child therefore discards little but may
-   * still retain a large ancestor seed, and both numbers say so honestly.
-   */
-  private timelineItemFor(candidate: TimelineCandidate, sourceUsage: number | undefined, currentUsage: number, _hardLimit: number, handoffAt: number, sourceSessionId: SessionId, sourceIsCurrent: boolean, sourceEvents: readonly SessionEvent[]): AgentTeamTimelineItem {
-    const retainedTokens = candidate.source === 'head'
-      ? currentUsage
-      : this.retainedEstimate(sourceUsage ?? 0, sourceEvents.length, candidate.turnEndSeq)
-    const discardedTokens = candidate.source === 'head'
-      ? 0
-      : sourceIsCurrent
-        ? Math.max(0, currentUsage - retainedTokens)
-        : currentUsage
-    const affectedThreads = candidate.turnEndSeq === -1 ? [] : this.threadsEnteringContext(sourceEvents, candidate.turnEndSeq)
-    let restorable = candidate.turnEndSeq !== -1
-    let reason: string | undefined
-    if (candidate.source === 'head') {
-      // The head is the current working set: returning to it discards
-      // nothing and is never a meaningful return target.
-      restorable = false
-      reason = 'the head is the current working set; returning to it discards nothing'
-    } else if (sourceUsage === undefined) {
-      // The source's cost cannot be measured (no meter, or the archived
-      // ancestor cannot be borrowed): the budget cannot be proven, so the
-      // candidate is not selectable. Never price an unknown as zero.
-      restorable = false
-      reason = 'the source Session\'s context cost cannot be measured, so the return budget cannot be proven'
-    } else if (candidate.source === 'handoff' || candidate.source === 'compaction') {
-      // A handoff starts a generation and a compaction rewrites the visible
-      // surface: rewinding into them is not a proven-safe V1 target.
-      restorable = false
-      reason = `source '${candidate.source}' is not a restorable checkpoint`
-    } else if (candidate.source === 'team-boundary') {
-      // A Team delivery is a selectable default checkpoint exactly when the
-      // Host can prove it stays inside one Thread's context: the boundary
-      // resolved at a completed turn AND exactly one Thread's facts entered
-      // the Session context through it. Multi-Thread or unattributable
-      // boundaries document why they are not selectable.
-      if (affectedThreads.length !== 1) {
-        restorable = false
-        reason = affectedThreads.length === 0
-          ? 'no single Thread is attributable to this boundary'
-          : 'multiple Threads entered the context through this boundary; write a fresh handoff instead'
-      } else if (retainedTokens >= handoffAt) {
-        restorable = false
-        reason = 'retained context would not materially shrink the working set'
-      }
-    } else if (candidate.source === 'agent' && retainedTokens >= handoffAt) {
-      restorable = false
-      reason = 'retained context would be at or above the handoff budget'
-    }
-    return {
-      checkpointRef: candidate.ref,
-      name: candidate.label,
-      source: candidate.source,
-      retainedTokens,
-      discardedTokens,
-      affectedThreads,
-      restorable,
-      ...(reason === undefined ? {} : { reason }),
-      ...(candidate.source === 'agent' ? {} : { sourceSessionId }),
-    }
   }
 
   /**
@@ -2375,7 +2516,12 @@ export default class AgentTeam extends TypertRemoteService {
       // old Session; the projection still carries the intent, so finish the
       // transition (or keep waiting for the containing turn) from here.
       if (persisted) {
-        const state = foldContextProjection(created.agent.session.ownEvents(), created.agent.session.inheritedEventCount, created.agent.session.id)
+        const inheritedEventCount = created.agent.session.inheritedEventCount
+        const state = foldTeamContextProjection(
+          created.agent.session.ownEvents(),
+          { sessionId: created.agent.session.id, inheritedEventCount },
+          this.contextProjectionHost,
+        )
         if (state.pending !== null) this.contextManagement.recoverPendingTransition(member.memberId, created.agent, member.sessionId)
         // A restart between one checkpoint's durable result and its quiet
         // follow-up delivery repairs exactly once; delivered continuations

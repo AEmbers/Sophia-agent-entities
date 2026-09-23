@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentTeamActivity, AgentTeamClaim, AgentTeamClientMemberStatus, AgentTeamMemberId } from '@wowyuarm/dsh-agent-team/types'
+import type { AgentTeamActivity, AgentTeamClaim, AgentTeamClientMemberStatus, AgentTeamMemberDiagnostic, AgentTeamMemberId } from '@wowyuarm/dsh-agent-team/types'
+import { AGENT_TEAM_HUMAN_HANDLE } from '@wowyuarm/dsh-agent-team/host'
 import { MENTION_BODY_FIXTURE } from '../../agent-team/tests/fixtures/mention-bodies.ts'
 import { zh } from '../src/client/locales.ts'
 import type { TeamConversationProps } from '../src/client/slots.ts'
-import { allMentionMembers, containsAllMention, containsMention, formatAbsoluteTime, formatActivity, formatClaimState, formatInboxTime, formatMessageTime, formatTaskStatus, isPlainTextBody, isSingleBrandedRef, mentionNamesOf, mentionedMemberIds, planMessageBody, shouldClampMessage, splitBrandedRefs, splitMentionNames, taskStatusDot } from '../src/client/team-formatters.ts'
+import { allMentionMembers, containsAllMention, containsMention, firstSentence, formatAbsoluteTime, formatActivity, formatClaimState, formatInboxTime, formatMessageTime, formatTaskStatus, HUMAN_HISTORIC_HANDLE, isPlainTextBody, isSingleBrandedRef, mentionNamesOf, formatRiskClass, mentionedMemberIds, planMessageBody, shouldClampMessage, splitBrandedRefs, splitMentionNames, taskStatusDot } from '../src/client/team-formatters.ts'
 
 const t = ((key: keyof typeof zh, params?: Record<string, string | number>) => {
   let value: string = zh[key]
@@ -33,6 +34,32 @@ describe('Team presentation formatters', () => {
     expect(formatTaskStatus('closed', t)).toBe('已关闭')
     expect(formatClaimState('active', t)).toBe('进行中')
     expect(formatClaimState('released', t)).toBe('已释放')
+  })
+
+  it('names every diagnostic class instead of showing the Host reason alone', () => {
+    const status = (diagnosticClass?: AgentTeamMemberDiagnostic['class']): Pick<AgentTeamClientMemberStatus, 'diagnostic'> =>
+      diagnosticClass === undefined ? {} : { diagnostic: { class: diagnosticClass, detail: 'host reason' } }
+    expect(formatRiskClass(status('session-refused'), t)).toEqual({ label: '会话被拒绝', sentenceKey: 'riskSessionRefused' })
+    expect(formatRiskClass(status('session-unreadable'), t).label).toBe('会话不可读')
+    expect(formatRiskClass(status('preset-composition'), t).label).toBe('预设装配失败')
+    expect(formatRiskClass(status('rollover'), t).label).toBe('上下文交接中')
+    expect(formatRiskClass(status('runtime'), t).label).toBe('运行时故障')
+    expect(formatRiskClass(status('activation'), t).label).toBe('激活失败')
+    // A Member carrying no diagnostic still gets a class word, never a hole.
+    expect(formatRiskClass(status(), t)).toEqual({ label: '运行时故障', sentenceKey: 'riskRuntime' })
+    // The sentence key keeps its placeholder so the row can supply the handle.
+    expect(zh[formatRiskClass(status('rollover'), t).sentenceKey]).toContain('{member}')
+  })
+
+  it('keeps a risk row to the Host diagnostic first sentence', () => {
+    expect(firstSentence('context pressure policy: the routed model capacity is unknown; refusing to forward'))
+      .toBe('context pressure policy: the routed model capacity is unknown.')
+    expect(firstSentence('reason one. more detail here')).toBe('reason one.')
+    expect(firstSentence('中文原因。后面还有')).toBe('中文原因。')
+    // No terminator: the text is the sentence and stays intact.
+    expect(firstSentence('a reason with no terminator')).toBe('a reason with no terminator')
+    expect(firstSentence('  padded  ')).toBe('padded')
+    expect(firstSentence('')).toBe('')
   })
 
   it('formats every Activity kind without exposing refs or enums', () => {
@@ -160,6 +187,14 @@ describe('Team presentation formatters', () => {
     expect(splitBrandedRefs('task:cafe 是咖啡')).toEqual([
       { text: 'task:cafe 是咖啡' },
     ])
+    // Member refs match the same shape; the roster map decides existence.
+    expect(splitBrandedRefs('问 member:6e8a5b10-df16-4ec0-943a-63738010953f').slice(1)).toEqual([
+      { text: 'member:6e8a5b10-df16-4ec0-943a-63738010953f', ref: 'member:6e8a5b10-df16-4ec0-943a-63738010953f' },
+    ])
+    // The Human id is not hex-shaped, so it never becomes a ref candidate.
+    expect(splitBrandedRefs('问 member:human')).toEqual([
+      { text: '问 member:human' },
+    ])
   })
 
   it('detects strings whose whole content is one branded ref', () => {
@@ -176,12 +211,42 @@ describe('Team presentation formatters', () => {
 
   it('maps mention refs to canonical handles through the member table', () => {
     const handles = new Map([['member:1' as AgentTeamMemberId, 'builder'], ['member:2' as AgentTeamMemberId, 'lead']])
-    expect(mentionNamesOf(['member:2' as AgentTeamMemberId, 'member:1' as AgentTeamMemberId, 'member:gone' as AgentTeamMemberId], handles)).toEqual(['lead', 'builder'])
+    expect(mentionNamesOf(['member:2' as AgentTeamMemberId, 'member:1' as AgentTeamMemberId, 'member:gone' as AgentTeamMemberId], handles, 'Human')).toEqual(['lead', 'builder'])
   })
 
-  it('keeps the Human mention renderable when the Agent roster omits it', () => {
+  it('names the Human mention from the profile when the Agent roster omits it', () => {
     const handles = new Map([['member:builder' as AgentTeamMemberId, 'builder']])
-    expect(mentionNamesOf(['member:human' as AgentTeamMemberId, 'member:builder' as AgentTeamMemberId], handles)).toEqual(['human', 'builder'])
+    expect(mentionNamesOf(['member:human' as AgentTeamMemberId, 'member:builder' as AgentTeamMemberId], handles, 'human')).toEqual(['human', 'builder'])
+  })
+
+  it('keeps the historic handle on a renamed Human mention', () => {
+    const handles = new Map([['member:builder' as AgentTeamMemberId, 'builder']])
+    expect(mentionNamesOf(['member:human' as AgentTeamMemberId, 'member:builder' as AgentTeamMemberId], handles, 'Ada'))
+      .toEqual([{ name: 'Ada', also: ['human'] }, 'builder'])
+    // The Host owns that string; the two halves must agree on it.
+    expect(HUMAN_HISTORIC_HANDLE).toBe(AGENT_TEAM_HUMAN_HANDLE)
+  })
+
+  it('chips a mention written with the historic handle under the renamed Human', () => {
+    const human = { name: 'Ada', also: [HUMAN_HISTORIC_HANDLE] }
+    // Whatever handle the body authored, the chip names the person as they are
+    // called today — the same rule member refs follow. The body itself is not
+    // rewritten anywhere the match did not land.
+    const chipText = (body: string): readonly string[] =>
+      splitMentionNames(body, [human, 'builder']).segments.filter(segment => segment.mention).map(segment => segment.text)
+    expect(chipText('请看 @human 这条')).toEqual(['@Ada'])
+    expect(chipText('请看 @Human 这条')).toEqual(['@Ada'])
+    expect(chipText('请看 @Ada 这条')).toEqual(['@Ada'])
+    for (const body of ['请看 @human 这条', '请看 @Human 这条', '请看 @Ada 这条']) {
+      expect(splitMentionNames(body, [human]).unmatched).toEqual([])
+    }
+    // An Agent's chip keeps the canonical spelling the roster carries, which is
+    // what it always did; only the Human's older handle resolves onto the name.
+    expect(chipText('@Builder 请看')).toEqual(['@builder'])
+    // One person, one chip: a body hitting the alias never also lands in the
+    // trailing fallback row under the current name.
+    expect(splitMentionNames('@human 和 @builder', [human, 'builder']).unmatched).toEqual([])
+    expect(splitMentionNames('@builder 只看这个', [human, 'builder']).unmatched).toEqual(['Ada'])
   })
 
   it('reads one handle only when the draft writes it as an authored mention', () => {
@@ -268,9 +333,15 @@ describe('Team presentation formatters', () => {
     const task = planMessageBody('请看 task:0123abcd-0000-0000-0000-000000000000', { human: false, canOpenRefs: true })
     expect(task.render).toBe('literal')
     expect(task.taskRefs).toEqual(['task:0123abcd-0000-0000-0000-000000000000'])
+    expect(task.threadRefs).toEqual([])
     const abbreviated = planMessageBody('请看 task:0123abcd', { human: false, canOpenRefs: true })
     expect(abbreviated.render).toBe('literal')
     expect(abbreviated.taskRefs).toEqual(['task:0123abcd'])
+    // Thread refs take the same literal path so their chips resolve in place.
+    const thread = planMessageBody('见 thread:0f0ad7ce', { human: false, canOpenRefs: true })
+    expect(thread.render).toBe('literal')
+    expect(thread.threadRefs).toEqual(['thread:0f0ad7ce'])
+    expect(thread.taskRefs).toEqual([])
   })
 
   it('keeps rich Agent bodies on Markdown and paints their refs inline when navigation is available', () => {
@@ -283,6 +354,7 @@ describe('Team presentation formatters', () => {
     expect(plan.fallbackRefs).toEqual([])
     expect(plan.fallbackNames).toEqual(['tester'])
     expect(plan.taskRefs).toEqual([])
+    expect(plan.threadRefs).toEqual([])
   })
 
   it('keeps the full mention row and no ref links on surfaces without navigation', () => {

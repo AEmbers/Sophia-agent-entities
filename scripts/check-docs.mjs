@@ -7,9 +7,9 @@
 // cannot be forgotten.
 //
 // It covers every bilingual page that ships: the maintained documents under
-// docs/ plus the four README pairs (repository root and one per package). The
-// set comparison stays docs-only, because those two READMEs are the only
-// indexes.
+// docs/, the four README pairs (repository root and one per package), and the
+// root contributing pair. The set comparison stays docs-only, because those two
+// READMEs are the only indexes.
 //
 // It deliberately runs standalone — no Harness checkout, no Vitest config — so a
 // documentation edit can be checked in a second: `npm run check:docs`, which is
@@ -44,12 +44,12 @@ const DOCS_SWITCHER = {
 }
 
 // `docs` enumerates: every Markdown file there is a maintained document unless
-// it is single-language. A README set names its page instead, so an unrelated
-// future Markdown file inside a package directory is not silently promoted into
-// the pairing rule.
+// it is single-language. A named set lists its pages instead, so an unrelated
+// future Markdown file inside a package directory — or at the repository root —
+// is not silently promoted into the pairing rule.
 const PAGE_SETS = [
   { directory: 'docs', switcher: DOCS_SWITCHER, enumerate: true, skip: SINGLE_LANGUAGE },
-  { directory: '.', pages: ['README.md'], switcher: {
+  { directory: '.', pages: ['README.md', 'CONTRIBUTING.md'], switcher: {
     english: '[English]({source}) | [简体中文]({pair})',
     chinese: '[English]({source}) | 简体中文',
   } },
@@ -143,7 +143,7 @@ if (!existsSync(docsDirectory) || !statSync(docsDirectory).isDirectory()) {
 
 // 1. Bilingual pairing and switcher integrity, in every page set.
 const linkFiles = new Set()
-let readmePairs = 0
+let pagePairs = 0
 for (const set of PAGE_SETS) {
   const directory = join(root, set.directory)
   if (!existsSync(directory) || !statSync(directory).isDirectory()) {
@@ -180,7 +180,7 @@ for (const set of PAGE_SETS) {
       continue
     }
     linkFiles.add(pair)
-    if (!set.enumerate) readmePairs += 1
+    if (!set.enumerate) pagePairs += 1
     checkSwitcher(source, set.switcher.english, { source: name, pair: pairName })
     checkSwitcher(pair, set.switcher.chinese, { source: name, pair: pairName })
   }
@@ -248,5 +248,5 @@ if (failures.length > 0) {
 
 console.log(
   `Documentation check OK: ${actual.size} maintained documents, ${actual.size} bilingual pairs, `
-  + `${readmePairs} README pairs, ${linkCount} relative links resolved, both indexes agree.`,
+  + `${pagePairs} page pairs, ${linkCount} relative links resolved, both indexes agree.`,
 )

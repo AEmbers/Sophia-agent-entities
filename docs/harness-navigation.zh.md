@@ -2,7 +2,7 @@
 
 [English](harness-navigation.md) | 中文
 
-日期：2026-08-17
+日期：2026-09-18
 
 维护要求：这是一份正式工程导航文档。它只记录已对照当前源码、测试或 Harness 文档核实的跨仓库路线；改变 package、脚本、slot 或安装方式时必须同步检查和更新它。它不是 Harness 的替代文档，也不改变本项目的产品决策。当前行为以源码和测试为准。
 
@@ -38,13 +38,13 @@
 
 ### 2.2 修改 model-facing tool 或 preset
 
-- 本仓库：`docs/team-collaboration.zh.md`、`packages/tool-agent-team/src/index.ts`（六个工具及运行时依赖）、`packages/agent-team/preset/team-member/agent.cordis.yml`（只在 team-enabled scope 中挂载）；历史工具研究仅在需要溯源时查 archive。
+- 本仓库：`docs/team-collaboration.zh.md`、`packages/tool-agent-team/src/index.ts`（八个工具及运行时依赖）、`packages/agent-team/preset/team-member/agent.cordis.yml`（只在 team-enabled scope 中挂载）；历史工具研究仅在需要溯源时查 archive。
 - Harness 文档：`docs/cookbook/adding-a-tool.md`、`docs/subsystems/tools.md`、`docs/subsystems/permission-presets.md`、`docs/subsystems/system-prompt.md`。
 - Harness 源码：`packages/core/tools/src/{index,schema,presentation}.ts`、`packages/preset/agent-presets/src`。
 
 Tool schema、canonical output、execute 与 presentation 是不同层。不要让 Host service 直接变成 global tool；不要把 `output`、`execute`、`timeoutMs` 等 implementation fields 泄漏到 model request。Tool 只在显式 team preset scope 中存在，普通 Session 不应出现 Team tools 或 guidance。
 
-### 2.4 修改 Client package、browser bundle 或加载图
+### 2.3 修改 Client package、browser bundle 或加载图
 
 1. 本仓库：先读 `docs/architecture.zh.md` 的 Client 章节、`docs/development.zh.md` 的 UI 验收规则和目标组件；需要解释既有视觉结构时，再读 `.scratch/archive/2026-08/m2-ui/design/dsh-client-plugin-development.md` 与 `.scratch/archive/2026-08/ui-redesign/`。
 2. Harness：
@@ -61,14 +61,14 @@ Tool schema、canonical output、execute 与 presentation 是不同层。不要�
 
 **Client 复用规则：** 复用 public package exports、`ui-primitives` 和 theme tokens；不要 import shipped package 的 private components/private CSS；不要复制 WorkspaceBrowser、ConversationRoot 或整个 Shell；components 不直接接触 `ctx`，业务 data 从 slot owner props、store 或 inject face 进入。
 
-### 2.5 修改 typed Remote、Host/Client RPC 或生成物
+### 2.4 修改 typed Remote、Host/Client RPC 或生成物
 
 - 本仓库：`packages/agent-team/src/index.ts` 的 service/`@Remote` declarations、`packages/agent-team/src/types.ts`、`scripts/generate-typert.mjs`；生成物在 `packages/agent-team/lib/typert.*`，不要手写。
 - Harness：`docs/subsystems/typert.md`；源码 `packages/typert/{generator,loader,protocol,registry}`、`packages/api/remotes`。
 
 `InvocationDescriptor` 是本地反射描述，不是 wire message；wire payload 必须来自显式 typed request/response。修改 Host Remote 后先运行 `npm run generate:typert`，再 typecheck、build，并检查生成结果稳定。Client mount contribution 使用 generated `/remote`，不要自行复制 RPC protocol。
 
-### 2.6 修改 Workspace、Session 或目录选择
+### 2.5 修改 Workspace、Session 或目录选择
 
 - 本项目：Team 只读取 `ctx.workspaces.list` projection；当前 UI 设计不复制 Workspace 创建/浏览，不调用 `ctx.workspaces.pickDirectory()` 或 `ctx.workspaces.create()`，无 Workspace 时回到普通 Session UI。
 - Harness docs：`docs/subsystems/workspace.md`、`docs/subsystems/session.md`、`docs/subsystems/storage.md`。
@@ -76,7 +76,7 @@ Tool schema、canonical output、execute 与 presentation 是不同层。不要�
 
 Workspace ID 是 branded id；路径通过 Host service 规范化；session cwd 归属必须由 Host projection 判断。不要在 Client 自己实现路径语义或第二套 Workspace store。
 
-### 2.7 修改 storage / persistence / replay / Thread Inbox
+### 2.6 修改 storage / persistence / replay / Thread Inbox
 
 - 本项目：`docs/team-collaboration.zh.md`、`packages/agent-team/src/ledger.ts`、相关 projection/lifecycle 源码和 JSON/SQLite backend tests；Thread Attention 与 Inbox 的历史设计背景在 `.scratch/archive/2026-08/thread-inbox/`。
 - Harness docs：`docs/subsystems/storage.md`、`docs/subsystems/persistence.md`、`docs/subsystems/session-persistence` 相关章节、`docs/defensive-patterns.md`。
@@ -84,7 +84,7 @@ Workspace ID 是 branded id；路径通过 Host service 规范化；session cwd 
 
 Team ledger 是唯一持久权威；projection、Inbox、Remote 和 UI 不能另写事实。遇到崩溃窗口先增加 failure-injection/恢复测试，不添加静默 fallback。
 
-### 2.8 修改 CSS、UI primitives 或 responsive layout
+### 2.7 修改 CSS、UI primitives 或 responsive layout
 
 - 本项目：先读目标组件和 `*.module.css`，再读 `docs/architecture.zh.md` 与 `docs/development.zh.md`；需要历史视觉审计或 public UI reuse 清单时，查 `.scratch/archive/2026-08/ui-redesign/{design,research}/`。当前行为以源码和测试为准。
 - Harness：`docs/web-styling.md`；`packages/client/ui-primitives/src`；`packages/client/ui-theme/src/styles`；`packages/client/AGENTS.md` 的 styling 和 component 规则。
@@ -123,24 +123,9 @@ dsh --profile team-demo
 
 这意味着：用户安装已发布 bundle 不需要 sibling Harness checkout；只有本地开发的 Typert、typecheck、build 与真实 browser verification 需要它。
 
-## 4. Session 研究证据与踩坑
+## 4. 历史研究指引
 
-本次交接重点查阅的 Pi session：
-
-`/home/yu/.pi/agent/sessions/--home-yu-projects-dsh-agent-team--/2026-08-15T15-25-36-664Z_01a00607-4c18-7e99-b169-4746e2805485.jsonl`
-
-该 session 约 29 MB、6040 行。它记录了从“先在 Harness 内做”转为“新建独立 `dsh-agent-team` 外部可安装 opt-in bundle”的决策、M1/M2 ticket 推进、Typert/Client bridge、真实 Web 验收和当前 UI redesign frontier。Session 原文不是 AGENTS.md 的常规必读内容；需要历史细节时按该路径检索，结论以本仓库当前设计和源码为准。
-
-已从 session 和源码核实的关键踩坑：
-
-1. **不要把所有问题改回 Harness。** Team 是 external plugin；如果 Harness 现有 UI 或 contract 不满足目标，先判断是否能在本 bundle 实现替代 plugin。只有确实需要修改 Harness public contract 时才另行决策。
-2. **Remote service 需要动态等待。** Client `apply` 阶段不能假设 mounted Remote 已存在；先 `$mount`，再 `ctx.inject(['remote.agentTeam'], ...)`，让 UI 在 service ready 后注册。
-3. **`dsh.client.inject` 不等于 apply 顺序。** 它描述 client graph 依赖，不能用来保证某个 slot declaration 已完成；使用 `ctx.slots.inject()` 等待 declaration。
-4. **Child slot 冲突不是 priority 问题。** Shipped `WorkspaceBrowser`（priority 0）和 Team shadow（priority -100）都声明 `sidebar.workspaces.directoryFlow` 时，live parent 同时声明同名 child 会被 `SlotCore` 拒绝。声明 child 就是拥有 render authority，不能复制 private child 来“补齐” shipped UI。
-5. **真实 Web 组合优先于手工 `ctx.plugin()` 测试。** Slot winner、Loader、bundle installation、client module 和 unload/restore 需要 REAL composition；unit tests 不能证明这些。
-6. **本地安装要模拟发布布局。** 直接 symlink package 可能绕过 profile 内的 peer fallback，造成假失败；browser 验收应复制已构建 package 的发布布局到临时 profile，再通过真实 `dsh plugin add`/profile 组合验证。
-7. **Overlay 不要重复挂载 global tool package。** `dsh-tool-agent-team` 由 team-member preset 在 isolated scope 中挂载；再把它作为 global row 会让普通 composition 错挂 tools。
-8. **Generated artifact 不手写。** Typert outputs 和 path facades 都由脚本生成；遇到输出漂移先修 generator input 或脚本，不直接改 `lib/` / `tsconfig*.json`。
+M1/M2 决策的原始记录在 2026-08-15 的 Pi session（`~/.pi/agent/sessions/--home-yu-projects-dsh-agent-team--/2026-08-15T15-25-36-664Z_*.jsonl`，约 29 MB）。其结论凡被当前源码、测试或上游文档复核的，均已吸收入 `docs/architecture.zh.md` 与 `docs/development.zh.md`；未被吸收的不作为规则。需要历史细节时按该路径或 `.scratch/README.md` 检索归档。
 
 ## 5. 当前状态
 

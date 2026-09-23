@@ -80,6 +80,7 @@ import type {
   AgentTeamReplyResult,
   AgentTeamRequestId,
   AgentTeamResolvedTaskRef,
+  AgentTeamResolvedThreadRef,
   AgentTeamMessageAttachment,
   AgentTeamSendMessageRequest,
   AgentTeamSendMessageResult,
@@ -433,6 +434,16 @@ function boundedInboxPreview(body: string): string {
 }
 
 /**
+ * Chip title for a resolved Thread ref: the same opening-line gist as the
+ * Inbox preview, but capped at 40 characters — a chip shares its line with
+ * prose, so the 120-character row bound would crowd the message out.
+ */
+function boundedThreadTitle(body: string): string {
+  const firstLine = body.split('\n', 1)[0]?.trim() ?? ''
+  return firstLine.length > 40 ? `${firstLine.slice(0, 39)}…` : firstLine
+}
+
+/**
  * How many Threads one Workspace's 「最近活跃」 slice may carry. It bounds what
  * the Host hands over, not what the reader sees: the Client merges every
  * visible Workspace's slice and trims the merged list to its own visible bound
@@ -493,6 +504,13 @@ export class AgentTeamLedger {
   private readonly createRef: (kind: 'channel' | 'message' | 'task' | 'thread' | 'claim' | 'activity') => string
   private operationTail: Promise<void> = Promise.resolve()
   /**
+   * Runtime human display name. Durable identity stays `member:human`; only
+   * the handle read by @ matching and handle-uniqueness follows this value.
+   * The Host syncs it from the `agent-team-human` settings namespace; the
+   * ledger never persists it, so a rename affects only later resolutions.
+   */
+  private humanHandle: string = AGENT_TEAM_HUMAN_HANDLE
+  /**
    * Head of the durable records the constructor's record-level replay
    * validated, adoptable once by the invariant mount. See `validateAtMount`.
    */
@@ -524,6 +542,20 @@ export class AgentTeamLedger {
       lastSequence: head?.sequence ?? 0,
       lastOperationId: head?.operationId ?? null,
     })
+  }
+
+  /** Current human display name for @ matching and uniqueness checks. */
+  humanDisplayHandle(): string {
+    return this.humanHandle
+  }
+
+  /**
+   * Sync the runtime human display name from Host settings. Never persisted:
+   * a rename affects only later @ resolutions and handle checks.
+   */
+  setHumanDisplayHandle(handle: string): void {
+    const name = handle.normalize('NFKC').trim()
+    if (name !== '') this.humanHandle = name
   }
 
   initialize(request: AgentTeamInitializeRequest = {
@@ -1535,7 +1567,8 @@ export class AgentTeamLedger {
     const recent = authorized.kind === 'human'
       ? this.recentInboxItems(authorized.memberId, workspaceIds[0]!, unreadThreads, taskNumbers)
       : Object.freeze([] as AgentTeamInboxItem[])
-    return Object.freeze({ items: Object.freeze(selected), recent,
+    return Object.freeze({ humanMemberId: this.initialization().data.humanMemberId,
+      items: Object.freeze(selected), recent,
       totalUnreadCount: items.reduce((sum, item) => sum + item.unreadCount, 0),
       totalDirectCount: items.reduce((sum, item) => sum + item.directCount, 0) })
   }
@@ -1551,8 +1584,15 @@ export class AgentTeamLedger {
     return this.memberActor(fact.kind === 'message' ? fact.message.sender : fact.activity.actor)
   }
 
-  /** One Member as a row draws them: the id carries the identity hue, the handle the initial. */
+  /**
+   * One Member as a row draws them: the id carries the identity hue, the handle
+   * the initial. The Human is the one Member the Agent roster never holds, so
+   * their row reads the runtime display name rather than falling back to the
+   * durable `member:human` id — the same name every other seat and @ matching
+   * already use.
+   */
   private memberActor(memberId: AgentTeamMemberId): AgentTeamInboxActor {
+    if (memberId === this.initialization().data.humanMemberId) return Object.freeze({ memberId, name: this.humanHandle })
     return Object.freeze({ memberId, name: this.state.members.get(memberId)?.handle ?? memberId })
   }
 
@@ -1738,6 +1778,30 @@ export class AgentTeamLedger {
     return this.state.claims.get(claimRef)
   }
 
+  /** Navigation facts for message-body Thread refs; unknown refs are omitted. */
+  resolveThreadRefs(workspaceId: WorkspaceId, threadRefs: readonly AgentTeamThreadRef[]): AgentTeamResolvedThreadRef[] {
+    const numbers = this.taskNumbers(workspaceId)
+    const resolved: AgentTeamResolvedThreadRef[] = []
+    for (const threadRef of threadRefs) {
+      const key = this.uniqueRefKey(this.state.threads, threadRef, 'thread')
+      const thread = key === undefined ? undefined : this.state.threads.get(key)
+      const channelRef = thread === undefined ? undefined : this.channelRefForThread(thread.threadRef)
+      const channel = channelRef === undefined ? undefined : this.state.channels.get(channelRef)
+      // Same archival rule as tasks: archived Channels do not exist on Team
+      // API surfaces, so their Threads stop resolving and message bodies
+      // render the refs as plain non-navigable text.
+      if (thread === undefined || channelRef === undefined || channel?.workspaceId !== workspaceId || channel?.state === 'archived') continue
+      const task = thread.taskRef === undefined ? undefined : this.state.tasks.get(thread.taskRef)
+      resolved.push(Object.freeze({
+        threadRef: thread.threadRef,
+        channelRef,
+        ...(task === undefined ? {} : { taskRef: task.taskRef, taskNumber: numbers.get(task.taskRef) ?? 0 }),
+        title: boundedThreadTitle(this.threadAnchor(thread.threadRef).body),
+      }))
+    }
+    return resolved
+  }
+
   /** Navigation facts for message-body Task refs; unknown refs are omitted. */
   resolveTaskRefs(workspaceId: WorkspaceId, taskRefs: readonly AgentTeamTaskRef[]): AgentTeamResolvedTaskRef[] {
     const numbers = this.taskNumbers(workspaceId)
@@ -1766,17 +1830,25 @@ export class AgentTeamLedger {
       const member = this.requireMember(memberId)
       if (!this.participatesIn(member.memberId, request.workspaceId)) throw new Error('Member cannot view another Workspace')
     }
-    if (request.channelRef !== undefined) {
-      this.requireActiveChannel(request.workspaceId, request.channelRef)
-      if (memberId !== undefined && !this.isChannelMember(request.channelRef, memberId)) throw new Error(`Agent Member '${memberId}' is not authorized for Channel '${request.channelRef}'`)
+    // Validation above accepts unique UUID abbreviations, so resolve both
+    // filters to full keys once: comparing the authored spelling in the fact
+    // filters below matches nothing and returns an empty view that every
+    // caller reads as "no such thread" (task #17).
+    const channelRefFilter = request.channelRef === undefined
+      ? undefined
+      : this.requireActiveChannel(request.workspaceId, request.channelRef).channelRef
+    if (channelRefFilter !== undefined) {
+      if (memberId !== undefined && !this.isChannelMember(channelRefFilter, memberId)) throw new Error(`Agent Member '${memberId}' is not authorized for Channel '${request.channelRef}'`)
     }
+    let threadRefFilter: AgentTeamThreadRef | undefined
     if (request.threadRef !== undefined) {
       const thread = this.requireThread(request.threadRef)
+      threadRefFilter = thread.threadRef
       const channelRef = this.channelRefForThread(thread.threadRef)
       if (channelRef === undefined) throw new Error(`unknown Thread ref '${request.threadRef}'`)
       if (this.state.channels.get(channelRef)?.workspaceId !== request.workspaceId) throw new Error(`Thread '${request.threadRef}' does not belong to Workspace '${request.workspaceId}'`)
       this.assertThreadChannelActive(channelRef)
-      if (request.channelRef !== undefined && channelRef !== request.channelRef) throw new Error(`Thread '${request.threadRef}' does not belong to Channel '${request.channelRef}'`)
+      if (channelRefFilter !== undefined && channelRef !== channelRefFilter) throw new Error(`Thread '${request.threadRef}' does not belong to Channel '${request.channelRef}'`)
       if (memberId !== undefined && !this.isChannelMember(channelRef, memberId)) throw new Error(`Agent Member '${memberId}' is not authorized for Channel '${channelRef}'`)
     }
     const channels = [...this.state.channels.values()].filter(channel => channel.workspaceId === request.workspaceId
@@ -1788,8 +1860,8 @@ export class AgentTeamLedger {
       const threadRef = fact.kind === 'message' ? fact.message.threadRef : fact.activity.threadRef
       const channelRef = this.channelRefForThread(threadRef)
       if (channelRef === undefined || !channelRefs.has(channelRef)) return false
-      if (request.channelRef !== undefined && channelRef !== request.channelRef) return false
-      if (request.threadRef !== undefined && threadRef !== request.threadRef) return false
+      if (channelRefFilter !== undefined && channelRef !== channelRefFilter) return false
+      if (threadRefFilter !== undefined && threadRef !== threadRefFilter) return false
       if (request.topLevelOnly && (fact.kind !== 'message' || !fact.message.topLevel)) return false
       if (request.includeActivities === false && fact.kind === 'activity') return false
       return direction === 'before' ? fact.sequence < before : fact.sequence > cursor
@@ -1816,8 +1888,8 @@ export class AgentTeamLedger {
       }
     }
     const visibleTasks = [...this.state.tasks.values()].filter(task => channelRefs.has(task.channelRef)
-      && (request.channelRef === undefined || task.channelRef === request.channelRef)
-      && (request.threadRef === undefined || task.threadRef === request.threadRef))
+      && (channelRefFilter === undefined || task.channelRef === channelRefFilter)
+      && (threadRefFilter === undefined || task.threadRef === threadRefFilter))
     const taskNumbers = this.taskNumbers(request.workspaceId)
     const items = selected.filter((fact): fact is Extract<AgentTeamThreadFact, { kind: 'message' }> => fact.kind === 'message').map(fact => {
       const message = fact.message
@@ -1845,8 +1917,8 @@ export class AgentTeamLedger {
       threads: Object.freeze([...this.state.threads.values()].filter(thread => {
         const channelRef = this.channelRefForThread(thread.threadRef)
         return channelRef !== undefined && channelRefs.has(channelRef)
-          && (request.channelRef === undefined || channelRef === request.channelRef)
-          && (request.threadRef === undefined || thread.threadRef === request.threadRef)
+          && (channelRefFilter === undefined || channelRef === channelRefFilter)
+          && (threadRefFilter === undefined || thread.threadRef === threadRefFilter)
       })),
       taskNumbers: Object.freeze(visibleTasks.map(task => Object.freeze({ taskRef: task.taskRef, taskNumber: taskNumbers.get(task.taskRef) ?? 0 }))),
       items: Object.freeze(items),
@@ -2110,7 +2182,10 @@ export class AgentTeamLedger {
     if (human === undefined || human.kind !== 'team/initialized') throw new Error('agent-team ledger has no Human Member')
     const humanMemberId = human.data.humanMemberId
     const assertHuman = (): void => {
-      if (operation.actor.kind !== 'human' || operation.actor.memberId !== humanMemberId || operation.actor.handle !== HUMAN_ACTOR.handle) {
+      // memberId is the durable Human authority; the handle is display-only
+      // and may carry a configured name (old records carry the historic
+      // literal), so replay never judges it here.
+      if (operation.actor.kind !== 'human' || operation.actor.memberId !== humanMemberId) {
         throw new Error(`agent-team operation ${operation.sequence} has invalid Human authority`)
       }
     }
@@ -2223,6 +2298,11 @@ export class AgentTeamLedger {
         if (other.memberId !== prior.memberId && other.state !== 'inactive' && this.participationOverlapFrom(projection, other.memberId, prior.memberId)
           && other.handle.normalize('NFKC').trim().toLowerCase() === normalized) throw new Error('invalid Member update handle')
       }
+      // Replay-time human collision uses the Host-synced runtime name; the
+      // default keeps old ledgers (written before configurable names) valid.
+      // A stored rename that now collides fails replay loudly rather than
+      // silently forking the @ namespace, so the operator renames first.
+      if (normalized === this.humanHandle.normalize('NFKC').trim().toLowerCase()) throw new Error('invalid Member update handle')
       return
     }
     if (operation.kind === 'team/channel-member-added') {
@@ -3609,7 +3689,8 @@ export class AgentTeamLedger {
 
   private assertHumanActor(actor: AgentTeamHumanActor): void {
     const initialization = this.initialization()
-    if (actor.kind !== 'human' || actor.memberId !== initialization.data.humanMemberId || actor.handle !== HUMAN_ACTOR.handle) {
+    // memberId is the durable Human authority; the handle is display-only.
+    if (actor.kind !== 'human' || actor.memberId !== initialization.data.humanMemberId) {
       throw new Error('agent-team operation lacks Human authority')
     }
   }
@@ -3853,13 +3934,24 @@ export class AgentTeamLedger {
    * Channel plus the Human. A name outside this set stays prose, which is what
    * keeps an incidental name-drop from reaching someone the Channel cannot
    * deliver to.
+   *
+   * The Human is reachable under two names: the current display handle and the
+   * permanent `human` alias, so a rename never silently orphans `@human`
+   * (matching ignores case, and chips render the display name either way).
+   * The alias yields when another candidate already answers to it, so one
+   * written name never notifies two different Members; enrollment reserves the
+   * literal, so that yield only ever covers data predating the reservation.
    */
   private mentionCandidatesFor(channelRef: AgentTeamChannelRef): readonly AgentTeamBodyMentionCandidate[] {
-    const candidates: AgentTeamBodyMentionCandidate[] = [{ memberId: AGENT_TEAM_HUMAN_MEMBER_ID, handle: AGENT_TEAM_HUMAN_HANDLE }]
+    const candidates: AgentTeamBodyMentionCandidate[] = [{ memberId: AGENT_TEAM_HUMAN_MEMBER_ID, handle: this.humanHandle }]
     for (const member of this.state.members.values()) {
       if (member.state === 'inactive' || member.state === 'archived') continue
       if (!this.isChannelMember(channelRef, member.memberId)) continue
       candidates.push({ memberId: member.memberId, handle: member.handle })
+    }
+    if (this.humanHandle.normalize('NFKC').trim().toLowerCase() !== AGENT_TEAM_HUMAN_HANDLE
+      && !candidates.some(candidate => candidate.handle.normalize('NFKC').trim().toLowerCase() === AGENT_TEAM_HUMAN_HANDLE)) {
+      candidates.push({ memberId: AGENT_TEAM_HUMAN_MEMBER_ID, handle: AGENT_TEAM_HUMAN_HANDLE })
     }
     return Object.freeze(candidates)
   }
@@ -3934,6 +4026,20 @@ export class AgentTeamLedger {
       && this.participatesInFrom(projection, member.memberId, workspaceId)
       && member.handle.normalize('NFKC').trim().toLowerCase() === normalized)) {
       throw new Error(`Agent Member handle '${handle}' is already active in Workspace '${workspaceId}'`)
+    }
+    // The human display name shares the @ namespace: an agent handle colliding
+    // with it would make body mentions ambiguous, so it is reserved globally.
+    // The ledger's runtime humanHandle is the single source; replay uses the
+    // Host-synced value, and the default equals the historic literal.
+    // The historic literal itself is reserved permanently alongside it: `@human`
+    // is the documented permanent alias for the Human, so it must never belong
+    // to an agent even after a rename moves the display name elsewhere.
+    const humanNormalized = this.humanHandle.normalize('NFKC').trim().toLowerCase()
+    if (humanNormalized !== '' && normalized === humanNormalized) {
+      throw new Error(`Agent Member handle '${handle}' collides with the human display name`)
+    }
+    if (normalized === AGENT_TEAM_HUMAN_HANDLE) {
+      throw new Error(`Agent Member handle '${handle}' collides with the reserved human alias`)
     }
   }
 

@@ -12,6 +12,7 @@ import Storage, { storageBackendServiceKey } from '@deepseek-ai/dsh-storage'
 import * as storageDomain from '@deepseek-ai/dsh-storage-domain'
 import AgentTeam from '../src/index.ts'
 import { MemoryMediaPool, MemoryStorageBackend } from './helpers/memory-backend.ts'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 
 const roots: string[] = []
 const contexts: Context[] = []
@@ -78,6 +79,7 @@ async function load(pool: MemoryMediaPool): Promise<Context> {
   ctx.provide('tools', { schemas: () => [] })
   ctx.provide('sessions', { flush: async () => true })
   ctx.provide('sessionPersistence', { list: async () => [] })
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(Loader)
   ctx.loader.builtins.include = Include
   ctx.loader.internal = {
