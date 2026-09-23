@@ -1,0 +1,20 @@
+# ===== 素材体积治理 =====
+# 归档级素材（2048x2048，单张 ~6MB，整套 ~122MB）：不入库，按需从素材包取用
+assets/members/out-2048/
+
+# 复核/调试中间产物
+assets/members/_inspect/
+assets/members/_verify/
+
+# ===== 构建产物 =====
+node_modules/
+dist/
+lib/
+*.tsbuildinfo
+
+# ===== 系统与编辑器 =====
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
