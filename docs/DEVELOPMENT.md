@@ -108,9 +108,16 @@ Sophia-agent-entities/
 |---|---|
 | `src/member-runtime.ts` | 成员激活 / 句柄缓存 / 工具策略注入 |
 | `src/channel.ts` | 频道成员、消息、Task Thread 推进 |
-| `src/context-management.ts` | rollover / checkpoint / 上下文接力 |
+| `src/context-continuity.ts` | rollover / checkpoint / 上下文接力 |
 | `src/notify.ts` | 空闲 `followup` / 忙碌 `steer` 双通道唤醒 |
 | `src/delegate.ts` | 任务下派为嵌套子 DAG（FR-5） |
+
+> **上游演进提示（2026-09-20 同步）**：上游已把上下文延续抽成**独立引擎包**
+> `context-continuity`（`dsh-agent-team/packages/agent-team/src/context-continuity-host.ts`
+> 作为 Team 侧的绑定层），原先的 `context-management.ts` **已被删除**。
+> 我们的 `sophia-engine-team` 是否直接复用该引擎、还是自持实现，
+> 待 M2 立项时评估 —— 复用可省大量工作，但要接受它对「谁是 Team notice」等
+> 两个维度的外部注入约定（见该文件头部注释）。
 
 ### 3.3 `sophia-engine-dag`
 
@@ -410,10 +417,11 @@ destroyMember(req: { memberId, force }): Promise<void>
 #### 6.1.2 尺寸分级渲染（LOD）——解决小尺寸辨识
 
 上游 `dsh-agent-team` 的实际做法（已核实，非推测）：成员行用 **24px 头像**的三轨网格
-（`dsh-agent-team/docs/frontend-design.zh.md:108`），头像按 `memberId` 字符串哈希出稳定色相
-（`hash*31+charCode mod 360`），即**纯色相区分、不带图形差分**（同上 `:69`）。
+（`dsh-agent-team/docs/frontend-design.zh.md:111`，2026-09-20 同步后行号），
+头像按 `memberId` 字符串哈希出稳定色相
+（`hash*31+charCode mod 360`，同文件 `:69`），即**纯色相区分、不带图形差分**。
 ⇒ 上游为绕开小尺寸辨识问题，选择了「放弃图形、只用色相」的策略。
-本项目轨道 2 要做的是**在保留图形差分的前提下**解决同一问题，因此下面这套 LOD 分级是必需的。
+本项目要做的是**在保留图形差分的前提下**解决同一问题，因此下面这套 LOD 分级是必需的。
 
 | 尺寸区间 | 渲染内容 | 使用场景 |
 |---|---|---|

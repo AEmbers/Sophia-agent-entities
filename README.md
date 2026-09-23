@@ -6,10 +6,11 @@
 
 | 子目录 | 上游仓库 | 并入库的分支 | 并入时上游 commit |
 |---|---|---|---|
-| [`dsh-agent-team/`](./dsh-agent-team) | [wowyuarm/dsh-agent-team](https://github.com/wowyuarm/dsh-agent-team) | `master` | `ce61be1` |
+| [`dsh-agent-team/`](./dsh-agent-team) | [wowyuarm/dsh-agent-team](https://github.com/wowyuarm/dsh-agent-team) | `master` | `ef47ef7` |
 | [`dsh-agent-teams/`](./dsh-agent-teams) | [NanmiCoder/dsh-agent-teams](https://github.com/NanmiCoder/dsh-agent-teams) | `main` | `87c95c9` |
 
 并入时间：2026-09-18
+最近同步：2026-09-20（`dsh-agent-team` `ce61be1` → `ef47ef7`，54 个提交，含 0.1.12–0.1.14 三个版本；`dsh-agent-teams` 已是最新，0 提交差）
 
 ## 为什么用 subtree 而不是 fork / submodule
 
