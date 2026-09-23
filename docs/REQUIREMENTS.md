@@ -66,7 +66,11 @@
 - FR-3.0 **角色**：持久团设**团长（Principal）**一名，由团内成员担任（如钦天监监正），
   对该团的技术决策负责，并承担 FR-5.3 的第一级审批职责。
 - FR-3.1 成员具备持久身份：`memberId`、专属 `sessionId`、私有记忆路径。
-- FR-3.2 成员具备可用性状态：`active` / `inactive` / `archived`，以及存在态 `idle` / `running`。
+- FR-3.2 成员具备生命周期状态：`active`（在岗）/ `suspended`（可逆挂起，见 FR-9.1）/ `archived`（终态，见 FR-9.3），
+  以及存在态 `idle` / `running`。
+  > **修订（2026-09-23，依 SPEC-sophia-core 裁决 Q-C）**：原 `inactive` 与 FR-9.1 的 `suspended` 是同物异名，
+  > 现合并为 `suspended`（规范名取 FR-9.1，因其有明确的可逆操作对 suspend/resume 定义；
+  > 而 `inactive` 仅有名称、无定义转换）。
 - FR-3.3 任务在频道内以 Task Thread 推进，支持认领、交接、人类验收。
 - FR-3.4 上下文支持 rollover / checkpoint，切换与重启不丢待决事项。
 - FR-3.5 团的存续**不依赖任何窗口会话**：窗口关闭后，团由常驻调度体继续驱动（FR-5.0.5）。

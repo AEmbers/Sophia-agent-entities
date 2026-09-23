@@ -99,7 +99,7 @@ Sophia-agent-entities/
 | `src/types/entities.ts` | Workspace / Channel / Member / Task / DagTeam 实体 |
 | `src/types/operations.ts` | 账本事件类型（channel-created、member-added、dag-owner-transferred …） |
 | `src/types/requests-results.ts` | Remote 请求/响应契约 |
-| `src/naming.ts` | 命名门禁 `^Sophia[\u4e00-\u9fa5][\u4e00-\u9fa5_0-9]*$` |
+| `src/naming.ts` | 三层标识门禁（position / name / memberId），规则见 FR-5A / FR-8 |
 | `src/staging.ts` | 双模草案 `StagingDualPlan` 生成 |
 
 ### 3.2 `sophia-engine-team`
@@ -213,7 +213,7 @@ async function beginTwoStageApproval(req: SpawnRequest): Promise<SpawnOutcome> {
   }
 
   // ② 第二级：推送人类收件箱（任意窗口可见）
-  const ticket = await ledger.commit({
+  const ticket = ledger.commit({
     kind: 'spawn/awaiting-human-approval',
     requesterMemberId: req.requesterMemberId,
     principalMemberId: principal.memberId,
@@ -241,7 +241,7 @@ async function beginTwoStageApproval(req: SpawnRequest): Promise<SpawnOutcome> {
 async function reattachOrphanedTeams(removedMemberId: string): Promise<void> {
   for (const team of await teamsOwnedBy(removedMemberId)) {
     const ancestor = await nearestLivingAncestorOf(removedMemberId) ?? await captainOf(team)
-    await ledger.commit({ kind: 'team/ownership-reattached',
+    ledger.commit({ kind: 'team/ownership-reattached',
       teamId: team.id, from: removedMemberId, to: ancestor.id, reason: 'parent-removed' })
     // 不级联销毁：保留子团已完成的工作成果
     // 不冻结：避免产生无人认领的僵尸团
