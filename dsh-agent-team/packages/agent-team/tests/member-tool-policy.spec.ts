@@ -2,7 +2,15 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+// Every test here boots a whole Host harness over a throwaway tree. The windows
+// lane stretched that boot to 4.1s against vitest's 5s default (worst of 11 CI
+// runs, 2026-09-17..21) and on 2026-09-21 a run crossed it, painting master red
+// while the same commit passed on a rerun. Headroom, not a retry.
+// Shared boot now runs inside `beforeAll`, whose default 10s hook budget is
+// smaller than the 30s each per-test boot used to get — carry the same
+// headroom to the hook or the slowest lane times out before any test runs.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 })
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
@@ -27,12 +35,18 @@ import type { AgentTeamMemberCapabilities, AgentTeamMemberId, AgentTeamRequestId
 import { harnessDir } from '../../../scripts/harness-dir.mjs'
 import { MemoryStorageBackend } from './helpers/memory-backend.ts'
 
-const cleanups: Array<() => Promise<void>> = []
+const sharedCleanups: Array<() => Promise<void>> = []
+/** Per-test disposers (LLM adapter registrations, ordinary sessions): drained after each test. */
+let testCleanups: Array<() => Promise<void> | void> = []
 const originalDshHome = process.env.DSH_HOME
 const requestId = (value: string): AgentTeamRequestId => value as AgentTeamRequestId
 
 afterEach(async () => {
-  await Promise.all(cleanups.splice(0).map(cleanup => cleanup()))
+  await Promise.all(testCleanups.splice(0).map(cleanup => cleanup()))
+})
+
+afterAll(async () => {
+  await Promise.all(sharedCleanups.splice(0).map(cleanup => cleanup()))
   if (originalDshHome === undefined) delete process.env.DSH_HOME
   else process.env.DSH_HOME = originalDshHome
 })
@@ -119,12 +133,17 @@ function waitForRunning(ctx: Context, agent: Agent): Promise<void> {
 }
 
 /**
- * The real composition with a per-member tool surface: the preset contributes
- * the five Team tools plus distinguishable `ordinary_tool`/`spare_tool`
- * fixtures, so allow-lists can hide and reveal names both the restriction and
- * the model turn can observe.
+ * File-shared harness: booted once in `beforeAll`, torn down once in
+ * `afterAll`. Previously every test paid the full boot (temp tree, preset
+ * file, a dozen plugin installs with disk reads through the loader) and the
+ * windows lane stretched one boot to 4.1s+ — 7 boots per file meant 7 chances
+ * to hit a slow tail. The ledger is append-only, so tests stay isolated
+ * through unique handles/requestIds (see the invariant below); the LLM
+ * adapter is the one per-test registration because `registerAdapter` throws
+ * on duplicate routes — each test registers its own and `afterEach`
+ * disposes it.
  */
-async function policyHarness(adapter: LlmAdapter = new EmptyAdapter()): Promise<{
+async function buildSharedHarness(): Promise<{
   readonly ctx: Context
   readonly workspaceId: WorkspaceId
   readonly teamFiber: Awaited<ReturnType<Context['plugin']>>
@@ -157,7 +176,6 @@ async function policyHarness(adapter: LlmAdapter = new EmptyAdapter()): Promise<
   ctx.loader.builtins.include = Include
   ctx.loader.builtins.group = Group
   await ctx.plugin(LlmRuntime)
-  ctx.llm.registerAdapter(['mock'], adapter)
   await ctx.plugin(SessionStore)
   // rc.1: AgentPresets injects 'sessionProjections'; the roster stays PENDING without it.
   await ctx.plugin(SessionProjectionRegistry)
@@ -183,8 +201,24 @@ async function policyHarness(adapter: LlmAdapter = new EmptyAdapter()): Promise<
     archiveSession: async () => {},
   })
   const teamFiber = await ctx.plugin(AgentTeam)
-  cleanups.push(async () => { await ctx.fiber.dispose(); await facility.closeAll(); await rm(root, { recursive: true, force: true }) })
+  sharedCleanups.push(async () => { await ctx.fiber.dispose(); await facility.closeAll(); await rm(root, { recursive: true, force: true }) })
   return { ctx, workspaceId, teamFiber }
+}
+
+// Isolation invariant: the shared ledger never forgets, so every handle and
+// every requestId in this file must be unique per test (suffixed t1..t7) — a
+// reused `add-<handle>` requestId would idempotently return another test's
+// Member, and a reused handle would fail availability. Grep `t[1-7]-` to audit.
+let shared: Awaited<ReturnType<typeof buildSharedHarness>>
+
+beforeAll(async () => {
+  shared = await buildSharedHarness()
+})
+
+/** Register one adapter for this test only; disposed in `afterEach`. */
+function useAdapter(adapter: LlmAdapter): void {
+  const dispose = shared.ctx.llm.registerAdapter(['mock'], adapter)
+  testCleanups.push(() => { dispose() })
 }
 
 interface MemberFacts {
@@ -209,13 +243,14 @@ function liveAgent(ctx: Context, facts: MemberFacts): Agent {
 
 describe('Agent Team member tool policy', () => {
   it('restricts each Member to its own allow-list without affecting siblings', async () => {
-    const { ctx, workspaceId } = await policyHarness()
+    useAdapter(new EmptyAdapter())
+    const { ctx, workspaceId } = shared
     // Baseline: an unrestricted Member sees the five Team tools and both fixtures.
-    const base = await addMember(ctx, workspaceId, 'baseline')
+    const base = await addMember(ctx, workspaceId, 't1-baseline')
     const baseAgent = liveAgent(ctx, base)
     expect(toolNames(ctx, baseAgent)).toEqual([...AGENT_TEAM_TOOL_NAMES, 'ordinary_tool', 'spare_tool'].sort())
 
-    const narrow = await addMember(ctx, workspaceId, 'narrow', { tools: { allow: ['ordinary_tool'] } })
+    const narrow = await addMember(ctx, workspaceId, 't1-narrow', { tools: { allow: ['ordinary_tool'] } })
     const narrowAgent = liveAgent(ctx, narrow)
     // The five Team tools are force-unioned; spare_tool disappears.
     expect(toolNames(ctx, narrowAgent)).toEqual([...AGENT_TEAM_TOOL_NAMES, 'ordinary_tool'].sort())
@@ -228,10 +263,11 @@ describe('Agent Team member tool policy', () => {
   })
 
   it('drops unknown allow-list names at activation with a diagnostic warning digest', async () => {
-    const { ctx, workspaceId } = await policyHarness()
+    useAdapter(new EmptyAdapter())
+    const { ctx, workspaceId } = shared
     // 'tool-renamed-away' simulates a Harness upgrade rename: committed as
     // pure intent, dropped at activation, never fatal.
-    const drifted = await addMember(ctx, workspaceId, 'drifted', { tools: { allow: ['tool-renamed-away', 'ordinary_tool'] } })
+    const drifted = await addMember(ctx, workspaceId, 't2-drifted', { tools: { allow: ['tool-renamed-away', 'ordinary_tool'] } })
     const driftedAgent = liveAgent(ctx, drifted)
     expect(toolNames(ctx, driftedAgent)).toEqual([...AGENT_TEAM_TOOL_NAMES, 'ordinary_tool'].sort())
     const status = ctx.agentTeam.membersForClient({ workspaceId }).find(item => item.member.memberId === drifted.memberId)
@@ -243,15 +279,16 @@ describe('Agent Team member tool policy', () => {
       }),
     ])
     // A clean re-edit clears the warnings together with the override.
-    const edited = await ctx.agentTeam.updateMember({ requestId: requestId('clear-drift'), memberId: drifted.memberId, handle: 'drifted', description: 'Cleaned up' })
+    const edited = await ctx.agentTeam.updateMember({ requestId: requestId('clear-drift'), memberId: drifted.memberId, handle: 't2-drifted', description: 'Cleaned up' })
     expect(edited.status.member.capabilities).toBeUndefined()
     expect(edited.status.capabilityWarnings).toBeUndefined()
   })
 
   it('restores the same restricted surface across suspend, resume, and Host restart', async () => {
-    const { ctx, workspaceId, teamFiber } = await policyHarness()
-    const other = await addMember(ctx, workspaceId, 'other')
-    const narrow = await addMember(ctx, workspaceId, 'narrow', { tools: { allow: ['ordinary_tool'] } })
+    useAdapter(new EmptyAdapter())
+    const { ctx, workspaceId, teamFiber } = shared
+    const other = await addMember(ctx, workspaceId, 't3-other')
+    const narrow = await addMember(ctx, workspaceId, 't3-narrow', { tools: { allow: ['ordinary_tool'] } })
 
     const suspended = await ctx.agentTeam.suspendMember({ requestId: requestId('suspend'), memberId: narrow.memberId })
     expect(suspended.status.availability, JSON.stringify(suspended.status)).toBe('suspended')
@@ -274,14 +311,15 @@ describe('Agent Team member tool policy', () => {
 
   it('live-applies an allow-list edit at the turn boundary in the same Session', async () => {
     const adapter = new ScriptedAdapter()
-    const { ctx, workspaceId } = await policyHarness(adapter)
-    const narrow = await addMember(ctx, workspaceId, 'narrow', { tools: { allow: ['ordinary_tool'] } })
+    useAdapter(adapter)
+    const { ctx, workspaceId } = shared
+    const narrow = await addMember(ctx, workspaceId, 't4-narrow', { tools: { allow: ['ordinary_tool'] } })
     const agent = liveAgent(ctx, narrow)
 
     // While the Member is idle, the edit applies immediately: same Session,
     // the next request schemas recomputed from the new restriction.
     const widened = await ctx.agentTeam.updateMember({
-      requestId: requestId('widen'), memberId: narrow.memberId, handle: 'narrow', description: 'Policy member',
+      requestId: requestId('widen'), memberId: narrow.memberId, handle: 't4-narrow', description: 'Policy member',
       capabilities: { tools: { allow: ['ordinary_tool', 'spare_tool'] } },
     })
     expect(widened.status.member.capabilities).toEqual({ tools: { allow: ['ordinary_tool', 'spare_tool'] } })
@@ -307,8 +345,9 @@ describe('Agent Team member tool policy', () => {
 
   it('waits for a running turn, then applies the swap in the same Session while later lifecycle operations queue behind it', async () => {
     const adapter = new GatedAdapter()
-    const { ctx, workspaceId } = await policyHarness(adapter)
-    const narrow = await addMember(ctx, workspaceId, 'narrow', { tools: { allow: ['ordinary_tool'] } })
+    useAdapter(adapter)
+    const { ctx, workspaceId } = shared
+    const narrow = await addMember(ctx, workspaceId, 't5-narrow', { tools: { allow: ['ordinary_tool'] } })
     const agent = liveAgent(ctx, narrow)
 
     // Open a held turn so the edit lands while the agent is running.
@@ -318,7 +357,7 @@ describe('Agent Team member tool policy', () => {
     await running
 
     const edit = ctx.agentTeam.updateMember({
-      requestId: requestId('narrow-wait'), memberId: narrow.memberId, handle: 'narrow', description: 'Policy member',
+      requestId: requestId('narrow-wait'), memberId: narrow.memberId, handle: 't5-narrow', description: 'Policy member',
       capabilities: { tools: { allow: ['ordinary_tool', 'spare_tool'] } },
     })
     // The edit is parked behind the running turn: it cannot resolve while the
@@ -346,9 +385,10 @@ describe('Agent Team member tool policy', () => {
   })
 
   it('keeps Team tools hidden from ordinary sessions outside the preset', async () => {
-    const { ctx } = await policyHarness()
-    const ordinary = await ctx.agents.create({ sessionId: SessionId('ordinary-session') })
-    cleanups.push(async () => { await ordinary.dispose() })
+    useAdapter(new EmptyAdapter())
+    const { ctx } = shared
+    const ordinary = await ctx.agents.create({ sessionId: SessionId('t6-ordinary') })
+    testCleanups.push(async () => { await ordinary.dispose() })
     const names = toolNames(ctx, ordinary.agent)
     for (const teamTool of AGENT_TEAM_TOOL_NAMES) expect(names).not.toContain(teamTool)
     expect(names).not.toContain('ordinary_tool')
@@ -360,7 +400,8 @@ describe('Agent Team member tool policy', () => {
   // resolving through the scope chain. The real @deepseek-ai/dsh-tool-session-query
   // plugin and a minimal SessionQueryEngine stand-in provide the payload.
   it('spike: mounts session-query per Member through the agent exact layer without sibling visibility', async () => {
-    const { ctx, workspaceId } = await policyHarness()
+    useAdapter(new EmptyAdapter())
+    const { ctx, workspaceId } = shared
     const engine = await import('@deepseek-ai/dsh-session-query')
     // The tool plugin ships in the adjacent Harness checkout (read-only
     // reference); it is not a Team dependency, so the spike loads it by path.
@@ -371,8 +412,8 @@ describe('Agent Team member tool policy', () => {
       apply: toolPluginModule.apply as (ctx: Context, config: unknown) => void,
     }
 
-    const holder = await addMember(ctx, workspaceId, 'holder')
-    const sibling = await addMember(ctx, workspaceId, 'sibling')
+    const holder = await addMember(ctx, workspaceId, 't7-holder')
+    const sibling = await addMember(ctx, workspaceId, 't7-sibling')
     const holderAgent = liveAgent(ctx, holder)
     const siblingAgent = liveAgent(ctx, sibling)
     expect(toolNames(ctx, siblingAgent)).not.toContain('session_search')
@@ -402,8 +443,8 @@ describe('Agent Team member tool policy', () => {
     // Sibling and ordinary surfaces stay clean — the mount is agent-exact.
     expect(toolNames(ctx, siblingAgent)).not.toContain('session_search')
     expect(toolNames(ctx, siblingAgent)).not.toContain('session_trace')
-    const ordinary = await ctx.agents.create({ sessionId: SessionId('ordinary-spike') })
-    cleanups.push(async () => { await ordinary.dispose() })
+    const ordinary = await ctx.agents.create({ sessionId: SessionId('t7-ordinary-spike') })
+    testCleanups.push(async () => { await ordinary.dispose() })
     expect(toolNames(ctx, ordinary.agent)).not.toContain('session_search')
 
     // The tool executes against the Member-scoped engine instance.

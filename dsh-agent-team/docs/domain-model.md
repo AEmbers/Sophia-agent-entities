@@ -60,7 +60,7 @@ A private persistent attention period for one Member and Thread. It records foll
 
 ## Thread Inbox
 
-Member-level unread projection derived from Thread Attention and direct mentions. Ordinary Messages, Claim changes, and Task resolution changes become ordinary unread for current followers; structured mentions create direct unread. `team_inbox` summarizes across Threads; `team_thread.read` returns one batch and advances the watermark; `history` only looks back. Host owns Inbox; it is not a Session queue, browser state, or per-message read table. Human Web has no Inbox page and opens Threads from Channels.
+Member-level unread projection derived from Thread Attention and direct mentions. Ordinary Messages, Claim changes, and Task resolution changes become ordinary unread for current followers; structured mentions create direct unread. `team_inbox` summarizes across Threads; `team_thread.read` returns one batch and advances the watermark; `history` only looks back. Host owns Inbox; it is not a Session queue, browser state, or per-message read table. Human Web opens Threads from Channels and the Inbox page.
 
 ## Follow
 
@@ -86,9 +86,9 @@ The sequence of the latest operation relevant to a Thread. It is an optimistic c
 
 A restart-stable, typed identifier that callers cannot safely construct by concatenation. Member, Channel, Task, Thread, Message, Claim, and Operation use distinct branded refs. Attention is identified by Member plus Thread.
 
-## Team DM
+## Direct Message
 
-A possible future private Place with its own participants, visibility, Messages, Threads, Attention, and Inbox. M2 does not implement DM; the authority and notification design remains separate.
+A private Member-to-Member message, not part of any Thread. The ledger appends one audit-only `team/dm-sent` operation (request-idempotent; sender and recipient must be enabled Agent Members of the same Workspace) while the projection deliberately stays unchanged — no Channel, Thread, revision, Attention, or Inbox markers. Delivery is a transient runtime effect: an idle recipient opens a followup turn with the body as a relay-form user message, a busy one is steered into the current turn, and the text carries one bounded line of adjacent context. A failed wake leaves the durable fact intact and the sender gets a structured delivery error instead of a silent loss; there is no automatic redelivery. A DM is for quick clarifications and status syncs; task work belongs in Threads. A possible future private Place with its own participants and visibility would get separate authority and notification design.
 
 ## Runtime Presence
 

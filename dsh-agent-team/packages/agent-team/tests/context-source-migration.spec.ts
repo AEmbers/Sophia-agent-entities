@@ -26,12 +26,11 @@ import {
   CHECKPOINT_SECTION_NAME,
   HANDOFF_SECTION_NAME,
   continuationCheckpointRefOf,
-  createCheckpointContinuationMessage,
-  createHandoffMessage,
   handoffOf,
   isCheckpointContinuationMessage,
   isHandoffMessage,
 } from '../src/context-source.ts'
+import { TEAM_CONTEXT_CODEC } from '../src/context-continuity-host.ts'
 
 const header = { version: 2, id: 'context-source-migration', createdAt: 1, isSeeded: false, delegationDepth: 0 }
 
@@ -76,11 +75,11 @@ const handoffInput = {
 
 describe('Agent Team message sources survive released-format migration', () => {
   it('migrates the rollover handoff this package writes', () => {
-    expect(() => migrateUserMessage(createHandoffMessage(handoffInput).source)).not.toThrow()
+    expect(() => migrateUserMessage(TEAM_CONTEXT_CODEC.createHandoffMessage(handoffInput).source)).not.toThrow()
   })
 
   it('migrates the checkpoint continuation this package writes', () => {
-    expect(() => migrateUserMessage(createCheckpointContinuationMessage('context-checkpoint-abc').source)).not.toThrow()
+    expect(() => migrateUserMessage(TEAM_CONTEXT_CODEC.createCheckpointContinuationMessage('context-checkpoint-abc').source)).not.toThrow()
   })
 
   it('refuses the retired custom kinds, so this fence still has teeth', () => {
@@ -109,7 +108,7 @@ describe('Agent Team message sources survive released-format migration', () => {
 
 describe('Agent Team message sources read back through the admitted slots', () => {
   it('recovers the whole handoff envelope from its named sections', () => {
-    const message = createHandoffMessage(handoffInput)
+    const message = TEAM_CONTEXT_CODEC.createHandoffMessage(handoffInput)
     expect(isHandoffMessage(message)).toBe(true)
     expect(handoffOf(message)).toMatchObject({
       previousSessionId: 'agent-team-previous',
@@ -124,7 +123,7 @@ describe('Agent Team message sources read back through the admitted slots', () =
 
   it('omits absent optional envelope facts instead of inventing them', () => {
     const { checkpointRef: _checkpointRef, relatedFiles: _relatedFiles, ...bare } = handoffInput
-    const message = createHandoffMessage(bare)
+    const message = TEAM_CONTEXT_CODEC.createHandoffMessage(bare)
     const handoff = handoffOf(message)
     expect(handoff).toBeDefined()
     expect(handoff?.checkpointRef).toBeUndefined()
@@ -132,7 +131,7 @@ describe('Agent Team message sources read back through the admitted slots', () =
   })
 
   it('round-trips a related path that contains a comma', () => {
-    const message = createHandoffMessage({
+    const message = TEAM_CONTEXT_CODEC.createHandoffMessage({
       ...handoffInput,
       relatedFiles: [{ path: 'src/a, b.ts', reason: 'odd but legal name' }, { path: 'src/parser.ts' }],
     })
@@ -163,7 +162,7 @@ describe('Agent Team message sources read back through the admitted slots', () =
 
   it('recovers the checkpoint ref from a continuation, exactly and by identity', () => {
     const ref = 'context-checkpoint-0123456789abcdef'
-    const message = createCheckpointContinuationMessage(ref)
+    const message = TEAM_CONTEXT_CODEC.createCheckpointContinuationMessage(ref)
     expect(continuationCheckpointRefOf(message)).toBe(ref)
     expect(isCheckpointContinuationMessage(message)).toBe(true)
     expect(isCheckpointContinuationMessage(message, ref)).toBe(true)

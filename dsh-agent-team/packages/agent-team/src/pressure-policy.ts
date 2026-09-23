@@ -20,10 +20,16 @@ import { CONTEXT_WINDOW_EXCEEDED_CODE } from '@deepseek-ai/dsh-llm'
 import type { CompactionEngine, CompactionResult } from '@deepseek-ai/dsh-compaction'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { AgentTeamMemberId } from './types.ts'
-import { CONTEXT_PRESSURE_NOTICE_SUMMARY } from './context-management.ts'
 import { AGENT_TEAM_PLUGIN_ID } from './context-source.ts'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { advanceOwnedSessionEventCursor, type OwnedSessionEventCursor, type SessionEventFold } from './session-event-cursor.ts'
+
+/**
+ * Stable summary of the one-shot rollover pressure notice. It is a durable
+ * marker: the notice's own presence in a Session's log is what latches the
+ * policy, so the wording is read back and must not drift.
+ */
+export const CONTEXT_PRESSURE_NOTICE_SUMMARY = 'Context pressure: prepare a handoff'
 
 /**
  * Whether this Session's own span already carries the pressure notice: either

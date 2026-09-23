@@ -1,5 +1,9 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+// Rendering the whole Team surface in jsdom has reached 3.4s on the windows lane
+// (worst of 11 CI runs, 2026-09-17..21) against vitest's 5s default, so the file
+// keeps headroom rather than betting on runner throughput.
+vi.setConfig({ testTimeout: 30_000 })
 import { cleanup, fireEvent, waitFor, within } from '@testing-library/react'
 import { usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-test-runtime'
 import { runtimeWithTeam } from './harness.tsx'
@@ -144,6 +148,40 @@ describe('Team conversation surfaces', () => {
     b.seedInbox([])
     await waitFor(() => expect(within(row).queryByText('99+')).toBeNull())
     expect(b.view.getByRole('button', { name: '打开 Task #1' })).toBeTruthy()
+    await b.runtime.dispose()
+  })
+
+  it('stops printing activity on a resolved Task door', async () => {
+    const b = await runtimeWithTeam({
+      mode: 'team', workspaceId: 'w1', initialChannels: true,
+      seedTaskStatus: 'done',
+      seededMessages: [{ body: '已经完成的任务', occurredAt: '2026-08-21T09:00:00.000Z' }],
+    })
+    fireEvent.click(await b.view.findByRole('button', { name: '# engineering' }))
+    // The reply is a newer fact than the opener, so follow-up activity exists —
+    // the door is the only place that could print it.
+    b.publishAgentReply()
+    const door = await b.view.findByRole('button', { name: '打开 Task #1' })
+    // A done Task already says nothing is moving, so the moment it resolved is
+    // not repeated on every finished row; the precise instant stays one hover
+    // away.
+    expect(door.textContent).toBe('Task #1')
+    expect(door.getAttribute('title')).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/)
+    await b.runtime.dispose()
+  })
+
+  it('keeps printing activity on a taskless discussion, which never resolves', async () => {
+    const b = await runtimeWithTeam({ mode: 'team', workspaceId: 'w1', initialChannels: true })
+    fireEvent.click(await b.view.findByRole('button', { name: '# engineering' }))
+    expect(await b.view.findByRole('heading', { name: '# engineering' })).toBeTruthy()
+    fireEvent.change(await b.view.findByRole('textbox', { name: '消息内容' }), { target: { value: 'plain thread' } })
+    fireEvent.click(b.view.getByRole('button', { name: '发送' }))
+    await waitFor(() => expect(b.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ asTask: false })))
+    b.publishAgentReply()
+    // A discussion wears no status word, dot, or owner stack, and it has no
+    // terminal state: recency is the whole of what its door can say.
+    const door = await b.view.findByRole('button', { name: '打开讨论' })
+    expect(door.textContent).toContain('最近活动')
     await b.runtime.dispose()
   })
 
@@ -725,22 +763,44 @@ describe('Team conversation surfaces', () => {
     await b.runtime.dispose()
   })
 
-  it('folds the workspace list behind the same section header as the panels', async () => {
+  it('states the current Workspace on one line and switches through its menu', async () => {
     const b = await runtimeWithTeam({ mode: 'team' })
     expect(await b.view.findByRole('heading', { name: '频道' })).toBeTruthy()
-    fireEvent.click(b.view.getByRole('button', { name: 'Toggle fixture sidebar' }))
-    await waitFor(() => { expect(b.view.getByRole('button', { name: '频道' })).toBeTruthy() })
-    const workspaceToggle = b.view.getByRole('button', { name: '工作区' })
-    expect(workspaceToggle.getAttribute('aria-expanded')).toBe('true')
-    expect(b.view.getByRole('button', { name: 'Alpha' })).toBeTruthy()
-    fireEvent.click(workspaceToggle)
-    expect(workspaceToggle.getAttribute('aria-expanded')).toBe('false')
-    expect(b.view.queryByRole('button', { name: 'Alpha' })).toBeNull()
+    // The selector renders in the wide sidebar only, and collapsing the fixture
+    // keeps that wide surface mounted for another 150ms (SidebarRoot's collapse
+    // settle) before the rail replaces it. Every assertion below reads the wide
+    // surface, so this test leaves the sidebar width alone: the collapse click
+    // it used to fire raced that window, and the last assertion lost the race on
+    // a slow lane. The rail keeps its own coverage in the toggle test above.
+    // The selected Workspace is the trigger's own text and its accessible name:
+    // a reader who cannot see the field still learns which one is stated. The
+    // others are not rows on the surface, so the sections below read as that
+    // Workspace's content.
+    const trigger = await b.view.findByRole('button', { name: '工作区，Alpha' })
+    expect(trigger.getAttribute('aria-haspopup')).toBe('menu')
+    expect(trigger.getAttribute('aria-expanded')).toBe('false')
+    expect(trigger.textContent).toContain('Alpha')
+    expect(b.view.queryByRole('button', { name: '工作区' })).toBeNull()
     expect(b.view.queryByRole('button', { name: 'Beta' })).toBeNull()
-    // Collapsing the list leaves the Workspace content sections in place.
+    // The Inbox crosses Workspaces, so it stands above the selector that scopes
+    // the sections below it.
+    const inboxCard = b.view.getByRole('button', { name: /^收件箱/ })
+    expect(inboxCard.compareDocumentPosition(trigger) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+    fireEvent.click(trigger)
+    expect(trigger.getAttribute('aria-expanded')).toBe('true')
+    // The menu list is a portal the loaded runtime can re-render between the
+    // query and the click, so a click can land on a detached node and be lost.
+    // Retry the interaction — not just the assertion — until the selection
+    // actually moves the navigation snapshot.
+    await waitFor(() => {
+      fireEvent.click(within(document.body).getByRole('menuitem', { name: 'Beta' }))
+      expect(b.runtime.ctx.teamNavigation.getSnapshot().workspaceId).toBe('w2')
+    })
+    await waitFor(() => { expect(b.view.getByRole('button', { name: '工作区，Beta' })).toBeTruthy() })
+    // Picking closes the menu and leaves the content sections standing.
+    expect(b.view.getByRole('button', { name: '工作区，Beta' }).getAttribute('aria-expanded')).toBe('false')
     expect(b.view.getByRole('button', { name: '频道' })).toBeTruthy()
-    fireEvent.click(workspaceToggle)
-    expect(b.view.getByRole('button', { name: 'Alpha' })).toBeTruthy()
     await b.runtime.dispose()
   })
 

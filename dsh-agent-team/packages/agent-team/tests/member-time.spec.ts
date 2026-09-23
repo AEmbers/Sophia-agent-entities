@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { afterEach } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Storage from '@deepseek-ai/dsh-storage'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
@@ -65,6 +66,7 @@ async function harness(pool = new MemoryMediaPool(), workspaceIds = [alpha]): Pr
   ctx.provide('agentPresets', { mount: async () => { throw new Error('unused') } })
   ctx.provide('tools', { schemas: () => [] })
   ctx.provide('sessionPersistence', { list: async () => [] })
+  await ctx.plugin(SessionProjectionRegistry)
   const fiber = await ctx.plugin(AgentTeam)
   cleanups.push(async () => { await fiber.dispose(); await facility.closeAll() })
   return { ctx, fiber, facility }

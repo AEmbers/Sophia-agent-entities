@@ -31,60 +31,70 @@
   outline-offset: 1px;
 }
 
-.workspaceList {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding-bottom: 2px;
-}
-
-.workspaceRow {
+/* The Workspace selector is a field, not a list row: it carries the bordered
+   trigger shape the creation forms already use for a single choice, so the one
+   line that states where the reader is does not read as the first entry of the
+   list below it. Its folder icon keeps the selected tint the list rows used to
+   carry, because the trigger is always showing a selection. It leads the sections
+   it scopes rather than the whole browser: the Inbox entry above it crosses
+   Workspaces, so that entry stays outside this selector's reach. */
+.workspaceTrigger {
   align-items: center;
-  background: transparent;
-  border: 0;
+  background: var(--dsw-alias-bg-layer-1);
+  border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 8px;
+  box-sizing: border-box;
   color: var(--dsw-alias-label-primary);
   cursor: pointer;
   display: flex;
+  font-size: 14px;
   gap: 6px;
-  height: 34px;
-  padding: 0 8px;
+  line-height: 22px;
+  margin: 0 0 2px;
+  min-height: 34px;
+  padding: 4px 8px;
   text-align: left;
   width: 100%;
 }
 /* Location reads like the harness session tree: the leaf that is the current
-   page carries the fill (aria-current='page' — the open Channel row, or this
-   Workspace row while its overview is up); the browsed Workspace row otherwise
-   stays quiet and only its folder icon tints (data-selected). */
-.workspaceRow:hover,
-.workspaceRow:focus-visible,
-.workspaceRow[aria-current='page'] {
+   page carries the fill. The field already sits on its own layer, so the shared
+   hover fill is what says its overview is the page on screen. */
+.workspaceTrigger:hover,
+.workspaceTrigger[aria-current='page'] {
   background: var(--dsw-alias-interactive-bg-hover);
 }
-.workspaceRow:focus-visible {
+.workspaceTrigger:focus-visible {
+  border-color: var(--dsw-alias-brand-primary);
   outline: 2px solid var(--dsw-alias-label-primary);
   outline-offset: -2px;
 }
 
 .workspaceIcon {
   align-items: center;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-state-business-primary);
   display: inline-flex;
   flex: 0 0 16px;
   height: 20px;
   justify-content: center;
 }
-.workspaceRow[data-selected] .workspaceIcon {
-  color: var(--dsw-alias-state-business-primary);
-}
-.workspaceCopy { display: flex; min-width: 0; }
-.workspaceCopy strong {
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 20px;
+.workspaceValue {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.workspaceChevron {
+  color: var(--dsw-alias-label-tertiary);
+  display: inline-flex;
+  flex: none;
+  transition: transform 120ms ease;
+}
+.workspaceChevronOpen {
+  transform: rotate(180deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspaceChevron { transition: none; }
 }
 
 .emptyState {
@@ -94,8 +104,8 @@
   margin: 8px;
 }
 
-/* The Human mention-Inbox entry: a card above the Workspaces section on the
-   wide rail, a queue icon on the narrow rail. Both mark unread the same way — a
+/* The Human mention-Inbox entry: a card above the Workspace selector on the wide
+   rail, a queue icon on the narrow rail. Both mark unread the same way — a
    dot on the icon's corner rather than a number beside it. The quantity is not
    gone, it moved into the control's own name: what a reader scans the sidebar
    for is whether anything waits, and the count answers a question asked on
@@ -150,13 +160,18 @@
 }
 /* Everything the sidebar still says about unread: the solid ink the queue uses
    for a Thread that named the reader, at the size of a mark instead of a count.
-   The ring is the surface's own background, so the dot reads as a mark laid over
-   the icon's strokes rather than one blending into them — and it follows the
-   card's hovered and current-page fills, which are not the page background. */
+   The ring is the surface's own background — the sidebar fill, as the Agent
+   badge's ring is — so the dot reads as a mark laid over the icon's strokes
+   rather than one blending into them. A hovered or current-page card adds a
+   translucent wash on top of that fill, so the ring paints both in order: the wash
+   alone would darken the already-washed card a second time and ring the dot with a
+   halo the reader would read as a smudge. */
 .inboxDot {
   background: var(--dsw-alias-state-business-primary);
   border-radius: 50%;
-  box-shadow: 0 0 0 2px var(--team-mark-ring, var(--dsw-alias-bg-base));
+  box-shadow:
+    0 0 0 2px var(--team-mark-ring, var(--dsw-specific-sidebar-fill)),
+    0 0 0 2px var(--dsw-specific-sidebar-fill);
   corner-shape: round;
   height: 8px;
   left: -2px;

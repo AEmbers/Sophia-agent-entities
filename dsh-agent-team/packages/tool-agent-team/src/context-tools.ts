@@ -9,12 +9,25 @@
  * @module @wowyuarm/dsh-agent-team/context-tools
  */
 
+import { createHash } from 'node:crypto'
 import type { AgentTeamContextCheckpointRef } from '@wowyuarm/dsh-agent-team/types'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { member, service } from './host-access.ts'
 
 const MAX_HANDOFF_CHARS = 32 * 1024
 const MAX_RELATED_FILES = 32
+
+/**
+ * Short stable identifier for one timeline row: a digest of the anchor's own
+ * ref. Rows routinely share a label (`Team message` is a constant) and a price
+ * (the same completed turn prices both), so without it two distinct anchors
+ * read as one duplicated row. Deliberately NOT the ref and deliberately not
+ * actionable: a ref only means something on a restorable row, which prints it
+ * in full for `context_rollover`.
+ */
+function anchorId(checkpointRef: string): string {
+  return createHash('sha256').update(checkpointRef).digest('hex').slice(0, 6)
+}
 
 const contextRollover = defineTool({
   name: 'context_rollover',
@@ -106,7 +119,7 @@ const contextCheckpoint = defineTool({
 
 const contextTimeline = defineTool({
   name: 'context_timeline',
-  description: 'Inspect the bounded structural timeline of this Member\'s context lineage: named checkpoints you recorded, Team boundaries (effect anchors: a committed team_message, a successful team_claim mutation, a follow/unfollow — rendered as `Team message`, `Team task claim change`, `Team attention change`; plus a Thread\'s first delivered notice, rendered as `First arrival: <refs>`), handoff and compaction boundaries, and the current head — across the current generation and its archived ancestors. Only the first delivery of a Thread\'s facts anchors; later re-deliveries and reminders produce no boundary. Returns approximate retained/discarded token estimates, current usage against the pressure budget, the Threads whose facts entered your context by each anchor, and which anchors are restorable. A Team boundary is a selectable default checkpoint exactly when it resolved at a completed turn and exactly one Thread is attributable to it; unattributable or multi-Thread boundaries state their reason. Structural only: no transcript content. A fresh context_rollover (no checkpointRef) never requires consulting this timeline first — call it directly. Use this tool only when you specifically intend a checkpointRef return: to pick the smallest sufficient ref, or to confirm that a fresh handoff is the better path when every anchor is marked non-restorable.',
+  description: 'Inspect the bounded structural timeline of this Member\'s context lineage: named checkpoints you recorded, Team boundaries (effect anchors: a committed team_message, a successful team_claim mutation, a follow/unfollow — rendered as `Team message`, `Team task claim change`, `Team attention change`; plus a Thread\'s first delivered notice, rendered as `First arrival: <refs>`), handoff and compaction boundaries, and the current head — across the current generation and its archived ancestors. Only the first delivery of a Thread\'s facts anchors; later re-deliveries and reminders produce no boundary. Returns approximate retained/discarded token estimates, current usage against the pressure budget, the Threads whose facts entered your context by each anchor, and which anchors are restorable. A Team boundary is a selectable default checkpoint exactly when the retained prefix through it stays inside one Thread and the return would shrink the working set below the handoff budget; a boundary spanning several Threads, or attributable to none, states its reason instead. Every row carries a short `anchor` id: it distinguishes rows that share a label and a price, and it is NOT a ref — only the `checkpointRef` printed on a restorable row may be cited to context_rollover. Structural only: no transcript content. A fresh context_rollover (no checkpointRef) never requires consulting this timeline first — call it directly. Use this tool only when you specifically intend a checkpointRef return: to pick the smallest sufficient ref, or to confirm that a fresh handoff is the better path when every anchor is marked non-restorable.',
   parameters: {
     limit: { type: 'number', description: 'Maximum number of items to return (default 12, at most 24).' },
   },
@@ -135,10 +148,12 @@ const contextTimeline = defineTool({
     // ref, label, source, size estimates, affected Threads, and
     // restorable/reason verdict, the model cannot pick a `checkpointRef` for
     // `context_rollover` — the summary line alone left the tool unusable for
-    // seeded returns. The Host bounds items (default 12, at most 24), so this
-    // list cannot grow unbounded. `incompleteFrom` states where and why the
-    // lineage walk stopped early, so history read up to that ancestor is
-    // known to be a truncation, not everything that exists.
+    // seeded returns. The short anchor id distinguishes rows that share a
+    // label and a price without ever printing a ref that is not usable. The
+    // Host bounds items (default 12, at most 24), so the list cannot grow
+    // unbounded. `incompleteFrom` states where and why the lineage walk
+    // stopped early, so history read up to that ancestor is known to be a
+    // truncation, not everything that exists.
     render: (_args, value) => {
       const lines = [`Context timeline: ${value.usageTokens} tokens used (handoff at ${value.handoffAt}, hard limit ${value.hardLimit}). ${value.items.length} item(s):`]
       for (const item of value.items) {
@@ -147,7 +162,7 @@ const contextTimeline = defineTool({
         const restorable = item.restorable
           ? `restorable — ref: ${item.checkpointRef}`
           : `not restorable — ${item.reason ?? 'no reason given'}`
-        lines.push(`- ${item.name} [source: ${item.source}] (${size}; ${threads}) — ${restorable}`)
+        lines.push(`- ${item.name} [source: ${item.source}; anchor ${anchorId(item.checkpointRef)}] (${size}; ${threads}) — ${restorable}`)
       }
       if (value.incompleteFrom !== undefined) {
         lines.push(`History incomplete: the lineage walk stopped at Session ${value.incompleteFrom.sessionId} (${value.incompleteFrom.reason}); ancestors before it could not be read and are not reflected above.`)

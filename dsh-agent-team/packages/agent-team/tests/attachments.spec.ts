@@ -8,6 +8,7 @@ const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\
 import { Context } from '@deepseek-ai/cordis'
 import InvariantRegistry from '@deepseek-ai/dsh-invariants'
 import Storage from '@deepseek-ai/dsh-storage'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import type { KvTable } from '@deepseek-ai/dsh-storage-domain'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
@@ -45,6 +46,7 @@ async function harness(): Promise<{ readonly ctx: Context; readonly facility: Do
   ctx.provide('sessionPersistence', { list: async () => [] })
   await ctx.plugin(InvariantRegistry)
   await ctx.plugin(agentTeamInvariant)
+  await ctx.plugin(SessionProjectionRegistry)
   const fiber = await ctx.plugin(AgentTeam)
   cleanups.push(async () => { await fiber.dispose(); await facility.closeAll() })
   return { ctx, facility }

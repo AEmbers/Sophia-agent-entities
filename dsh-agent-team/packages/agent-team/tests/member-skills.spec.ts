@@ -137,9 +137,10 @@ describe('Agent Team member-private skills', () => {
     const member = await addMember(ctx, workspaceId, 'holder')
     const agent = liveAgent(ctx, member.sessionId)
 
-    // Default catalog = the plugin's bundled core skills (the meta skill);
-    // no project/user/global roots leak in. Ordinary sessions see nothing.
-    expect(await catalogNames(ctx, agent)).toEqual(['member-skill-manager'])
+    // Default catalog = the plugin's bundled core skills (the two meta
+    // skills); no project/user/global roots leak in. Ordinary sessions see
+    // nothing.
+    expect(await catalogNames(ctx, agent)).toEqual(['member-memory-manager', 'member-skill-manager'])
     const ordinary = await ctx.agents.create({ sessionId: SessionId('ordinary-skills') })
     cleanups.push(async () => { await ordinary.dispose() })
     expect(await catalogNames(ctx, ordinary.agent)).toEqual([])
@@ -150,14 +151,14 @@ describe('Agent Team member-private skills', () => {
     // discovery rather than racing it.
     await writeFile(join(member.privateMemoryPath, 'skills', 'code-review.md'), SKILL_MD('code-review', 'Review changes', 'Review the diff carefully.'))
     await vi.waitFor(async () => {
-      expect(await catalogNames(ctx, agent)).toEqual(['code-review', 'member-skill-manager'])
+      expect(await catalogNames(ctx, agent)).toEqual(['code-review', 'member-memory-manager', 'member-skill-manager'])
     })
 
     // A sibling Member keeps exactly the bundled set — neither the private
     // skill nor the directory is shared.
     const sibling = await addMember(ctx, workspaceId, 'sibling')
     const siblingAgent = liveAgent(ctx, sibling.sessionId)
-    expect(await catalogNames(ctx, siblingAgent)).toEqual(['member-skill-manager'])
+    expect(await catalogNames(ctx, siblingAgent)).toEqual(['member-memory-manager', 'member-skill-manager'])
 
     // The installed skill loads with its full body for the owner alone.
     const loaded = await ctx.skills.get('code-review', { scope: agent as never })
@@ -188,6 +189,28 @@ describe('Agent Team member-private skills', () => {
     expect((await readFile(reference, 'utf8'))).toContain('The description is the skill')
   })
 
+  it('ships the bundled member-memory-manager with the index craft in directory form', async () => {
+    const { ctx, workspaceId } = await memberSkillsHarness()
+    const member = await addMember(ctx, workspaceId, 'memory-reader')
+    const agent = liveAgent(ctx, member.sessionId)
+    const skills = await ctx.skills.list({ scope: agent as never })
+    const memory = skills.find(skill => skill.name === 'member-memory-manager')
+    expect(memory).toBeDefined()
+    const resourceBase = memory?.resourceBase
+    expect(resourceBase?.kind).toBe('directory')
+    const directory = resourceBase?.kind === 'directory' ? resourceBase : undefined
+    expect(directory?.path.endsWith('member-memory-manager')).toBe(true)
+    // The description is the only index entry a Member routes by, so it names
+    // the real triggers: the injected block, the budget, and note upkeep.
+    expect(memory?.description).toContain('memory.md')
+    expect(memory?.description).toContain('maintenance warning')
+    const loaded = await ctx.skills.get('member-memory-manager', { scope: agent as never })
+    expect(loaded?.content).toContain('## Three tiers')
+    // The craft states the boundary the persona only points at.
+    expect(loaded?.content).toContain('past 16 KiB the index is not injected at all')
+    expect(loaded?.content).toContain('Demote, do not delete')
+  })
+
   it('filters an explicit selection and live-applies selection edits', async () => {
     const { ctx, workspaceId } = await memberSkillsHarness()
     // auto Member: two skills installed, no selection.
@@ -196,7 +219,7 @@ describe('Agent Team member-private skills', () => {
     await writeFile(join(member.privateMemoryPath, 'skills', 'alpha.md'), SKILL_MD('alpha', 'Alpha skill', 'Alpha body.'))
     await writeFile(join(member.privateMemoryPath, 'skills', 'beta.md'), SKILL_MD('beta', 'Beta skill', 'Beta body.'))
     await vi.waitFor(async () => {
-      expect(await catalogNames(ctx, agent)).toEqual(['alpha', 'beta', 'member-skill-manager'])
+      expect(await catalogNames(ctx, agent)).toEqual(['alpha', 'beta', 'member-memory-manager', 'member-skill-manager'])
     })
 
     // Explicit selection: only the listed name is listed or loadable. The
@@ -222,7 +245,7 @@ describe('Agent Team member-private skills', () => {
     await ctx.agentTeam.updateMember({
       requestId: requestId('select-auto'), memberId: member.memberId, handle: 'picky', description: 'Skills member',
     })
-    expect(await catalogNames(ctx, agent)).toEqual(['alpha', 'beta', 'member-skill-manager'])
+    expect(await catalogNames(ctx, agent)).toEqual(['alpha', 'beta', 'member-memory-manager', 'member-skill-manager'])
   })
 
   it('provisions skills/ on activation and removes it with the Member', async () => {
@@ -232,7 +255,7 @@ describe('Agent Team member-private skills', () => {
     await writeFile(join(skillsDir, 'ephemeral.md'), SKILL_MD('ephemeral', 'Ephemeral', 'Gone with the Member.'))
     const agent = liveAgent(ctx, member.sessionId)
     await vi.waitFor(async () => {
-      expect(await catalogNames(ctx, agent)).toEqual(['ephemeral', 'member-skill-manager'])
+      expect(await catalogNames(ctx, agent)).toEqual(['ephemeral', 'member-memory-manager', 'member-skill-manager'])
     })
 
     // Removal deletes the whole private namespace, skills included.
@@ -246,19 +269,19 @@ describe('Agent Team member-private skills', () => {
     await writeFile(join(member.privateMemoryPath, 'skills', 'keeper.md'), SKILL_MD('keeper', 'Keeper', 'Survives restarts.'))
     const agent = liveAgent(ctx, member.sessionId)
     await vi.waitFor(async () => {
-      expect(await catalogNames(ctx, agent)).toEqual(['keeper', 'member-skill-manager'])
+      expect(await catalogNames(ctx, agent)).toEqual(['keeper', 'member-memory-manager', 'member-skill-manager'])
     })
 
     await ctx.agentTeam.suspendMember({ requestId: requestId('suspend'), memberId: member.memberId })
     const resumed = await ctx.agentTeam.resumeMember({ requestId: requestId('resume'), memberId: member.memberId })
     expect(resumed.status.availability).toBe('active')
-    expect(await catalogNames(ctx, liveAgent(ctx, member.sessionId))).toEqual(['keeper', 'member-skill-manager'])
+    expect(await catalogNames(ctx, liveAgent(ctx, member.sessionId))).toEqual(['keeper', 'member-memory-manager', 'member-skill-manager'])
 
     // Host restart: the provider remounts at activation and re-discovers.
     await teamFiber.dispose()
     await ctx.plugin(AgentTeam)
     const restored = ctx.agentTeam.membersForClient({ workspaceId }).find(item => item.member.memberId === member.memberId)
     expect(restored?.availability).toBe('active')
-    expect(await catalogNames(ctx, liveAgent(ctx, member.sessionId))).toEqual(['keeper', 'member-skill-manager'])
+    expect(await catalogNames(ctx, liveAgent(ctx, member.sessionId))).toEqual(['keeper', 'member-memory-manager', 'member-skill-manager'])
   })
 })

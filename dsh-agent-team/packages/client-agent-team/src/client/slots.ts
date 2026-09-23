@@ -24,6 +24,7 @@ import type {
   AgentTeamPutAttachmentRequest,
   AgentTeamPutAttachmentResult,
   AgentTeamMemberResult,
+  AgentTeamAddMemberResult,
   AgentTeamRecoverMemberRequest,
   AgentTeamRecoverMemberResult,
   AgentTeamMembersRequest,
@@ -32,6 +33,8 @@ import type {
   AgentTeamReplyRequest,
   AgentTeamResolveTaskRefsRequest,
   AgentTeamResolveTaskRefsResult,
+  AgentTeamResolveThreadRefsRequest,
+  AgentTeamResolveThreadRefsResult,
   AgentTeamReplyResult,
   AgentTeamConfirmationRequired,
   AgentTeamThreadHistory,
@@ -56,6 +59,7 @@ import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { TeamNavigationActions, TeamNavigationSnapshot } from './navigation.ts'
 import type { TeamChangeListener, TeamChangeScope } from './team-changes.ts'
 import type { TeamDraftStore } from './drafts.ts'
+import type { TeamHumanIdentitySource } from './human-identity.ts'
 
 export interface TeamNavigationSource {
   getSnapshot: () => TeamNavigationSnapshot
@@ -105,7 +109,7 @@ export type TeamSidebarProps = PropsRuntime<'sidebar.workspaces'>
     /** Fired after every committed durable Thread read; the badge refreshes without waiting for a changes wake. */
     subscribeReads: (listener: () => void) => () => void
     subscribeChanges: SubscribeTeamChanges
-    addMember: (request: AgentTeamAddMemberRequest) => Promise<RemoteResult<AgentTeamMemberResult>>
+    addMember: (request: AgentTeamAddMemberRequest) => Promise<RemoteResult<AgentTeamAddMemberResult>>
     loadChannels: (request: AgentTeamViewRequest) => Promise<RemoteResult<AgentTeamView>>
     createChannel: (request: AgentTeamCreateChannelRequest) => Promise<RemoteResult<AgentTeamCreateChannelResult>>
     updateChannel: (request: AgentTeamUpdateChannelRequest) => Promise<RemoteResult<AgentTeamUpdateChannelResult>>
@@ -134,6 +138,8 @@ export type TeamConversationProps = PropsRuntime<'main'> & PropsLocale<'team'> &
   navigation: TeamNavigationSource
   /** Keyed composer draft cache; one store per Client context. */
   drafts: TeamDraftStore
+  /** The Human's own identity: the display name and avatar every seat that names or draws them reads. */
+  humanIdentity: TeamHumanIdentitySource
   loadChannels: (request: AgentTeamViewRequest) => Promise<RemoteResult<AgentTeamView>>
   readThread: (request: AgentTeamThreadReadRequest) => Promise<RemoteResult<AgentTeamThreadReadResult>>
   loadThreadHistory: (request: AgentTeamThreadHistoryRequest) => Promise<RemoteResult<AgentTeamThreadHistory>>
@@ -147,11 +153,14 @@ export type TeamConversationProps = PropsRuntime<'main'> & PropsLocale<'team'> &
   changeTask: (request: AgentTeamTaskRequest) => Promise<RemoteResult<AgentTeamTaskResult>>
   promoteThread: (request: AgentTeamPromoteThreadRequest) => Promise<RemoteResult<AgentTeamPromoteThreadResult>>
   resolveTaskRefs: (request: AgentTeamResolveTaskRefsRequest) => Promise<RemoteResult<AgentTeamResolveTaskRefsResult>>
+  resolveThreadRefs: (request: AgentTeamResolveThreadRefsRequest) => Promise<RemoteResult<AgentTeamResolveThreadRefsResult>>
   loadMembers: (request: AgentTeamMembersRequest) => Promise<RemoteResult<readonly AgentTeamClientMemberStatus[]>>
   /** Human direct-only Inbox slice; the Inbox page merges one call per visible Workspace. */
   loadInbox: (request: AgentTeamInboxRequest) => Promise<RemoteResult<AgentTeamInbox>>
   /** Human-only Thread Attention observations; the Thread composer ranks the returned followers first. */
   threadObservations: (request: AgentTeamThreadObservationsRequest) => Promise<RemoteResult<AgentTeamThreadObservations>>
+  /** Agent-card session jump, shared by every slot; message member chips reuse it. */
+  openMemberSession: (sessionId: AgentTeamClientMemberStatus['member']['sessionId']) => void
 }
 
 export type TeamSettingsProps = PropsRuntime<'sidebar.settings'> & PropsLocale<'team'> & {

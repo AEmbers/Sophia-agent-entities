@@ -94,6 +94,46 @@ describe('context tools render the model-facing decision surface', () => {
     }
   })
 
+  it('context_timeline gives every row a short anchor id that is not a ref, so same-label rows stay distinct', () => {
+    const tools = contextTools()
+    // Two boundaries that share a label and a price — exactly what two
+    // deliveries resolved in the same turn produce — must still be
+    // distinguishable in the render, and a row that is not restorable must
+    // never print a ref the model could try to cite.
+    const anchor = {
+      checkpointRef: 'team-boundary-' + '1'.repeat(64),
+      name: 'Team message',
+      source: 'team-boundary',
+      retainedTokens: 4242,
+      discardedTokens: 0,
+      affectedThreads: ['thread:one'],
+      restorable: false,
+      reason: 'retained context would not materially shrink the working set',
+    }
+    const other = { ...anchor, checkpointRef: 'team-boundary-' + '2'.repeat(64) }
+    const text = renderText(tools.get('context_timeline')!, {}, { usageTokens: 10, hardLimit: 256000, handoffAt: 200000, items: [anchor, other] })
+    const rows = text.split('\n').filter(line => line.startsWith('- Team message'))
+    expect(rows).toHaveLength(2)
+    const ids = rows.map(row => /anchor ([0-9a-f]{6})\]/.exec(row)?.[1])
+    expect(ids[0]).toBeDefined()
+    expect(ids[1]).toBeDefined()
+    expect(ids[0]).not.toBe(ids[1])
+    for (const row of rows) {
+      expect(row).toContain('not restorable')
+      expect(row).not.toContain('team-boundary-')
+    }
+    // The id is a digest of the row's own ref: same input, same id, so a
+    // repeated read of one anchor stays recognizable.
+    const again = renderText(tools.get('context_timeline')!, {}, { usageTokens: 10, hardLimit: 256000, handoffAt: 200000, items: [anchor, other] })
+    expect(again).toBe(text)
+    // The description states Team's actual selection rule and what the id is
+    // (and is not): the rule is the retained prefix, not the boundary's own
+    // attribution, and the id is not citable.
+    const description = tools.get('context_timeline')!.description
+    expect(description).toContain('retained prefix through it stays inside one Thread')
+    expect(description).toContain('NOT a ref')
+  })
+
   it('context_timeline keeps the output bounded by the Host-supplied item list', () => {
     const tools = contextTools()
     // The Host bounds items (default 12, at most 24); the render mirrors

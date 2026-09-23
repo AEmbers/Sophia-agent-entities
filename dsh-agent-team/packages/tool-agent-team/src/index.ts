@@ -1,5 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
-import AgentTeam, { AGENT_TEAM_HUMAN_HANDLE, AgentTeamDmDeliveryError, markAgentTeamPreset } from '@wowyuarm/dsh-agent-team/host'
+import AgentTeam, { AgentTeamDmDeliveryError, markAgentTeamPreset } from '@wowyuarm/dsh-agent-team/host'
 import { formatTeamTimestamp } from '@wowyuarm/dsh-agent-team/time-format'
 import { registerContextTools } from './context-tools.ts'
 import { service, workspaceOf, workspaceParam } from './host-access.ts'
@@ -675,7 +675,7 @@ const teamView = defineTool({
         ...(participation.title === undefined ? {} : { title: participation.title }), default: participation.default })),
       channels: view.channels.map(channel => ({ channelRef: channel.channelRef, name: channel.name })),
       members: [
-        { memberId: view.humanMemberId, kind: 'human', handle: AGENT_TEAM_HUMAN_HANDLE, description: 'Human Team Member', presence: 'available' },
+        { memberId: view.humanMemberId, kind: 'human', handle: host.humanHandle(), description: 'Human Team Member', presence: 'available' },
         ...host.members().filter(status => visibleMemberIds.has(status.member.memberId)).map(status => ({ memberId: status.member.memberId,
           kind: 'agent', handle: status.member.handle, description: status.member.description, presence: status.presence })),
       ],

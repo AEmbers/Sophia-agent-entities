@@ -190,10 +190,10 @@ export function carriesLegacyHandoffSource(value: unknown): boolean {
  * would deliver that handoff a second time.
  */
 export function handoffAlreadyInLog(
-  boundaries: readonly { readonly source: string }[],
+  boundaries: readonly { readonly kind: string }[],
   ownEvents: readonly unknown[],
 ): boolean {
-  if (boundaries.some(boundary => boundary.source === 'handoff')) return true
+  if (boundaries.some(boundary => boundary.kind === 'handoff')) return true
   return ownEvents.some(carriesLegacyHandoffSource)
 }
 

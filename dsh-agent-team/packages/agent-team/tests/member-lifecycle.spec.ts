@@ -31,7 +31,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import AgentTeam, { AGENT_TEAM_HUMAN_MEMBER_ID, AGENT_TEAM_TOOL_NAMES, isTsxDevMode, markAgentTeamPreset, teamPresetScopeMismatchMessage } from '../src/index.ts'
-import { checkpointRefFor, foldContextProjection } from '../src/context-projection.ts'
+import { checkpointRefFor, foldTeamContextProjection } from '../src/context-projection.ts'
 import { AGENT_TEAM_PLUGIN_ID, continuationCheckpointRefOf, handoffOf, isCheckpointContinuationMessage, isHandoffMessage } from '../src/context-source.ts'
 import { RECOVERY_DELAY_MS } from '../src/recovery.ts'
 import type { AgentTeamChannelRef, AgentTeamClaimRef, AgentTeamMemberId, AgentTeamRequestId } from '../src/types.ts'
@@ -373,7 +373,15 @@ describe('Agent Team Member lifecycle', () => {
     const added = await ctx.agentTeam.addMember({ requestId: requestId('add'), workspaceId, handle: 'builder', description: 'Builds the implementation', presetId: 'team-member', channelRefs: [channel.channel.channelRef] })
     expect(added.status.availability).toBe('active')
     expect(added.status.member.privateMemoryPath).toBe(join(root, 'dsh-home', 'agent-team', 'members', added.status.member.memberId.replaceAll(':', '-')))
-    expect(await readFile(join(added.status.member.privateMemoryPath, 'memory.md'), 'utf8')).toContain('# Member memory')
+    // The first-run scaffold states the index's four sections and routes the
+    // writing rules to the bundled skill instead of restating them.
+    const scaffold = await readFile(join(added.status.member.privateMemoryPath, 'memory.md'), 'utf8')
+    expect(scaffold).toContain('# Member memory')
+    expect(scaffold).toContain('## Identity and role')
+    expect(scaffold).toContain('## Durable rules')
+    expect(scaffold).toContain('## In hand')
+    expect(scaffold).toContain('## Notes index')
+    expect(scaffold).toContain('the bundled `member-memory-manager` skill')
     await expect(access(join(added.status.member.privateMemoryPath, 'notes'))).resolves.toBeUndefined()
     const live = ctx.agents.get(added.status.member.sessionId)
     expect(live?.session.header.cwd).toBe(project)
@@ -622,7 +630,7 @@ describe('Agent Team Member lifecycle', () => {
     const channel = await ctx.agentTeam.createChannel({ requestId: requestId('bare-channel'), workspaceId, name: 'ops', description: 'Ops work' })
     const before = await ctx.agentTeam.sendMessage({ asTask: true, requestId: requestId('pre-join'), workspaceId, channelRef: channel.channel.channelRef, body: 'Posted before anyone joined' })
     expect(before.kind).toBe('committed')
-    expect(ctx.agentTeam.inboxForAgent(agent, { workspaceId })).toEqual({ items: [], recent: [], totalUnreadCount: 0, totalDirectCount: 0 })
+    expect(ctx.agentTeam.inboxForAgent(agent, { workspaceId })).toEqual({ humanMemberId: AGENT_TEAM_HUMAN_MEMBER_ID, items: [], recent: [], totalUnreadCount: 0, totalDirectCount: 0 })
 
     // Joining a Channel lights the whole delivery chain for later mentions.
     await ctx.agentTeam.joinChannel({ requestId: requestId('join'), workspaceId, channelRef: channel.channel.channelRef, memberId: bare.status.member.memberId })
@@ -856,7 +864,7 @@ describe('Agent Team Member lifecycle', () => {
     const view = ctx.agentTeam.view({ workspaceId })
     expect(view.threads).toHaveLength(0)
     expect(view.items).toHaveLength(0)
-    expect(ctx.agentTeam.inboxForAgent(recipient, { workspaceId })).toEqual({ items: [], recent: [], totalUnreadCount: 0, totalDirectCount: 0 })
+    expect(ctx.agentTeam.inboxForAgent(recipient, { workspaceId })).toEqual({ humanMemberId: AGENT_TEAM_HUMAN_MEMBER_ID, items: [], recent: [], totalUnreadCount: 0, totalDirectCount: 0 })
     expect(() => ctx.agentTeam.validateLedger()).not.toThrow()
 
     // A second DM carries the bounded adjacent context of the first exchange:
@@ -1056,7 +1064,8 @@ describe('Agent Team Member lifecycle', () => {
     const request = JSON.stringify(adapter.requests[0]!.messages)
     expect(request).toContain('Direct Team mention')
     expect(request).toContain('Please investigate the top-level wake path')
-    expect(request).toContain('human')
+    // The rendered sender line, not the 'member:human' ids elsewhere in the request.
+    expect(request).toContain('From: human')
     expect(request).toContain(committed.task!.taskRef)
     // The notification states the absolute commit instant in UTC+8.
     expect(request).toContain('Occurred at: ')
@@ -1391,7 +1400,7 @@ describe('Agent Team Member lifecycle', () => {
 
   it('keeps a persisted Member session active after switching its model and restarting', async () => {
     const adapter = new ScriptedAdapter()
-    const { ctx, workspaceId } = await realHarness(adapter)
+    const { ctx, workspaceId, teamFiber } = await realHarness(adapter)
     const added = await ctx.agentTeam.addMember({
       requestId: requestId('persisted-model-add'), workspaceId, handle: 'builder',
       description: 'Builds the implementation', presetId: 'team-member', channelRefs: [],
@@ -1409,7 +1418,22 @@ describe('Agent Team Member lifecycle', () => {
     })
     expect(edited.status.availability).toBe('active')
 
-    expect(ctx.agents.get(added.status.member.sessionId)).toBeDefined()
+    // Host restart on the persisted Session: the switched selection, not the
+    // creation-time model, drives the reactivated Agent.
+    await ctx.agentTeam.suspendMember({ requestId: requestId('persisted-model-suspend'), memberId: added.status.member.memberId })
+    await teamFiber.dispose()
+    await new Promise(resolve => setImmediate(resolve))
+    await ctx.plugin(AgentTeam)
+    await ctx.agentTeam.resumeMember({ requestId: requestId('persisted-model-resume'), memberId: added.status.member.memberId })
+    const resumed = await waitFor(() => {
+      const restarted = ctx.agents.get(added.status.member.sessionId)
+      return restarted !== undefined && restarted.status === 'idle' ? restarted : undefined
+    })
+    adapter.enqueue(textResponse('after the restart.'))
+    resumed.followup(createUserMessage({ content: [{ type: 'text', text: 'Use the switched model after the restart.' }], source: { kind: 'user' } }))
+    await resumed.whenIdle()
+    expect(adapter.requests.at(-1)).toMatchObject({ provider: 'mock', model: 'switched-model' })
+    expect(ctx.agentTeam.members().find(entry => entry.member.memberId === added.status.member.memberId)!.availability).toBe('active')
   })
 
   it('applies Member model edits to a live Agent immediately and keeps pinned selections across restarts', async () => {
@@ -1484,7 +1508,7 @@ describe('Agent Team Member lifecycle', () => {
 describe('Agent Team fresh context_rollover rollover (ticket 01)', () => {
   it('rolls a Member over end to end: handoff first, fresh Session, archive, facts survive', async () => {
     const adapter = new ScriptedAdapter()
-    const { ctx, workspaceId, archived } = await realHarness(adapter)
+    const { ctx, workspaceId, archived, pressureState } = await realHarness(adapter)
     const channel = await ctx.agentTeam.createChannel({ requestId: requestId('rollover-channel'), workspaceId, name: 'engineering', description: 'Engineering work' })
     const added = await ctx.agentTeam.addMember({ requestId: requestId('rollover-add'), workspaceId, handle: 'builder', description: 'Builds the implementation', presetId: 'team-member', channelRefs: [channel.channel.channelRef] })
     const previousSessionId = added.status.member.sessionId
@@ -1497,6 +1521,14 @@ describe('Agent Team fresh context_rollover rollover (ticket 01)', () => {
     // The generation after the rollover consumes the handoff and replies.
     adapter.enqueue(textResponse('Continuing from the handoff.'))
     const liveBefore = ctx.agents.get(previousSessionId)!
+    // The retired generation's own source shape, captured while it is still
+    // live: this is exactly what the timeline hands the Host to price a row.
+    const retiredSource = {
+      sessionId: previousSessionId,
+      header: liveBefore.session.header,
+      inheritedEventCount: liveBefore.session.inheritedEventCount,
+      events: liveBefore.session.ownEvents(),
+    }
     liveBefore.followup(createUserMessage({ content: [{ type: 'text', text: 'Please hand off now.' }], source: { kind: 'user' } }))
 
     // The rollover completes asynchronously after the containing turn ends.
@@ -1547,6 +1579,24 @@ describe('Agent Team fresh context_rollover rollover (ticket 01)', () => {
     expect(handoffText).toContain(handoff)
     // The generation consumed the handoff and answered.
     expect(adapter.requests.length).toBeGreaterThanOrEqual(2)
+
+    // The timeline folds its sources with the same configuration the
+    // projection folds with, legacy rollover alias included.
+    const foldConfig = ctx.agentTeam.contextFoldConfig()
+    expect(foldConfig.rolloverToolNames).toContain('context_rollover')
+    expect(foldConfig.checkpointToolName).toBe('context_checkpoint')
+
+    // A live source is priced in the live Session's own tokens and a retired one
+    // through its own detached replay — never the current generation's.
+    pressureState.bySession.set(newSessionId, 777)
+    pressureState.bySession.set(previousSessionId, 4242)
+    expect(ctx.agentTeam.measureContextSourceForAgent(liveAfter, {
+      sessionId: newSessionId,
+      header: liveAfter.session.header,
+      inheritedEventCount: liveAfter.session.inheritedEventCount,
+      events: liveAfter.session.ownEvents(),
+    })).toBe(777)
+    expect(ctx.agentTeam.measureContextSourceForAgent(liveAfter, retiredSource)).toBe(4242)
   })
 
   it('an ordinary Session never receives the context_rollover tool', async () => {
@@ -1593,7 +1643,7 @@ describe('Agent Team fresh context_rollover rollover (ticket 01)', () => {
       return JSON.stringify(event.data.message.content).includes('does not resolve in this Member\'s lineage')
     })
     expect(rejection).toBeDefined()
-    const poisoned = foldContextProjection(live.session.ownEvents(), live.session.inheritedEventCount, live.session.id)
+    const poisoned = foldTeamContextProjection(live.session.ownEvents(), { sessionId: live.session.id, inheritedEventCount: live.session.inheritedEventCount })
     expect(poisoned.pending).toBeNull()
 
     // An explicit later-turn fresh rollover still succeeds: the refused
@@ -1643,7 +1693,7 @@ describe('Agent Team fresh context_rollover rollover (ticket 01)', () => {
     const current = ctx.agentTeam.members().find(status => status.member.memberId === memberId)!
     expect(current.member.sessionId).toBe(sessionId)
     expect(() => ctx.agentTeam.validateLedger()).not.toThrow()
-    const poisoned = foldContextProjection(live.session.ownEvents(), live.session.inheritedEventCount, live.session.id)
+    const poisoned = foldTeamContextProjection(live.session.ownEvents(), { sessionId: live.session.id, inheritedEventCount: live.session.inheritedEventCount })
     expect(poisoned.pending).toMatchObject({ toolCallId: 'call-seam-nc' })
     expect(poisoned.pending?.turnEndSeq).not.toBe(-1)
 
@@ -1658,7 +1708,7 @@ describe('Agent Team fresh context_rollover rollover (ticket 01)', () => {
     // the spent pending intent in the projection — the poison state is
     // provably undone at the fold before the binding moves.
     const replaced = await waitFor(() => {
-      const state = foldContextProjection(live.session.ownEvents(), live.session.inheritedEventCount, live.session.id)
+      const state = foldTeamContextProjection(live.session.ownEvents(), { sessionId: live.session.id, inheritedEventCount: live.session.inheritedEventCount })
       return state.pending?.toolCallId === 'call-seam-retry' && state.pending.turnEndSeq !== -1 ? state : undefined
     })
     expect(replaced.pending).toMatchObject({ handoff: 'explicit fresh retry after the seam failure' })
@@ -2123,7 +2173,7 @@ describe('Agent Team checkpoint selection and return (ticket 02)', () => {
     expect(turnEnds).toHaveLength(1)
     const results = events.filter(event => event.type === 'tool/result')
     expect(results.length).toBe(2)
-    const state = foldContextProjection(events, undefined, live.session.id)
+    const state = foldTeamContextProjection(events, { sessionId: live.session.id })
     expect(state.checkpoints).toHaveLength(1)
     expect(state.checkpoints[0]!.turnEndSeq).toBe(turnEnds[0]!.seq)
   })
@@ -2147,7 +2197,7 @@ describe('Agent Team checkpoint selection and return (ticket 02)', () => {
     const events = live.session.ownEvents()
     const turns = events.filter(event => event.type === 'turn/start')
     expect(turns).toHaveLength(1)
-    const state = foldContextProjection(events, undefined, live.session.id)
+    const state = foldTeamContextProjection(events, { sessionId: live.session.id })
     expect(state.checkpoints).toHaveLength(0)
     expect(state.continuations).toHaveLength(0)
   })
@@ -2184,8 +2234,6 @@ describe('Agent Team checkpoint selection and return (ticket 02)', () => {
     expect(refs).toContain(checkpointRefFor(sessionId, 'call-tl-cp1'))
     expect(refs).toContain(checkpointRefFor(sessionId, 'call-tl-cp2'))
     // Newest first, head present, every agent checkpoint restorable.
-    const cpIndexes = refs.map(ref => timeline.items.findIndex(item => item.checkpointRef === ref))
-    expect(cpIndexes[cpIndexes.indexOf(refs.indexOf(checkpointRefFor(sessionId, 'call-tl-cp1')))]).toBeLessThanOrEqual(timeline.items.length)
     const first = timeline.items.find(item => item.checkpointRef === checkpointRefFor(sessionId, 'call-tl-cp1'))!
     const second = timeline.items.find(item => item.checkpointRef === checkpointRefFor(sessionId, 'call-tl-cp2'))!
     expect(first.restorable).toBe(true)
@@ -2242,6 +2290,11 @@ describe('Agent Team checkpoint selection and return (ticket 02)', () => {
     const timeline = await ctx.agentTeam.contextTimelineForAgent(next, { memberId, limit: 24 })
     expect(timeline.incompleteFrom).toMatchObject({ sessionId: firstSessionId, reason: expect.stringMatching(/^refused: /) })
     expect(timeline.items.length).toBeGreaterThan(0)
+    // A generation opens on its handoff boundary: it is read with Team's own
+    // source vocabulary and is never a return target, so a return into the
+    // generation's opening is refused with a reason that names the source.
+    const handoff = timeline.items.find(item => item.source === 'handoff')
+    expect(handoff).toMatchObject({ name: 'context handoff', restorable: false, reason: "source 'handoff' is not a restorable checkpoint" })
     const status = ctx.agentTeam.members().find(entry => entry.member.memberId === memberId)!
     expect(status.availability).toBe('active')
     expect(status.presence).not.toBe('unavailable')
@@ -2269,7 +2322,7 @@ describe('Agent Team checkpoint selection and return (ticket 02)', () => {
     }) ? true : undefined)
     await live.whenIdle()
     const anchorEvents = live.session.ownEvents().length
-    const anchorTurnEndSeq = foldContextProjection(live.session.ownEvents(), undefined, live.session.id).checkpoints[0]!.turnEndSeq
+    const anchorTurnEndSeq = foldTeamContextProjection(live.session.ownEvents(), { sessionId: live.session.id }).checkpoints[0]!.turnEndSeq
 
     adapter.enqueue(textResponse('noisy branch work.'))
     live.followup(createUserMessage({ content: [{ type: 'text', text: 'now make some noise' }], source: { kind: 'user' } }))
@@ -2311,7 +2364,7 @@ describe('Agent Team checkpoint selection and return (ticket 02)', () => {
     // Inherited historical intent stays inert: the inherited prefix's
     // checkpoint history is visible, but no continuation or rollover is
     // rescheduled from it.
-    const state = foldContextProjection(own, next.session.inheritedEventCount, next.session.id)
+    const state = foldTeamContextProjection(own, { sessionId: next.session.id, inheritedEventCount: next.session.inheritedEventCount })
     expect(state.pending).toBeNull()
     expect(state.continuations).toHaveLength(0)
     // The old generation archived; the ledger records the seed fields.
@@ -2381,7 +2434,7 @@ describe('Agent Team checkpoint lineage (ticket 02 ancestors)', () => {
     await waitForArchived(archived, firstSessionId, secondSessionId)
     expect(archived).not.toContain(thirdSessionId)
     // The inherited prefix is exactly the ancestor's anchor cut.
-    const gen1Fold = foldContextProjection(gen1.session.ownEvents(), undefined, firstSessionId)
+    const gen1Fold = foldTeamContextProjection(gen1.session.ownEvents(), { sessionId: firstSessionId })
     const anchor = gen1Fold.checkpoints.find(entry => entry.checkpointRef === checkpointRefFor(firstSessionId, 'call-anc-cp'))!
     expect(gen3.session.inheritedEventCount).toBe(anchor.turnEndSeq + 1)
     // The handoff is the first own model-facing context of generation 3.
@@ -2408,7 +2461,7 @@ describe('Agent Team checkpoint lineage (ticket 02 ancestors)', () => {
     adapter.enqueue(toolCallResponse('call-repair-cp', 'context_checkpoint', { name: 'pre-crash anchor' }))
     const live = ctx.agents.get(sessionId)!
     live.followup(createUserMessage({ content: [{ type: 'text', text: 'checkpoint before the crash' }], source: { kind: 'user' } }))
-    await waitFor(() => foldContextProjection(live.session.ownEvents(), undefined, live.session.id).checkpoints.some(entry => entry.turnEndSeq !== -1) ? true : undefined)
+    await waitFor(() => foldTeamContextProjection(live.session.ownEvents(), { sessionId: live.session.id }).checkpoints.some(entry => entry.turnEndSeq !== -1) ? true : undefined)
     await live.whenIdle()
     await new Promise(resolve => setTimeout(resolve, 50))
     const deliveredBeforeRestart = live.session.ownEvents().filter(event => event.type === 'user/message'
@@ -3061,9 +3114,9 @@ describe('Agent Team recovery hardening (ticket 04)', () => {
     adapter.enqueue(textResponse('anchored.'))
     const live = ctx.agents.get(firstSessionId)!
     live.followup(createUserMessage({ content: [{ type: 'text', text: 'record the anchor' }], source: { kind: 'user' } }))
-    await waitFor(() => foldContextProjection(live.session.ownEvents(), undefined, live.session.id).checkpoints.some(entry => entry.turnEndSeq !== -1) ? true : undefined)
+    await waitFor(() => foldTeamContextProjection(live.session.ownEvents(), { sessionId: live.session.id }).checkpoints.some(entry => entry.turnEndSeq !== -1) ? true : undefined)
     await live.whenIdle()
-    const anchorTurnEndSeq = foldContextProjection(live.session.ownEvents(), undefined, live.session.id).checkpoints[0]!.turnEndSeq
+    const anchorTurnEndSeq = foldTeamContextProjection(live.session.ownEvents(), { sessionId: live.session.id }).checkpoints[0]!.turnEndSeq
 
     adapter.enqueue(textResponse('noise past the anchor.'))
     live.followup(createUserMessage({ content: [{ type: 'text', text: 'make some noise' }], source: { kind: 'user' } }))
@@ -3182,6 +3235,66 @@ describe('Agent Team recovery hardening (ticket 04)', () => {
     expect(handoffPos).toBeGreaterThanOrEqual(0)
     expect(carriedIndex).toBeGreaterThan(handoffPos)
     expect(archivedHandoffs(resumed)).toHaveLength(1)
+    expect(() => ctx.agentTeam.validateLedger()).not.toThrow()
+  })
+
+  it('finishes a spent rollover intent at activation when a restart lands after the turn ended but before the swap', async () => {
+    // The crash window no other test reaches: the rollover result is durable,
+    // the containing turn HAS ended, the lifecycle commit seam refused the
+    // swap, and the process died before any retry. Activation then replays the
+    // Session, re-derives the spent intent, and must complete the transition
+    // itself — commenting the recovery hook out of the activation path leaves
+    // every other test in this suite green, so this case is its only guard.
+    const adapter = new ScriptedAdapter()
+    const { ctx, workspaceId, jobsState, teamFiber: initialFiber } = await realHarness(adapter)
+    const channel = await ctx.agentTeam.createChannel({ requestId: requestId('recb-channel'), workspaceId, name: 'engineering', description: 'Engineering work' })
+    const added = await ctx.agentTeam.addMember({ requestId: requestId('recb-add'), workspaceId, handle: 'builder', description: 'Builds the implementation', presetId: 'team-member', channelRefs: [channel.channel.channelRef] })
+    const memberId = added.status.member.memberId
+    const sessionId = added.status.member.sessionId
+    const live = ctx.agents.get(sessionId)!
+
+    // A job that starts between the durable result and the swap makes the seam
+    // refuse the transition, leaving a SPENT pending intent in the projection
+    // while the old generation stays bound — the recoverable poison state.
+    const disposeObserver = ctx.on('session/event', (session, event) => {
+      if (session.id !== sessionId || event.type !== 'turn/end') return
+      jobsState.jobs = [{ id: 'bash-recb', label: 'racing job', status: 'running', reported: false }]
+    })
+    adapter.enqueue(toolCallResponse('call-recb-nc', 'context_rollover', { handoff: 'the handoff a restart must finish' }))
+    live.followup(createUserMessage({ content: [{ type: 'text', text: 'roll over while a job races the seam' }], source: { kind: 'user' } }))
+    await waitForIdle(ctx, live)
+    await new Promise(resolve => setTimeout(resolve, 100))
+    disposeObserver()
+
+    const poisoned = foldTeamContextProjection(live.session.ownEvents(), { sessionId: live.session.id, inheritedEventCount: live.session.inheritedEventCount })
+    expect(poisoned.pending).toMatchObject({ toolCallId: 'call-recb-nc', handoff: 'the handoff a restart must finish' })
+    expect(poisoned.pending?.turnEndSeq).not.toBe(-1)
+    expect(ctx.agentTeam.members().find(status => status.member.memberId === memberId)!.member.sessionId).toBe(sessionId)
+
+    // Host restart over the same ledger and Session store, with the job
+    // settled: activation alone must finish the interrupted transition.
+    jobsState.jobs = []
+    adapter.enqueue(textResponse('continuing after the recovered swap.'))
+    await initialFiber.dispose()
+    await new Promise(resolve => setImmediate(resolve))
+    await ctx.plugin(AgentTeam)
+
+    const renewed = await waitFor(() => {
+      const status = ctx.agentTeam.members().find(entry => entry.member.memberId === memberId)
+      return status !== undefined && status.member.sessionId !== sessionId ? status : undefined
+    })
+    const next = await waitFor(() => ctx.agents.get(renewed.member.sessionId)!)
+    await waitFor(() => next.session.ownEvents().some(event => event.type === 'user/message') ? true : undefined)
+    await next.whenIdle()
+    await new Promise(resolve => setTimeout(resolve, 100))
+
+    // The recovered swap delivers the ORIGINAL intent's handoff exactly once.
+    const delivered = next.session.ownEvents().flatMap(event => event.type === 'user/message' && isHandoffMessage(event.data) ? [handoffOf(event.data)] : [])
+    expect(delivered).toHaveLength(1)
+    expect(delivered[0]?.previousSessionId).toBe(sessionId)
+    expect(delivered[0]?.newSessionId).toBe(renewed.member.sessionId)
+    expect(delivered[0]?.sections.find(section => section.name === 'HANDOFF')?.text).toBe('the handoff a restart must finish')
+    expect(archivedHandoffs(next)).toHaveLength(1)
     expect(() => ctx.agentTeam.validateLedger()).not.toThrow()
   })
 
@@ -3793,7 +3906,7 @@ describe('Agent Team recovery hardening (ticket 04)', () => {
       // Only the rollover turn counts: the pending intent must already be
       // durable, or the injected input would be consumed by that same turn
       // instead of riding behind the handoff.
-      const state = foldContextProjection(live.session.ownEvents(), undefined, live.session.id)
+      const state = foldTeamContextProjection(live.session.ownEvents(), { sessionId: live.session.id })
       if (state.pending === null) return
       injected = true
       queueMicrotask(() => {
@@ -3847,7 +3960,7 @@ describe('Agent Team recovery hardening (ticket 04)', () => {
     let injected = false
     const disposeObserver = ctx.on('session/event', (session, event) => {
       if (session.id !== firstSessionId || event.type !== 'turn/end' || injected) return
-      const state = foldContextProjection(live.session.ownEvents(), undefined, live.session.id)
+      const state = foldTeamContextProjection(live.session.ownEvents(), { sessionId: live.session.id })
       if (state.pending === null) return
       injected = true
       queueMicrotask(() => {
@@ -3946,7 +4059,7 @@ describe('Agent Team recovery hardening (ticket 04)', () => {
     adapter.enqueue(textResponse('big anchor recorded.'))
     const live = ctx.agents.get(firstSessionId)!
     live.followup(createUserMessage({ content: [{ type: 'text', text: 'record the big anchor' }], source: { kind: 'user' } }))
-    await waitFor(() => foldContextProjection(live.session.ownEvents(), undefined, live.session.id).checkpoints.some(entry => entry.turnEndSeq !== -1) ? true : undefined)
+    await waitFor(() => foldTeamContextProjection(live.session.ownEvents(), { sessionId: live.session.id }).checkpoints.some(entry => entry.turnEndSeq !== -1) ? true : undefined)
     await live.whenIdle()
 
     // Fresh rollover into a small generation 2: the current child is cheap,
@@ -3999,7 +4112,7 @@ describe('Agent Team recovery hardening (ticket 04)', () => {
     adapter.enqueue(textResponse('anchor recorded.'))
     const live = ctx.agents.get(firstSessionId)!
     live.followup(createUserMessage({ content: [{ type: 'text', text: 'record the anchor' }], source: { kind: 'user' } }))
-    await waitFor(() => foldContextProjection(live.session.ownEvents(), undefined, live.session.id).checkpoints.some(entry => entry.turnEndSeq !== -1) ? true : undefined)
+    await waitFor(() => foldTeamContextProjection(live.session.ownEvents(), { sessionId: live.session.id }).checkpoints.some(entry => entry.turnEndSeq !== -1) ? true : undefined)
     await live.whenIdle()
 
     adapter.enqueue(toolCallResponse('call-unmeas-nc', 'context_rollover', { handoff: 'fresh generation' }))
@@ -4046,8 +4159,6 @@ describe('Agent Team Member private memory directory sanitization (issue #7)', (
     expect(memberMemoryDirectoryName(memberId)).toBe('member-9d903b7c-0f9f-4d7c-8be9-3f5c0f8f1a2b')
     // No path-segment-forbidden characters remain on any platform.
     expect(memberMemoryDirectoryName(memberId)).not.toContain(':')
-    // The branded ref itself is unchanged by the helper.
-    expect(memberId).toBe('member:9d903b7c-0f9f-4d7c-8be9-3f5c0f8f1a2b')
   })
 
   it('sanitizes only the final segment of a legacy colon path on any platform', async () => {

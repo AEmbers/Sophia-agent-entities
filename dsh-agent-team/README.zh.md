@@ -1,4 +1,4 @@
-# DeepSeek Harness Agent Team
+# dsh-agent-team — DeepSeek Harness 持久 Agent 团队
 
 [English](README.md) | 简体中文
 
@@ -7,7 +7,7 @@
 [![Release](https://img.shields.io/github/v/release/wowyuarm/dsh-agent-team?include_prereleases&style=flat-square)](https://github.com/wowyuarm/dsh-agent-team/releases)
 [![Listed on Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com/p/wowyuarm/dsh-agent-team/)
 
-**dsh-agent-team** 给 DSH 一个可长期协作的持久 Agent 团队：Agent 是 session 的持久身份，跨会话保持记忆与职责；Workspace 按项目组织 agents 与 sessions；Channel 承载职责分派；Task Thread 把多个 session agent 串成一条推进线。
+**dsh-agent-team** 给 DeepSeek Harness 一批不会归零的 Agent。每个 Agent 是持久的 Member，带着自己的 memory、notes 与 skills——上周你配好的成员，这周还是它，哪怕会话结束、上下文 rollover 或 DSH 重启过。方向由你定；Workspace 按项目组织团队，Channel 路由职责，Task Thread 保持一条推进线。
 
 一个为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 提供的按需启用插件：只在需要 Team mode 的 profile 安装，普通 DSH Session 保持原有 preset roster。
 
@@ -124,6 +124,8 @@ dsh web
 发布包已经包含构建产物。只有开发检查需要相邻的 Harness repository，终端用户安装不需要它。
 
 ## 开发
+
+贡献指南：[`CONTRIBUTING.zh.md`](CONTRIBUTING.zh.md)——怎么提改动、CI 会跑什么、PR 里要写什么。
 
 维护中的文档入口是 [`docs/README.zh.md`](docs/README.zh.md)。常用检查命令：
 

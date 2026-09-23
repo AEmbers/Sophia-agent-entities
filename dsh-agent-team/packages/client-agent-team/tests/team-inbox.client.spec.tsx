@@ -129,6 +129,35 @@ describe('Team Inbox surfaces', () => {
     await b.runtime.dispose()
   })
 
+  it("draws the reader's own picture and name where a row names the Human", async () => {
+    // The Host projects the row's actor, and for the Human that projection can
+    // only ever carry the durable id: the Agent roster it resolves handles from
+    // does not hold them. The Client's identity projection is what every other
+    // seat draws the Human from, so the row reads it too — the same face the
+    // timeline shows, and the profile's own initial when those bytes fail.
+    const b = await runtimeWithTeam({ mode: 'team', workspaceId: 'w1', humanProfile: { name: 'Ada', avatarRef: 'avatar:1' } })
+    const card = await b.view.findByRole('button', { name: '收件箱' })
+    const rows = [inboxRow('w1', 'thread:human', { newestActor: { memberId: 'member:human', name: 'member:human' } })]
+    b.seedInbox(rows)
+    b.seedInbox(rows)
+    await waitForEntryUnread(card, 1)
+    fireEvent.click(card)
+    const row = await b.view.findByRole('button', { name: /#engineering/ })
+    const actor = actorOf(row)!
+    expect(actor.getAttribute('aria-label')).toBe('最新来自 @Ada')
+    const image = await waitFor(() => {
+      const node = actor.querySelector('img')
+      if (node === null) throw new Error('row avatar image not mounted')
+      return node
+    })
+    expect(image.getAttribute('src')).toBe('data:image/png;base64,AAAA')
+    expect(b.getHumanAvatar).toHaveBeenCalledWith({ avatarRef: 'avatar:1' })
+    fireEvent.error(image)
+    await waitFor(() => { expect(actor.textContent).toBe('A') })
+    expect(actor.querySelector('img')).toBeNull()
+    await b.runtime.dispose()
+  })
+
   it('marks the Thread that named the reader with the shared capsule, and one that merely moved with a hairline', async () => {
     const b = await runtimeWithTeam({ mode: 'team', workspaceId: 'w1' })
     const card = await b.view.findByRole('button', { name: '收件箱' })

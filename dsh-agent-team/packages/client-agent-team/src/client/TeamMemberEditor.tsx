@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { AgentTeamClientMemberStatus, AgentTeamModelSelection, AgentTeamUpdateMemberRequest } from '@wowyuarm/dsh-agent-team/types'
-import type { TeamModelEffortOption, TeamModelProviderGroup, TeamSidebarProps } from './slots.ts'
+import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import type { TeamModelCatalog, TeamModelEffortOption, TeamModelProviderGroup, TeamSidebarProps } from './slots.ts'
 import { Button, IconChevronDownOutline14, Input, Menu, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
 import { mintRequestId } from './requests.ts'
@@ -14,10 +15,66 @@ function modelKey(provider: string, model: string): string {
 }
 
 /**
+ * Shared Host catalog across the pickers: one in-flight read while pending,
+ * last good value afterwards. Revalidation re-reads (a slow Host still
+ * refreshes behind already-rendered rows), and a loader that starts throwing
+ * keeps serving its last good value rather than blanking every picker.
+ */
+interface ModelCatalogCache {
+  inflight?: Promise<RemoteResult<TeamModelCatalog>>
+  value?: TeamModelCatalog
+}
+
+const modelCatalogCaches = new WeakMap<TeamSidebarProps['loadModels'], ModelCatalogCache>()
+
+function peekCatalogGroups(loadModels: TeamSidebarProps['loadModels']): readonly TeamModelProviderGroup[] | undefined {
+  return modelCatalogCaches.get(loadModels)?.value?.groups
+}
+
+function sharedCatalog(loadModels: TeamSidebarProps['loadModels']): Promise<RemoteResult<TeamModelCatalog>> {
+  const cached = modelCatalogCaches.get(loadModels)
+  if (cached?.inflight !== undefined) return cached.inflight
+  const next = loadModels()
+  const entry = cached ?? {}
+  entry.inflight = next
+  modelCatalogCaches.set(loadModels, entry)
+  const forget = (result: RemoteResult<TeamModelCatalog> | undefined): void => {
+    if (modelCatalogCaches.get(loadModels) === entry && entry.inflight === next) {
+      delete entry.inflight
+      if (result !== undefined && result.ok) entry.value = result.value
+    }
+  }
+  next.then(
+    (result) => { forget(result) },
+    () => { forget(undefined) },
+  )
+  return next
+}
+
+/**
+ * Best-effort warm of the shared catalog (the agents panel calls this while
+ * the roster loads, so the pickers open with rows instead of paying the
+ * first read on open). Failures belong to the picker's own error surface.
+ */
+export function warmModelCatalog(loadModels: TeamSidebarProps['loadModels']): void {
+  try {
+    void sharedCatalog(loadModels).catch(() => {
+      // The picker that later reads surfaces the failure with its retry entry.
+    })
+  } catch {
+    // Same: a synchronously refused warm leaves no trace; the picker reports it.
+  }
+}
+
+/**
  * Shared provider/model dropdown for the create and edit forms. The option
  * list rides the shared Menu primitive (one leading "follow Host default"
  * row, then non-selectable provider headings) with a capped, internally
- * scrolling card so growing model catalogs cannot stretch the dialog.
+ * scrolling card so growing model catalogs cannot stretch the dialog. Mounts
+ * open with the warmed value when one exists and revalidate behind it, so a
+ * slow Host read delays a refresh — never the picker itself; a refused or
+ * failed read with no warmed value renders a retryable error instead of
+ * stranding the field on "loading".
  */
 export function ModelPickerField({ model, onModelChange, loadModels, disabled, t }: {
   readonly model: AgentTeamModelSelection | undefined
@@ -26,23 +83,44 @@ export function ModelPickerField({ model, onModelChange, loadModels, disabled, t
   readonly disabled: boolean
   readonly t: TeamSidebarProps['t']
 }) {
-  const [groups, setGroups] = useState<readonly TeamModelProviderGroup[]>()
+  const [groups, setGroups] = useState<readonly TeamModelProviderGroup[] | undefined>(() => peekCatalogGroups(loadModels))
   const [modelsError, setModelsError] = useState<string>()
+  const [reloadToken, setReloadToken] = useState(0)
   const [open, setModelOpen] = useState(false)
   const [effortOpen, setEffortOpen] = useState(false)
   useEffect(() => {
     let mounted = true
-    void loadModels().then(result => {
-      if (!mounted) return
-      if (result.ok) {
-        setGroups(result.value.groups)
-        setModelsError(undefined)
-      } else {
-        setModelsError(result.error.message)
-      }
-    })
+    let pending: Promise<RemoteResult<TeamModelCatalog>>
+    try {
+      pending = sharedCatalog(loadModels)
+    } catch (error) {
+      // A synchronously refused read (an undeclared remote, a dead scope)
+      // used to strand the field on "loading" forever with no diagnostic;
+      // surface it as the same retryable failure an answered refusal gets.
+      // Last good rows stay rendered underneath, matching a refused answer.
+      setModelsError(error instanceof Error ? error.message : String(error))
+      return
+    }
+    void pending.then(
+      (result) => {
+        if (!mounted) return
+        if (result.ok) {
+          setGroups(result.value.groups)
+          setModelsError(undefined)
+        } else {
+          setModelsError(result.error.message)
+        }
+      },
+      (error: unknown) => {
+        // A rejected read (a transport that died mid-call) previously fell
+        // through as an unhandled rejection behind the same endless loading
+        // line; it retries like any other failure.
+        if (!mounted) return
+        setModelsError(error instanceof Error ? error.message : String(error))
+      },
+    )
     return () => { mounted = false }
-  }, [loadModels])
+  }, [loadModels, reloadToken])
 
   const items: MenuEntry[] = [{ id: '', label: t('modelFollowDefault') }]
   const byKey = new Map<string, { provider: string; id: string; name: string; efforts: readonly TeamModelEffortOption[] }>()
@@ -70,7 +148,20 @@ export function ModelPickerField({ model, onModelChange, loadModels, disabled, t
   return <div className={createCss.field}>
     <span>{t('memberModel')}</span>
     {groups === undefined && modelsError === undefined && <small className={css.editHint}>{t('modelsLoading')}</small>}
-    {modelsError !== undefined && <small className={css.editHint}>{t('modelsLoadFailed', { message: modelsError })}</small>}
+    {modelsError !== undefined && (
+      <p className={css.editHint}>
+        <span role="alert">{t('modelsLoadFailed', { message: modelsError })}</span>
+        {' '}
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={disabled}
+          onClick={() => { setModelsError(undefined); setReloadToken(token => token + 1) }}
+        >
+          {t('retry')}
+        </Button>
+      </p>
+    )}
     {groups !== undefined && (
       <Menu
         open={open}
@@ -89,7 +180,7 @@ export function ModelPickerField({ model, onModelChange, loadModels, disabled, t
             type="button"
             className={createCss.selectTrigger!}
             aria-label={t('memberModel')}
-            aria-haspopup="listbox"
+            aria-haspopup="menu"
             aria-expanded={open}
             disabled={disabled}
             onClick={() => { setModelOpen(value => !value) }}
@@ -119,7 +210,7 @@ export function ModelPickerField({ model, onModelChange, loadModels, disabled, t
             type="button"
             className={createCss.selectTrigger!}
             aria-label={t('reasoningEffort')}
-            aria-haspopup="listbox"
+            aria-haspopup="menu"
             aria-expanded={effortOpen}
             disabled={disabled}
             onClick={() => { setEffortOpen(value => !value) }}

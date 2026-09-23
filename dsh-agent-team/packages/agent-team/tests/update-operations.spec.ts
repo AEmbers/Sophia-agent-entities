@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import InvariantRegistry from '@deepseek-ai/dsh-invariants'
 import Storage from '@deepseek-ai/dsh-storage'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import type { KvTable } from '@deepseek-ai/dsh-storage-domain'
 import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
@@ -40,6 +41,7 @@ async function harness(pool = new MemoryMediaPool()): Promise<{ readonly ctx: Co
   ctx.provide('sessionPersistence', { list: async () => [] })
   await ctx.plugin(InvariantRegistry)
   await ctx.plugin(agentTeamInvariant)
+  await ctx.plugin(SessionProjectionRegistry)
   const fiber = await ctx.plugin(AgentTeam)
   cleanups.push(async () => { await fiber.dispose(); await facility.closeAll() })
   return { ctx, facility }

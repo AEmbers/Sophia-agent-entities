@@ -1,4 +1,8 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+// Booting a real Storage-backed Host per test has reached 3.2s on the windows
+// lane (worst of 11 CI runs, 2026-09-17..21) against vitest's 5s default, so the
+// file keeps headroom rather than betting on runner throughput.
+vi.setConfig({ testTimeout: 30_000 })
 import { Context } from '@deepseek-ai/cordis'
 import Storage from '@deepseek-ai/dsh-storage'
 import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
@@ -300,4 +304,39 @@ describe('large-ledger projection equivalence (issue #21)', () => {
       taskNumbers: source.view({ workspaceId: alpha, limit: 1 }).taskNumbers,
     }
   }
+
+  // The previous-Session index feeds crash recovery, so it must be derived
+  // without reading a Session log — and a restart must rebuild it from the
+  // operation table alone.
+  it('derives each Member\'s previous Session and last transition from the transition records', async () => {
+    const { ledger, table } = await openLedger()
+    await ledger.initialize()
+    const channel = (await ledger.createChannel({ requestId: requestId('lineage-channel'), workspaceId: alpha, name: 'lineage', description: 'Lineage', memberIds: [], actor: human })).value.channel
+    const memberId = 'member:lineage' as AgentTeamMemberId
+    const session = (generation: string): SessionId => SessionId(`session:lineage-${generation}`)
+    await ledger.addMember({
+      requestId: requestId('lineage-member'), workspaceId: alpha, handle: 'lineage', description: 'Lineage member', presetId: 'team-member',
+      channelRefs: [channel.channelRef], actor: human,
+      member: { memberId, sessionId: session('0'), workspaceId: alpha, handle: 'lineage', description: 'Lineage member', presetId: 'team-member', privateMemoryPath: '/tmp/lineage', state: 'enabled' },
+    })
+    // A Member that never moved has left no Session behind.
+    expect(ledger.previousSessionForMember(memberId)).toBeUndefined()
+
+    // Human renewal, then a Member's own rollover, then another renewal: both
+    // writers feed the same index.
+    await ledger.renewMemberSession({ requestId: requestId('lineage-renew-1'), workspaceId: alpha, memberId, sessionId: session('1'), actor: human })
+    await ledger.rolloverMemberSession({ requestId: requestId('lineage-rollover'), workspaceId: alpha, memberId, actor: memberActor(memberId, 'lineage'),
+      previousSessionId: session('1'), newSessionId: session('2'), handoffEventSeq: 7 as never, trigger: 'model' })
+    await ledger.renewMemberSession({ requestId: requestId('lineage-renew-2'), workspaceId: alpha, memberId, sessionId: session('3'), actor: human })
+
+    expect(ledger.previousSessionForMember(memberId)).toBe(session('2'))
+    expect(ledger.lastTransitionForMember(memberId)).toEqual({ previousSessionId: session('2'), targetSessionId: session('3') })
+
+    // Independent replay over the same table rebuilds the identical index.
+    expect(() => ledger.validate()).not.toThrow()
+    const fresh = new AgentTeamLedger(table)
+    expect(fresh.previousSessionForMember(memberId)).toBe(session('2'))
+    // An unknown Member owns nothing rather than failing the read.
+    expect(fresh.previousSessionForMember('member:unknown' as AgentTeamMemberId)).toBeUndefined()
+  })
 })

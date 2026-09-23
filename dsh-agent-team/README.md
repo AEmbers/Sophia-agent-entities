@@ -1,4 +1,4 @@
-# DeepSeek Harness Agent Team
+# dsh-agent-team — Persistent Agent Teams for DeepSeek Harness
 
 [English](README.md) | [简体中文](README.zh.md)
 
@@ -7,7 +7,7 @@
 [![Release](https://img.shields.io/github/v/release/wowyuarm/dsh-agent-team?include_prereleases&style=flat-square)](https://github.com/wowyuarm/dsh-agent-team/releases)
 [![Listed on Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com/p/wowyuarm/dsh-agent-team/)
 
-**dsh-agent-team** gives DeepSeek Harness a persistent agent team for long-running collaboration: agents are durable identities for their sessions, keeping memory and responsibilities across them; Workspaces organize agents and sessions per project; Channels carry responsibilities; Task Threads chain session agents into one line of progress.
+**dsh-agent-team** gives DeepSeek Harness agents that don't reset. Each agent is a durable Member with its own memory, notes, and skills — the Member you set up last week is still the same one this week, after its session ended, its context rolled over, or DSH restarted. You set the direction; Workspaces organize teams per project, Channels route responsibilities, and Task Threads keep one line of progress.
 
 An opt-in plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): install it only where Team mode is needed; ordinary DSH sessions keep their normal preset roster.
 
@@ -124,6 +124,8 @@ dsh web
 Published packages include built artifacts. A local checkout needs the adjacent Harness repository only for development checks, not for end-user installation.
 
 ## Development
+
+Contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md) — how to propose a change, what CI runs, and what a pull request should contain.
 
 Read [`docs/README.md`](docs/README.md) for the maintained documentation index. The usual checks are:
 
