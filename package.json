@@ -1,0 +1,12 @@
+{
+  "name": "sophia-agent-entities",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sophia-agent-entities 工作区根：仅收录 packages/*（dsh-agent-team 与 dsh-agent-teams 是 git subtree 收录的上游仓库，不并入本工作区）",
+  "packageManager": "pnpm@11.8.0",
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vitest": "4.1.11",
+    "@types/node": "24.13.6"
+  }
+}

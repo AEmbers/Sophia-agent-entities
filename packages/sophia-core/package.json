@@ -1,0 +1,25 @@
+{
+  "name": "@sophia/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Sophia-agent-entities 基础包：三层标识命名门禁、追加式账本、团队派生策略与两级审批、双模草案类型与角色模型（**TS 源码直出**：本包 noEmit、不产出 dist，由消费方工具链转译）",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vitest": "4.1.11",
+    "@types/node": "24.13.6"
+  }
+}
