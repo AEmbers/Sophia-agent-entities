@@ -64,7 +64,7 @@
     "smoke:client": "node ../../scripts/sophia-client-smoke.mjs"
   },
   "devDependencies": {
-    "@types/node": "24.13.6",
+    "@types/node": "26.6.2",
     "@types/react": "~18.3.31",
     "@types/react-dom": "~18.3.7",
     "react": "~18.3.1",
