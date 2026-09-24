@@ -1,0 +1,13 @@
+version: 2
+updates:
+  # 我们的包：保持默认（每周检查 npm 生态）
+  - package-ecosystem: "npm"
+    directory: "/packages/sophia-core"
+    schedule:
+      interval: "weekly"
+  # 上游克隆（只读参照物，不入我们的依赖面）：显式关闭，消除 vitest 误报
+  - package-ecosystem: "npm"
+    directory: "/dsh-agent-team"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 0
