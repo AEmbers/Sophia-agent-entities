@@ -1,0 +1,306 @@
+/* Task identity and its state pill share one baseline row. */
+.titleLine {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.titleLine h1 { margin: 0; }
+
+/* The header band closes with its own rule, so the sections inside it
+   separate by space alone — a rule here would draw a second line around
+   nothing. */
+.workSection {
+  margin: 14px auto 0;
+  max-width: 880px;
+}
+
+.riskSection {
+  margin: 14px auto 0;
+  max-width: 880px;
+}
+
+.riskSection h2 {
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  margin: 0 0 6px;
+}
+
+/* One risk is one line: the localized class label leads, and the Host's own
+   English diagnostic rides the row's title instead of the line box. */
+.riskRow {
+  align-items: center;
+  color: var(--dsw-alias-label-secondary);
+  display: flex;
+  flex-wrap: nowrap;
+  font-size: 11px;
+  gap: 6px;
+  line-height: 16px;
+  margin: 0 0 2px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.riskRow > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.riskClass {
+  color: var(--dsw-alias-state-error-primary);
+  font-weight: 600;
+}
+
+.claimList {
+  display: grid;
+  gap: 0;
+  padding: 4px 0 0 22px;
+}
+
+/* Identity and its state share the first line; the direction owns the second.
+   The dot column plus the row's left padding put every dot on the same spine
+   as the disclosure row's title. */
+.claimRow {
+  align-items: center;
+  border-radius: 6px;
+  column-gap: 8px;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  min-height: 30px;
+  padding: 3px 6px 5px;
+}
+
+.claimRow:hover { background: var(--dsw-alias-interactive-bg-hover); }
+
+/* The presence dot in the first track is the row's only liveness signal: a
+   second badge beside the handle would say "available" twice. */
+.claimOwner {
+  align-items: center;
+  color: var(--dsw-alias-label-secondary);
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 500;
+  gap: 4px;
+  grid-column: 2;
+  grid-row: 1;
+  line-height: 16px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.claimDirection {
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  grid-column: 2;
+  grid-row: 2;
+  line-height: 18px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* A finished Claim stops competing with the live ones for the eye. */
+.claimRowDone .claimDirection { color: var(--dsw-alias-label-secondary); }
+
+.claimState {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  grid-column: 3;
+  grid-row: 1;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.emptyClaims {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 18px;
+  margin: 0;
+  padding: 5px 6px;
+}
+
+.activityRow {
+  align-items: center;
+  color: var(--dsw-alias-label-tertiary);
+  display: flex;
+  font-size: 11px;
+  gap: 8px;
+  justify-content: center;
+  line-height: 18px;
+  margin: 4px auto;
+  max-width: 100%;
+  padding: 5px 12px;
+  text-align: center;
+}
+
+.activityText {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.activityMark {
+  background: var(--dsw-alias-border-l3);
+  border-radius: 50%;
+  corner-shape: round;
+  flex: 0 0 5px;
+  height: 5px;
+  width: 5px;
+}
+
+/* A block of consecutive activities reads as one ledger: block members align
+   to the text column (avatar 28px + gap 10px, level with the run divider)
+   instead of stacking as centered floats; an isolated activity stays centered. */
+.activityRow:has(+ .activityRow),
+.activityRow + .activityRow {
+  justify-content: flex-start;
+  padding-left: 38px;
+  text-align: left;
+}
+
+.historySection {
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  margin: 0 auto 12px;
+  max-width: 100%;
+  padding-bottom: 10px;
+}
+
+.historySection h2 {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 16px;
+  margin: 0 0 4px;
+  text-transform: uppercase;
+}
+
+.publicSection { min-width: 0; }
+
+.unreadBoundary {
+  align-items: center;
+  color: var(--dsw-alias-label-tertiary);
+  display: flex;
+  font-size: 11px;
+  gap: 10px;
+  line-height: 16px;
+  margin: 10px 0 6px;
+}
+
+.unreadBoundary::before,
+.unreadBoundary::after {
+  background: var(--dsw-alias-border-l3);
+  content: '';
+  flex: 1;
+  height: 1px;
+}
+
+.unreadBoundary span { flex: none; }
+
+/* Calendar-day anchor between rendered facts; quieter than the unread line. */
+.daySeparator {
+  align-items: center;
+  color: var(--dsw-alias-label-tertiary);
+  display: flex;
+  font-size: 11px;
+  gap: 10px;
+  letter-spacing: 0.02em;
+  line-height: 16px;
+  margin: 12px 0 4px;
+}
+
+.daySeparator::before,
+.daySeparator::after {
+  background: var(--dsw-alias-border-l2);
+  content: '';
+  flex: 1;
+  height: 1px;
+}
+
+.daySeparator span { flex: none; }
+
+.newUpdates {
+  align-items: center;
+  background: var(--dsw-specific-input-major, var(--dsw-alias-bg-layer-1));
+  border: 1px solid var(--dsw-alias-border-l2-darkmode-thin);
+  border-radius: 999px;
+  corner-shape: round;
+  box-shadow: var(--dsw-shadow-lv2);
+  display: flex;
+  font-size: 12px;
+  justify-content: center;
+  line-height: 18px;
+  margin: 8px auto;
+  padding: 4px 12px;
+  position: sticky;
+  bottom: 8px;
+  width: fit-content;
+  z-index: 2;
+}
+
+/* The hint carries no read semantics — it only scrolls to the tail. */
+.newUpdatesJump {
+  background: none;
+  border: 0;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  font: inherit;
+  line-height: inherit;
+  padding: 0;
+}
+
+.newUpdatesJump:focus-visible {
+  border-radius: 6px;
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 2px;
+}
+
+/* The opener is one line in every Thread kind: a Task's title runs long and
+   embeds unbreakable refs, and a discussion repeats its anchor message in full
+   right below, so a second line here would only spend the band's height on text
+   the reader can already see. The full text rides the title attribute. */
+.taskTitle {
+  color: var(--dsw-alias-label-secondary);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  font-size: 13px;
+  line-height: 20px;
+  margin: 2px 0 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+/* The closed-task bar replaces the composer slot; the notice explains why input
+   is unavailable and carries the one recovery action. */
+.closedBar {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+}
+.closedNotice {
+  align-items: center;
+  color: var(--dsw-alias-label-tertiary);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 13px;
+  gap: 12px;
+  justify-content: center;
+  line-height: 20px;
+  padding: 10px 16px 14px;
+}
+
+@media (max-width: 600px) {
+  /* The claim row keeps its desktop template: identity and state share the
+     first line and the direction owns the second at every width, so only the
+     vertical alignment changes here. */
+  .claimRow { align-items: start; }
+
+  .activityRow { padding-inline: 0; }
+  .newUpdates { max-width: calc(100% - 16px); }
+}

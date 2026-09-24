@@ -430,7 +430,7 @@ function collectSpawnEvents(ledger: Ledger, requestId: RequestId): readonly Spaw
  * 并让刚建出来的新团静默丢失。最新的一条才代表「此刻这个申请对应的团」。
  * 先收齐再取最大，而不是「遇到就返回」—— 后者依赖事件顺序，是这里最容易写错的地方。
  */
-function findTeamCreatedFor(ledger: Ledger, requestId: RequestId): TeamId | null {
+export function findTeamCreatedFor(ledger: Ledger, requestId: RequestId): TeamId | null {
   // 用数组累积而不是「在闭包里更新一个 `let latest`」：后者的控制流分析在回调里不可靠
   // （`tsc` 会把闭包外的变量收窄成 `never`，实际写出来就是 TS2339）。
   // 这里的形状与 `collectSpawnEvents` 保持一致，两处都好读。

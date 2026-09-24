@@ -415,6 +415,11 @@ export function changeScopesOf(event: LedgerEvent): readonly ChangeScope[] {
       return scopes
     }
 
+    case 'team/destroyed':
+      // 团队级中止（2026-09-24）：它改变的是**这个团自己的视图**（wire 不再发它），
+      // 不波及父团 —— 中止不改变父团的成员/子团列表（团还在账本里，只是停了）。
+      return [teamScope(event.data.teamId)]
+
     case 'team/member-added':
       // AC-10-2 钉死的一条：新成员自身的 member scope + 其所属团的 team scope。
       return [memberScope(event.data.member.memberId), teamScope(event.data.teamId)]
@@ -430,6 +435,14 @@ export function changeScopesOf(event: LedgerEvent): readonly ChangeScope[] {
       return [teamScope(event.data.teamId)]
 
     case 'team/thread-started':
+      return []
+
+    case 'team/message-sent':
+      // 与 `team/thread-started` 同源：受影响实体是「线程里的一条消息」，
+      // 而 §6.3 的 scope 词汇表里没有 channel/thread/message 种类。
+      // 载荷里也没有 `teamId` 可投（见 `MessageSentData`），故如实返回空 ——
+      // 详细理由与「带 scopes 的读取看不到消息」这一后果写在
+      // `projection/index.ts` 的 `UNSCOPED_EVENT_KINDS`。
       return []
 
     case 'plan/approved':

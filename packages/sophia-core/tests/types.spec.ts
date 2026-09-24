@@ -189,7 +189,10 @@ describe('AC-STAGE-1 双模草案默认模式', () => {
 
 describe('账本事件判别联合（FR-10.1）', () => {
   it('kind 清单与 LedgerEventMap 双向一致，且无重复', () => {
-    expect(LEDGER_EVENT_KINDS).toHaveLength(19)
+    // ⚠ 19 → 20 → 21：**因新增 `team/message-sent`、`team/destroyed` 而必更**
+    // （A 类：契约变更的必然结果）。
+    // 精确计数本身就是护栏（漏一个 kind 就红），故仍是精确值，**不弱化成 >=**。
+    expect(LEDGER_EVENT_KINDS).toHaveLength(21)
     expect(new Set(LEDGER_EVENT_KINDS).size).toBe(LEDGER_EVENT_KINDS.length)
 
     // 契约 §6.1 表格里每一项都必须存在（这条是「清单没漏项」的运行期回声，
@@ -203,6 +206,10 @@ describe('账本事件判别联合（FR-10.1）', () => {
       'dag/ownership-transferred',
       'plan/approved',
       'team/member-added',
+      // ⚠ 本次新增：单独列在这里而不只靠上面的计数 —— 计数只能证「条数对」，
+      // 不能证「新 kind 真的在白名单里」（有人删掉它、再加一个别的，计数照样对）。
+      'team/message-sent',
+      'team/destroyed',
     ] as const) {
       expect(LEDGER_EVENT_KINDS).toContain(required)
     }
@@ -230,8 +237,15 @@ describe('账本事件判别联合（FR-10.1）', () => {
           return `换模 ${event.data.from.model}→${event.data.to.model}`
         case 'team/channel-created':
           return `频道 ${event.data.channelId}`
+        // ⚠ 2026-09-24 新增 kind（A 类）：不加，`assertNever(event)` 的入参不再是 never ⇒ tsc 红。
+        case 'team/destroyed':
+          return `中止 ${event.data.teamId}`
         case 'team/thread-started':
           return `线程 ${event.data.threadId}`
+        // ⚠ 本分支是**因新增 kind 而必加**的（A 类）：不加，下面 `assertNever(event)`
+        // 的入参就不再是 `never` ⇒ `tsc` 报 TS2345（这正是本用例要的那个性质）。
+        case 'team/message-sent':
+          return `消息 ${event.data.messageId} @ ${event.data.threadId}`
         case 'plan/approved':
           return `核准 ${event.data.planId} @ ${event.data.mode}`
         case 'spawn/awaiting-human-approval':
@@ -483,6 +497,9 @@ const memberAddedEvent = {
     teamId,
     member: { position: '灵台郎', name: '灵台郎', memberId },
     lifecycle: 'active',
+    // `model` 是**必填但可空**（`MemberAddedData` 的说明）：此夹具只关心 kind 判别与
+    // 三层标识的收窄，故如实写 `null`（成员跟随全局默认），而不是塞一个假模型。
+    model: null,
   },
 } satisfies LedgerEvent
 

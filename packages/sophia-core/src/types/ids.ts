@@ -30,6 +30,16 @@ export type DagTeamId = Brand<string, 'DagTeamId'>
 export type ChannelId = Brand<string, 'ChannelId'>
 /** Task Thread ID（FR-3.3）。 */
 export type ThreadId = Brand<string, 'ThreadId'>
+/**
+ * 消息 ID（`team/message-sent` 的载荷字段）。
+ *
+ * 为什么单开一个品牌而不是复用 `EventId`：两者**生命周期不同** ——
+ * 账本事件的 `eventId` 由账本自己发（一条事件一个），而消息 ID 由**写入方**发，
+ * 是「这条消息」在界面上的稳定身份（线程时间线/频道预览都按它去重与排序）。
+ * 复用 `EventId` 会把「消息身份」与「账本行身份」绑死，将来消息被别的事件
+ * 形态承载（如编辑、撤回）时就没有独立身份可用。
+ */
+export type MessageId = Brand<string, 'MessageId'>
 /** 双模草案 ID（FR-1）。 */
 export type PlanId = Brand<string, 'PlanId'>
 /** 账本事件 ID（FR-10.1）。 */

@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.client.json",
+  "compilerOptions": {
+    "noEmit": false,
+    // 只出类型声明，**不落 `.js`**（OCR 复核 [3]）。
+    //
+    // 原因：打包改由 tsdown 直接吃 `src/client/index.ts` 完成（见 tsdown.config.ts），
+    // 中间产物 `lib/client/index.js` 因此不再需要 —— 而且它带着一个靠 `define`
+    // 才替换的 `__SOPHIA_PLUGIN_ID__` 自由变量，若留在 `files: ["lib"]` 里被发布，
+    // 谁按约定路径 require 都会 `ReferenceError`。emitDeclarationOnly 让它根本不产生。
+    "emitDeclarationOnly": true,
+    "declaration": true,
+    "outDir": "lib",
+    "rootDir": "src"
+  },
+  "include": ["src/client"],
+  "exclude": []
+}

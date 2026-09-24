@@ -18,5 +18,25 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["src", "tests", "vitest.config.ts"]
+  // ── include 里的 `tsdown.config.ts` 是**有意加进来的**（captain 转交的实测缺陷）──
+  // 它原先不在任何 tsconfig 的 include 内 ⇒ `npm run typecheck` **永远看不到它**
+  // ⇒ 里面 `error?.message` 的 TS2339 一直存在却无人发现（"门禁看不到 = 假绿"）。
+  // 与 `vitest.config.ts` 一样，构建/测试配置本身也是代码，应当被检查。
+  // 已确认纳入后可正常检查（lib=es2024 + types=node 足够：
+  // 它只用 readFileSync / new URL / import.meta.url / process.env）。
+  "include": ["src", "tests", "vitest.config.ts", "tsdown.config.ts"],
+  // ── t1 · 插件外壳新增（SPEC §1.3 冻结配置上的**唯一**改动）──
+  // `lib` 被 §1.3 冻结为 ["es2024"]（无 DOM），而浏览器半边 `src/client/`
+  // 必然要用 DOM（`window.__ModuleLoader__`）。若不排除，主配置会直接
+  // `TS2304: Cannot find name 'window'` 而 exit 2 —— 实测过。
+  // 浏览器半边改由 `tsconfig.client.json` 完整类型检查（lib 加 DOM / DOM.Iterable，
+  // 并配自动 JSX 运行时 —— 但 `jsxImportSource` 指向**本包自己的**实现，
+  // 那条偏离是承重的，理由见 `src/client/react-runtime.ts` 的文件头）。
+  // **这不是放宽检查**：两侧文件都在各自配置的 include 里被完整检查，只是 lib 不同。
+  //
+  // ── t5 · 前端 UI 新增：`tests/client` 一并排除（与 `src/client` 同源理由）──
+  // client 的用例要渲染 DOM/JSX，故同样落在 `tsconfig.client.json` 的
+  // `include` 里；若留在主配置，它们会因为 `lib` 无 DOM 而报
+  // `Cannot find name 'document'`。两侧都是**完整检查**，只是 lib 与 jsx 设置不同。
+  "exclude": ["src/client", "tests/client"]
 }

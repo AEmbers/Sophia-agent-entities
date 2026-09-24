@@ -53,9 +53,90 @@ git subtree pull --prefix=dsh-agent-teams up-teams/main --squash \
 Sophia-agent-entities/
 ├── dsh-agent-team/      # 上游 wowyuarm/dsh-agent-team
 ├── dsh-agent-teams/     # 上游 NanmiCoder/dsh-agent-teams
+├── docs/                # 需求 / SPEC / 开发文档 / 验证与评审报告
+├── packages/
+│   └── sophia-core/     # 本框架的领域库 + DSH 插件外壳
 ├── README.md
 └── LICENSE
 ```
+
+## 安装到 DSH profile
+
+`packages/sophia-core` 既是领域库，也是一个可被 DSH 加载的插件（宿主半 + 浏览器半）。
+安装分两步：**先构建**（构建产物 `lib/` 不入库），**再挂进 profile 的 bundle 列表**。
+
+### 1. 构建
+
+```bash
+pnpm install
+pnpm --filter @sophia/core run build
+```
+
+`build` 依次跑：`tsc` 产出宿主半的 `.js` 与 `.d.ts` → `tsc` 只产出浏览器半的
+`.d.ts`（`emitDeclarationOnly`）→ `tsdown` 把浏览器半打包成 DSH 的
+`__ModuleLoader__` 闭包工厂（`lib/client.js`）。
+
+> 浏览器半**不经 tsc 落 `.js`**：`src/client/index.ts` 里的包名要靠 tsdown
+> 构建期注入（`define`），先让 tsc 落一份 `lib/client/index.js` 会留下一个
+> 未定义自由变量，而它会随 `files: ["lib"]` 一起发布 —— 谁按约定路径 require
+> 都 `ReferenceError`。`tests/shell.spec.ts` 有一条断言专门钉住这个文件**不存在**。
+
+> ⚠ **`lib/` 是构建产物且被 `.gitignore` 忽略**。刚 clone 下来直接跑测试，
+> `tests/shell.spec.ts` 里依赖产物的用例会**明确失败并打印补救命令** —— 这是刻意的：
+> 给一条绿色假象比红得更糟。
+
+### 2. 挂进 profile
+
+推荐用 DSH 自己的命令（它会 pnpm 安装该包并把本包对进 profile 的
+`dsh.profile.bundles` 列表）：
+
+```bash
+dsh plugin --profile desktop add <本仓库路径>/packages/sophia-core
+```
+
+也可以手工把包放进 profile，再在 profile 的 `package.json` 里把
+`"@sophia/core"` 加进 `dsh.profile.bundles`。加载行由本包自带的
+`packages/sophia-core/cordis.patch.yml` 声明（`dsh.bundle.patch` 指向它）：
+
+| 行 id | 模块 | 作用 |
+|---|---|---|
+| `sophia-host` | `@sophia/core/host` | 宿主半边：只读自检路由 `/api/sophia/status` + 面向模型的公告 |
+| `sophia` | `@sophia/core` | **裸包名行**，浏览器半边的发现锚点；同时是领域库入口 |
+
+> **为什么是两行**：DSH 的 `dsh-client-modules` 只对**裸包名**行做包解析
+> （`exactPackageSpecifier` 要求 `@scope/name` 恰两段，`@sophia/core/host`
+> 三段会被整行跳过）。所以「让 GUI 认出浏览器半」必须有一条裸名行。
+>
+> 裸名行 import 的是 `exports["."]` —— 也就是领域库入口 `@sophia/core`。
+> 它**同时**导出领域符号（31 个）与插件三元组 `name` / `inject` / `apply`，
+> 与在跑的 `dsh-postman` 同构（它的 `exports["."]` 也既是宿主半边又是自己的 API）。
+> 两侧不撞名，`tests/shell.spec.ts` 把这条前提钉成了断言。
+>
+> 另一行 `@sophia/core/host` 因为三段而**不会**被 client-modules 解析，
+> 所以它不会和裸名行争同一个包（否则 `reconcilePackage` 会抛
+> `resolves from multiple active Loader sources`）。
+
+### 3. 验证安装
+
+重启 DSH 后，宿主半会挂上只读自检路由（回环）：
+
+```bash
+curl http://127.0.0.1:<端口>/api/sophia/status
+# {"ok":true,"plugin":"sophia","phase":"shell","route":"/api/sophia/status",
+#  "surfaces":{"host":true,"client":"skeleton","tools":false,"runtime":false}}
+```
+
+浏览器控制台里应出现 `[sophia] client half mounted`，且 `window.__SOPHIA_CLIENT__` 有值。
+
+> **诚实边界**：上面这条响应是**契约形状**（由 `tests/shell.spec.ts` 用假 ctx
+> 驱动真实 `apply` 后断言的），本轮**没有**真的把包挂进运行中的 profile 去抓一次
+> 真实响应 —— 那会改到主人的 DSH 配置，不在本任务范围内。
+> 同理，`[sophia] client half mounted` 一行来自**在模拟 `__ModuleLoader__` 里
+> 执行构建产物**的实测，不是从真实浏览器控制台抄来的。
+> 「接线正确」在交付时是**静态+单元级**结论，端到端挂载验证属于集成任务。
+
+> 当前是**外壳阶段**：`surfaces` 里的 `client` 为 `skeleton`、`tools`/`runtime` 为 `false`
+> 是如实回报，不是故障 —— 成员运行时、Agent 工具集与真实 UI 由后续任务挂载。
 
 ## 许可
 

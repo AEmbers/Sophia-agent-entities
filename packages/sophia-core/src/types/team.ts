@@ -104,8 +104,46 @@ export type DagTaskState = string
 export interface TeamSpec {
   /** 拟用团名（展示用）。 */
   readonly name: string
-  /** 拟建名册：职位 + 数量。 */
-  readonly roster: readonly { readonly position: string; readonly count: number }[]
+  /**
+   * 拟建名册：职位 + 数量 + **可选**的初始模型。
+   *
+   * ## 为什么 `model` 在这里是**可选**，而账本载荷里的 `model` 是**必填可空**
+   *
+   * 本接口是**调用方输入**（`tools/spawn-team.ts` 的入参 → 建团申请），
+   * 而 `MemberAddedData.model`（`types/operations.ts`）是**账本载荷**。两者场景不同：
+   *
+   * | 层 | 形状 | 理由 |
+   * |---|---|---|
+   * | 申请契约（本接口） | **可选** | 「调用方没指定」是合法输入，逼每个调用方写 `null` 是噪音 |
+   * | 账本载荷 | **必填可空** | 记录侧必须如实：`null` = 跟随全局默认 |
+   *
+   * 在**输入侧**「省略该字段」与「显式写 `null`」**语义等价**，都表示「跟随全局默认」
+   * （`src/client/locales.ts` 的 `modelFollowDefault` 是这个状态的既有文案），
+   * 所以这里**不需要**让调用方靠「写不写 `null`」去表达这层区别；
+   * 该区别只在**账本侧**才有意义（那时它是「事实」，必须逐条落地）。
+   * `undefined → null` 的归一化发生在消费侧（`narrowRoster`），不在本类型。
+   *
+   * ## `?` 后面为什么还要 `| null`
+   *
+   * 因为归一化要把「没写」写成 `null`，而本仓开着 `exactOptionalPropertyTypes`。
+   * 实测（`typescript@5.9.3` 的编译器 API，内存探针、零文件足迹）：
+   * 只有 `?` 时那份归一化代码报 **TS2322**；写成 `? | null` 则 **0 诊断**。
+   * ⇒ `| null` 不是冗余，去掉它就会让消费侧的归一化编译不过。
+   *
+   * ## ⚠ 加了 `model?` **并不能**单靠自己防止「传了却被丢掉」
+   *
+   * 同一探针实测：只有**对象字面量**才会触发多余属性检查（TS2353）；
+   * 把项先建成变量、或消费侧「只挑 `position`/`count` 重建数组」，则**0 诊断** ——
+   * 即在消费侧窄化时漏掉 `model`，它会被**静默丢弃**而编译全绿。
+   * 所以「初始模型真的传得出去」这件事，最终由消费侧的窄化代码负责
+   * （它必须把 `model` 一并带上），本类型只负责让**合法输入**有地方写。
+   */
+  readonly roster: readonly {
+    readonly position: string
+    readonly count: number
+    /** 该职位的**初始模型**；省略或 `null` = 跟随全局默认。形状与 `wire.ts` / 换模事件逐字一致。 */
+    readonly model?: { readonly provider: string; readonly model: string } | null
+  }[]
   /** 拟建任务标题。 */
   readonly tasks: readonly string[]
 }

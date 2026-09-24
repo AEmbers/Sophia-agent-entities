@@ -19,6 +19,7 @@ import type {
   EventId,
   HostSessionId,
   MemberId,
+  MessageId,
   PlanId,
   RequestId,
   TeamId,
@@ -182,6 +183,43 @@ export interface MemberAddedData {
   readonly member: MemberIdentity
   /** 初始生命周期状态。 */
   readonly lifecycle: MemberLifecycle
+  /**
+   * 建团那一刻该成员的模型（provider + model）。
+   *
+   * ⚠ **它是 `null` 而不是可选（`?`），这是有意的**，理由三条：
+   * 1. **与「生命周期」对称**：本载荷已经在携带 `lifecycle`（同为运行属性）。
+   *    模型与它同级 —— 既然 `lifecycle` 进了 `member-added`，模型也该进。
+   *    这是**补齐一个不对称**，不是引入新概念。
+   * 2. **显式 `null` 优先于「省略」**：本文件既有 6 处「槽位必在、值可为空」
+   *    （`previousEventId` / `createdByHostSessionId` / `ownerMemberId` /
+   *    `parentTeamId` / `assigneeMemberId` / 又一处 `parentTeamId`）全是
+   *    `X: Y | null`，**没有一处**写成 `?: Y | null`。
+   *    若做成可选，「写的人忘了」与「初始确实未知」在账本上**不可区分**；
+   *    做成必填 + 可空则逼每个写入方显式表态。
+   * 3. **`null` 是真实存在的产品状态，不是兜底**：`src/client/locales.ts` 有
+   *    `modelFollowDefault: '跟随全局默认'` —— 成员可以没有自己的具体模型、
+   *    跟随全局默认，此时 `null` 才是**如实**的表达。
+   *
+   * ## 为什么必须有这个字段（否则界面上「换模」按钮第一次点必然失败）
+   *
+   * 换模事件按 FR-6.4 必须携带**真实的**旧模型 `from`，而 `from` 取自账本投影
+   * （`tools/switch-model.ts` 的 `projection.modelOf`，**不接受模型自报**）。
+   * 此前 `projection/index.ts` 折叠 `member-added` 时硬写 `model: null`
+   * ⇒ 成员「从未换过模」时 `from` 取不到 ⇒ 返回 `unknown-current-model`。
+   * 于是**新建的团里，人类第一次点换模必定失败**。
+   * 补上本字段后，建团那一刻的模型就有账本事实可依。
+   *
+   * ⚠ **不得**用「写一条 `from` 与 `to` 相同的换模事件」绕过：账本不可改写，
+   * 那会留下**一条从未发生过的模型转换**，污染唯一的真相源。
+   *
+   * ## 形状为何内联而不是引用 `projection` 的 `MemberModel`
+   *
+   * 层级：`projection/` 依赖 `types/`，反向引用会形成环。本文件对同形状的处置
+   * 已有先例 —— `MemberModelSwitchedData` 的 `from` / `to` 也是**内联**写
+   * `{ provider, model }`（`src/wire.ts` 的线格式同样内联）。
+   * 故此处与它们保持一致。
+   */
+  readonly model: { readonly provider: string; readonly model: string } | null
 }
 
 /** `plan/approved` 的载荷（FR-2.3：操作者、时间、planId、选中模式）。 */
@@ -217,6 +255,20 @@ export interface TeamCreatedData {
   readonly ownerMemberId: MemberId | null
   readonly parentTeamId: TeamId | null
   readonly name: string
+}
+
+/**
+ * `team/destroyed` 的载荷（2026-09-24 新增，团队级中止）。
+ *
+ * 语义（主人定的成品行为：「停止团队」按钮 = 这条事件）：
+ * - **中止**：团的后续协作停止 —— wire 视图不再发这个团（收件箱/活动面板不再显示）；
+ * - **保留已完成结果**：账本是 append-only，这条团的历史事件一条都不删 —— 审计可查。
+ * 重复 destroy 同一个团**幂等**：投影取**第一条** destroyed 的序号（终态不可撤回）。
+ */
+export interface TeamDestroyedData {
+  readonly teamId: TeamId
+  /** 操作原因（可选，人类在确认弹窗里可不给）。 */
+  readonly reason: string | null
 }
 
 /** `team/member-renamed` 的载荷（FR-8.2）。 */
@@ -271,6 +323,54 @@ export interface ThreadStartedData {
   readonly assigneeMemberId: MemberId | null
 }
 
+/**
+ * `team/message-sent` 的载荷（FR-3.3：往一条**已存在**的线程里投一条消息）。
+ *
+ * ⚠ **时间不进这里**：`occurredAt` 由事件基座承载（见本文件顶部「时间在基座、
+ * 不在 data」那条纪律，`SpawnDecisionData` 上方亦同）—— 载荷里再放一份时间会出现
+ * **两个时间真相**，而基座那份是账本自己发、不可伪造的。投影层因此直接读
+ * `event.occurredAt` 去填线格式的 `WireMessage.occurredAt`。
+ *
+ * ⚠ **不含 `title` / `assigneeMemberId`**：那两项是线程的既有事实，记在
+ * `team/thread-started` 上。消息事件只说自己（谁、在哪条线程、正文是什么），
+ * 这样 `foldLedgerEvents` 对它天然是**追加**语义（见 `ThreadStartedData` 那条
+ * 「同 threadId 覆盖写」的说明 —— 本 kind 正是为了避开那种覆盖才存在）。
+ *
+ * `senderMemberId` 是**发送者**，与「收件人」不同：收件人只体现在运行时通知里，
+ * 不进账本（`sophia_team_message` 的 `to` 是投递参数，不是账本事实）。
+ *
+ * ⚠ **`senderMemberId` 可为 `null`：发送者不一定是团内成员。**
+ *
+ * 两种真实现象：
+ *
+ * | 谁发的 | `data.senderMemberId` | 事件基座的 `actor` |
+ * |---|---|---|
+ * | 团内成员（`sophia_team_message`） | 该成员的 id | `{kind:'member', memberId}` |
+ * | **主人自己**（面板里手打，`POST /api/sophia/team/message`） | **`null`** | `{kind:'human', humanId}` |
+ *
+ * **为什么不新增一个 `sender` 判别维度**：事件基座的 `actor` 本来就是账本里
+ * 「这动作是谁做的」的**唯一**真相（`LedgerEventBase.actor`，人类 / 宿主 / 成员三态）。
+ * 再加一个 sender 联合类型，就是**同一件事实记两遍** —— 两处必然漂移
+ * （某天 actor 是成员而 sender 说人类，谁对？），而账本的卖点正是「只有一份真相」。
+ * ⇒ 这里只回答一件事：**有没有一个成员发送者**。`null` 的含义严格等于「没有」，
+ * 「那是谁」去读基座的 `actor`。
+ *
+ * **代价（如实记下）**：想知道「这条人类消息具体是哪位人类」必须 join 基座字段，
+ * 光读 `data` 读不出来；而且线格式那边没有对应字段（见 `src/wire.ts` 的
+ * `WireMessage.senderMemberId`：人类发送时取**空串**），因此**界面现在把主人自己发的
+ * 消息渲染成一个没有名字的气泡**（`adapters.ts` 的 `actorOf` 按成员表查不到就把 id 原样显示，
+ * 空串 ⇒ 空名）。要让界面上写「主人 / 你」，必须在客户端加一处「非成员发送者」的渲染 ——
+ * 那属于客户端改动，本批未做（见交付报告）。
+ */
+export interface MessageSentData {
+  readonly messageId: MessageId
+  readonly channelId: ChannelId
+  readonly threadId: ThreadId
+  /** 发送者成员 id；**`null` = 不是团内成员发的**（人类操作者）——「是谁」看基座 `actor`。 */
+  readonly senderMemberId: MemberId | null
+  readonly body: string
+}
+
 /** `dag/team-created` 的载荷（FR-7.1：含 owner）。 */
 export interface DagTeamCreatedData {
   readonly dagTeamId: DagTeamId
@@ -298,6 +398,8 @@ export interface DagTaskStateChangedData {
 export interface LedgerEventMap {
   'team/initialized': TeamInitializedData
   'team/created': TeamCreatedData
+  /** 团队级中止（2026-09-24）：人类显式停止整团；已完成结果保留在账本里。 */
+  'team/destroyed': TeamDestroyedData
   'team/member-added': MemberAddedData
   'team/member-renamed': MemberRenamedData
   'team/member-suspended': MemberLifecycleChangedData
@@ -306,6 +408,7 @@ export interface LedgerEventMap {
   'team/member-model-switched': MemberModelSwitchedData
   'team/channel-created': ChannelCreatedData
   'team/thread-started': ThreadStartedData
+  'team/message-sent': MessageSentData
   'plan/approved': PlanApprovedData
   'spawn/awaiting-human-approval': SpawnAwaitingHumanData
   'spawn/principal-rejected': SpawnPrincipalRejectionData

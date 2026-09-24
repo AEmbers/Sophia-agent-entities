@@ -1,0 +1,51 @@
+# sophia-core bundle patch —— 把 Sophia 插件挂进 dsh profile 的宿主组合。
+#
+# 安装：`dsh plugin --profile <name> add <本包路径或包名>`
+# 该命令会把包 pnpm 安装进 profile，并把本包对进 profile 的
+# `dsh.profile.bundles` 列表；DSH 启动时读 profile 的 patch 链装载这些行。
+#
+# 两行的分工（这不是冗余，是 DSH 模块系统的硬要求）：
+#
+# 1. `@sophia/core`（裸包名行）—— 浏览器半的**发现锚点**，同时也是领域库入口。
+#    DSH 的 client-modules 在扫描 loader 行时，只对**裸包名**做包解析
+#    （`exactPackageSpecifier()` 要求 `@scope/name` 恰两段；`@sophia/core/host`
+#    三段会被判为「不是包」而直接跳过）。所以「让 GUI 认得本插件的 client 半」
+#    必须有一条裸名行，而这一行的宿主半边因此必须在启动路径上可加载。
+#    它指向 lib/plugin.js，导出 `name`/`inject`/`apply` **外加 re-export 领域库**
+#    （`export * from './index.ts'`）。
+#
+#    ── 关于「零依赖空壳」这个说法（曾在这里写过，已作废）──
+#    更早的版本把本行做成零依赖空壳、领域库挪去 `./core`。那样
+#    `import { ... } from '@sophia/core'` 拿不到任何领域符号，而
+#    `src/types/index.ts` 与 `docs/SPEC-sophia-core.md` 都承诺「下游一律从
+#    `@sophia/core` 导入」—— 等于给 t2–t5 埋一个**静默**的坑（OCR 复核 [7]）。
+#    现在领域库就在本行入口上（与在跑的 `dsh-postman` 同构：它的
+#    `exports["."]` 也既是宿主半边、又承载自己的 API）。
+#
+#    ── 代价如实说明：这确实把领域库的加载期风险放到了发现链上 ──
+#    实测依据：client-modules 的 `processOne()` 会跳过 `entry.fiber === undefined`
+#    的行（`dsh-client-modules/lib/index.js:778`）⇒ **宿主半边 import 失败的行
+#    会连浏览器半一起不被发现**。所以本行 import 领域库，等于让账本的
+#    `node:sqlite` 依赖也能连带打断 UI 发现链。这个风险被以下实测数据判为可接受：
+#      · `node:sqlite` 在真实运行时可用 —— `DSH Desktop.exe` +
+#        `ELECTRON_RUN_AS_NODE=1` → node=24.18.1 / electron=43.3.0，
+#        `require('node:sqlite').DatabaseSync` 是 function；
+#      · 领域库在该运行时 import 成功、31 个符号；
+#      · `src/ledger.ts` **模块作用域无副作用**（只有常量与函数定义，
+#        `new DatabaseSync` 在 `openLedger()` 函数体内），import 本身不碰磁盘；
+#      · `tests/shell.spec.ts` 对「`exports["."]` 同时给出领域符号与插件三元组」
+#        以及「两侧不撞名」都有断言（两条都做过反向自检，见测试文件注释）。
+#    净判断：契约一致性 > 一个经实测不存在的启动风险。若将来领域库真的长出
+#    模块作用域副作用，应改的是那个副作用，不是把对外契约摘掉。
+#
+# 2. `@sophia/core/host`（子路径行）—— 真正的宿主半边：
+#    只读自检路由 `/api/sophia/status` + 面向模型的提示词公告。
+#    成员运行时 / 工具集 / 常驻调度体后续在此挂载。
+#    注：本行不会被 client-modules 解析（三段名），所以它**不会**和裸名行
+#    争同一个包 —— 否则 reconcilePackage 会抛
+#    `resolves from multiple active Loader sources`。
+- insert:
+    - id: sophia-host
+      name: '@sophia/core/host'
+    - id: sophia
+      name: '@sophia/core'

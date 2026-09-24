@@ -1,0 +1,111 @@
+════════════════════════════════════════════════════════════════════════════
+vendor/team/ 交付验证记录
+任务：把上游 wowyuarm/dsh-agent-team 的「收件箱页 + Thread 页」整份复制进
+      索菲亚 packages/sophia-core/src/client/vendor/team/ ，接到索菲亚自己的数据上
+执行者：subagent（父 agent = session-fa9cd8ac-06e6-46d2-8b60-134e80c2b61b）
+════════════════════════════════════════════════════════════════════════════
+
+【1】npx tsc --noEmit -p tsconfig.client.json
+      （无输出）
+      exit=0
+
+【2】npx vitest run
+      Test Files  18 passed (18)
+      Tests       854 passed (854)
+      Duration    2.80s
+      exit=0
+      ※ 任务书写的基线是 853；本机改动**前**实测就是 854。
+        改动前/改动后同为 18 files / 854 tests ⇒ 无回归、无用例被删。
+
+【3】npm run build
+      ℹ [@sophia/core/client] lib\client.js      250.93 kB │ gzip:  73.02 kB
+      ℹ [@sophia/core/client] lib\client.js.map  415.78 kB │ gzip: 130.50 kB
+      ✔ [@sophia/core/client] Build complete in 64ms
+      exit=0
+
+【3b】注册期零 require 硬约束：lib/client.js 里 `require(` 计数
+      require( = 2        ← 必须 = 2，实测 = 2
+      两处分别是：
+        if (cached === void 0) cached = require("react");
+        const primitives = new Proxy({}, { get: (_t, key) =>
+                                   require("@deepseek-ai/dsh-client-ui-primitives")[key] });
+      本次新增的文件**没有增加任何一条** —— 它们全部走
+      `react-runtime.ts` 的 hooks()/memoize()/react() 惰性取与
+      `bridge.ts` 的 primitives 惰性代理。
+
+      ⚠ **本目录里 `require(` 的文本命中是 6 处，但真实调用点是 0** ——
+        这 6 处全在我**自己的注释**里，形如「撞红「`require(` ≤ 2」的既有断言」，
+        都带反引号（是**讨论**这条约束，不是调用）。
+        判据（可复跑）：`require(` **不被反引号前缀**者才算调用点
+          node -e "… lines.forEach(l=>{if(/(?<!\`)\brequire\(/.test(l))…})"
+          → realCallSites=0
+        ⚠ 我第一版的检查脚本写的是 `s.includes('require(')`（不排除注释），
+          于是把自己写的注释判成了命中 —— 那是一次**假红**。
+          已把这条失败样本撤回（id=fc-20260924-b1942f9c3b08，理由：假红，断言写错）。
+
+【4】node ..\..\scripts\check-t5-structure.mjs
+      OK src/client=18 tests/client=4 smoke="node ../../scripts/sophia-client-smoke.mjs"
+      OK .sp-avatar 只做 border-radius:50% + object-fit:cover（无二次裁切）
+      OK 成员名走 DOM 文本（data-sophia-name）；18 处 OCR 修复均在位
+      OK PANEL_CSS 模板字符串内无反引号
+      exit=0
+      ※ 素材硬约束（头像只 border-radius:50% + object-fit:cover、不做二次裁切）
+        逐条通过。本目录**没有**改动 styles.ts 的 .sp-avatar 规则体。
+
+【5】新文件真的进了编译（"编译 0 错误"证明不了这件事，故另取证）
+      5a) tsconfig.client.json 的 include = ["src/client", "tests/client"]
+          ⇒ src/client/vendor/team/ 在其下，**被包含**。
+      5b) `npx tsc --noEmit -p tsconfig.client.json --listFiles`
+          ⇒ 其中匹配 `vendor/team` 的条目 = **25 个**
+          （目录下**共 34 个文件**：25 个 .ts/.tsx 进 tsc 模块图；
+           8 个 .module.css 由 tsdown 的 CSS 插件在构建期处理、不进 tsc；
+           1 个 VERIFY.txt 是本记录本身 ⇒ 25 + 8 + 1 = 34，对得上）
+          ⚠ 我第一版报告里写「33 个文件」，是**漏算了本文件（VERIFY.txt）**，
+            不是有文件丢失（34 个全部在盘上）。
+            这条失败样本也已撤回（id=fc-20260924-6741b79034fa，理由：叙述性数字写错）。
+          样例：
+            .../vendor/team/agent-team-types.ts
+            .../vendor/team/TeamThreadPage.tsx
+            .../vendor/team/TeamInboxPage.tsx
+            .../vendor/team/adapters.ts
+            ...（共 25）
+      5c) 可达性实测（临时在 src/client/index.ts 注入一行 import，
+          构建后**已还原**，index.ts 字节数回到 21050）：
+            注入前 bundle = 250.93 kB（与基线逐字一致）
+            注入后 bundle = 277.98 kB
+            bundle 里 `contains('TeamThreadPage')` = True
+            bundle 里 `contains('createTeamDataSource')` = True
+            注入后 `require(` 计数 = **仍为 2**
+          ⇒ 我的代码**能被 tsdown 打进 bundle**，且**不破坏注册期零 require**。
+
+【6】build_compile_check 工具
+      不可用：本机调用返回 `output.render failed: The "path" argument must be
+      of type string. Received null`（工具自身缺陷，与本次改动无关）。
+      替代取证见【5】的 5b/5c，比该工具更强的证据（它只看 Compile Include 项，
+      而 5b 是编译器实际加载的模块图、5c 是真实产物体积）。
+
+【7】OCR 评审
+      ocr_review(mode="review", repoPath="C:\Users\Administrator\Sophia-agent-entities")
+      结论：53 个文件 / 33 条意见（**HIGH 0** / MEDIUM 15 / LOW 18）
+      ⇒ 按 AGENTS.md 的处置口径「CRITICAL/HIGH 必须修」：**本次 0 条需要修**。
+      33 条意见的落点**全部在本次改动之外**的既有文件：
+        view-model.ts / adapters/activity.ts / styles.ts / components.tsx /
+        panel.tsx / seats.tsx / tsdown.config.ts / host.ts / host-assembly.ts /
+        projection/index.ts / runtime/member-runtime.ts / tools/*.ts /
+        scripts/check-t5-structure.mjs / scripts/verify-t5.mjs /
+        scripts/sophia-client-smoke.mjs
+      **vendor/team/ 下 0 条意见**（33 个新文件中，本目录是本次新增的最大代码面，
+      却一条未命中）。
+      ⚠ 如实说明判据强度：这是「评审没报」而不是「评审证明了没有缺陷」。
+      上述 33 条我**没有**去修 —— 它们不在本次授权范围（只做 vendor/team 两页），
+      且其中多条涉及宿主账本/工具语义，改动会牵连本批其它任务。
+
+════════════════════════════════════════════════════════════════════════════
+本次**未做**（如实列出，逐条见交付报告第 6 节）
+  · TeamThreadPage 是「结构照抄 + 三块功能剥离」，字节数 46107 → 21794（47%），
+    不是 861 行完整复刻 ⇒ 需要宿主先补 promote / changeTask / claim 三条事实面
+  · 侧栏 / 频道页 / Agents 面板等其余页面**不在本批**，未移植
+  · 索菲亚宿主**没有**消息发送路由 ⇒ composer 提交会如实报 404
+  · 已读水位 / 结构化 @提到 / claim / attention / 任务序号 索菲亚账本里都没有
+    ⇒ 收件箱「需要我」队列**结构上恒为空**（如实降级，不是缺陷掩盖）
+════════════════════════════════════════════════════════════════════════════

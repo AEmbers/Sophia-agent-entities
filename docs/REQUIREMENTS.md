@@ -248,3 +248,27 @@
 - Q2 DAG 成员头像风格：与常驻成员统一质感，还是刻意区分「临时特遣队」。
 - Q3 配色主色是否沿用 `#5B4CF0`。
 - Q4 模式选择的默认值是否允许用户在上层配置中改写。
+
+### FR-3.6 常驻驱动与能力边界（依 `docs/SPIKE-resident-driver.md` 实测结论）
+
+> **本节由 t6 spike 的实测结论驱动，目的是避免「交付即误导」。**
+> 上游把团队绑在 captain 的 live turn 上（`dsh-agent-teams/src/types.ts:248` 的 `captainSessionId`），
+> 且调度器**每次 kick 都要求 liveCaptain**（`src/scheduler.ts:292/306`），**全部触发点都在工具调用里**
+> ⇒ 上游**没有任何自主心跳**。这是「团变僵尸」的真凶，**不是窗口关闭**。
+
+- FR-3.6.1 须自建**常驻驱动体**（不依赖任何窗口会话）：`ctx.interval` tick → 扫账本算 ready 集 →
+  `resume` 父会话 → 投递唤醒 durable 子会话。
+- FR-3.6.2 **驱动体必须在宿主进程内**运行。实测约束：**会话写锁跨进程独占** ——
+  第二个进程 resume 同一会话会报 `session "..." is already owned by an active write handle`。
+  ⇒ **否决「另起一个常驻 node 进程」这条路**。
+- FR-3.6.3 唤醒前**必须先 `resume` 父会话**，否则过不了 `authorizeLineage`。
+
+**能力边界（必须如实对外表述，不得夸大）**：
+
+| 场景 | 能否照常干活 | 依据 |
+|---|---|---|
+| **DSH 运行期间，窗口关了** | ✅ **可以** | 宿主是 `main` 的 `utilityProcess.fork()` 子进程，**不是 renderer 的子进程**；`main.js` 的 `windowAllClosed` 是空函数（刻意压制默认退出），close 只走 `window.hide()` ⇒ 「宿主存活」与「窗口存活」进程结构上无关。已跑通端到端。 |
+| **DSH 整个退出后** | ❌ **不行** | 宿主随 main 收 shutdown，驱动体无运行环境。 |
+
+> ⚠️ **对外表述纪律**：不得写成「窗口关了团照常干活」而不加限定 ——
+> 那会让人误以为 DSH 退出后也照常。正确表述是「**DSH 运行期间**，窗口关了团照常干活」。

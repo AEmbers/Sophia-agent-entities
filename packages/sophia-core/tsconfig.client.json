@@ -1,0 +1,43 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["es2024", "DOM", "DOM.Iterable"],
+    // ── t5 · 前端 UI：JSX 走**自动运行时**，但运行时指向本包自己的实现 ──
+    //
+    // ⚠ 这与上游 `dsh-agent-teams/tsconfig.client.json` 的写法**不同**，
+    // 而且这个不同是**承重**的，别照抄回去（OCR 复核 MEDIUM 专门提过：
+    // 文件头的注释曾写成「与上游逐字一致」，与真实配置矛盾）。
+    //
+    // 为什么不能用默认 importSource：默认会注入 `react/jsx-runtime`，
+    // 打包产物里那是一条**顶层** `require(...)`，而 `tests/shell.spec.ts`
+    // 用真实 loader 契约 + 一个**会抛错**的 `require` materialize
+    // `lib/client.js` ⇒ 当场变红（已复现 `Error: unexpected require react`）。
+    //
+    // 为什么不用 `jsxFactory: "h"`（经典）：那条路也能消除顶层 require，
+    // 但 TS 对 JSX 元素**不做组件 prop 检查**（`h` 的形参是 `unknown`），
+    // 拼错属性名不报错。下方这条配置**保留**严格 prop 检查 ——
+    // 实测：给组件多传一个 `extraProp` 会报
+    // `TS2322: Property 'extraProp' does not exist on type 'IntrinsicAttributes & Props'`。
+    //
+    // 完整取舍与实测对照表见 `src/client/react-runtime.ts` 的文件头。
+    "jsx": "react-jsx",
+    "jsxImportSource": "sophia-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "sophia-jsx/jsx-runtime": ["./src/client/jsx-runtime.ts"],
+      // dev 模式用的是另一个说明符（`jsx-dev-runtime`）—— 缺了这条，
+      // 在 dev 模式（vitest / 开发服务器）下会报
+      // `Cannot find package 'sophia-jsx/jsx-dev-runtime'`，而症状是
+      // **整份用例集 0 个测试**（「没跑起来」被读成「没失败」）。
+      "sophia-jsx/jsx-dev-runtime": ["./src/client/jsx-dev-runtime.ts"]
+    },
+    "types": [],
+    "noEmit": true
+  },
+  // client 半的**用例**也在这一侧：它们要渲染 JSX/DOM，而主配置的
+  // `lib` 无 DOM（`lib: ["es2024"]`）⇒ 留在主配置会报 `Cannot find name 'document'`。
+  // 主配置的 `exclude` 已同步排除 `tests/client`（两侧都是**完整检查**，
+  // 只是 lib 与 jsx 设置不同 —— 这不是放宽检查）。
+  "include": ["src/client", "tests/client"],
+  "exclude": []
+}

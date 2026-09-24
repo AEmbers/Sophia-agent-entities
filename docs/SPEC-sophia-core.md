@@ -1333,3 +1333,34 @@ T8 的处置符合此判据（它用运行期门禁兜住了真失效模式，�
   T8 已给出量级依据（转挂是成员回收时的控制面操作，`teamsOwnedBy` 规模是个位数），符合要求。
 - **已实现、意见未看到类**（`HumanInbox.push` 无失败语义等）：t8 指出 `delegation.ts` **已实现** push 失败后的账本级恢复
   （正是 OCR [1] 抓出的缺陷，已有两条回归用例）。意见未看到既有实现，不成立。
+
+## 12. 已知的类型层盲区（Q-I 裁定，2026-09-23）
+
+### 12.1 `Ledger.commit` 的载荷声明为 `unknown` ⇒ 手写内联载荷不受类型检查
+
+`LedgerCommitInput.data` 的类型是 **`unknown`**（`src/ledger.ts:79` 与 `:298`）。
+⇒ **「必填字段」只对用具名类型 / `satisfies` 的构造点生效。**
+
+**实测**：`MemberAddedData.model` 被定为**必填可空**后，`tests/tools.spec.ts:152` 与 `:162` 里
+两处只写 `{teamId, member, lifecycle}` 而无 `model` 的载荷，**tsc 不报错**。
+
+**后果**：`灵台郎` 在 `src/` 里新增 `member-added` 写入点时若漏写 `model`，
+**编译不会拦**，而成员会**又回到「换模第一次必失败」**（FR-6.1 失效）。
+
+⇒ **要求**：
+1. `src/` 内新增 `member-added` 写入点**必须**显式带 `model`（哪怕是 `null`），**不得留空**。
+2. 该约束**只能靠运行时兜底与测试覆盖**，不能指望类型层 —— 写 `member-added` 的路径**每一条都要有用例**。
+3. 判断「某文件是否真被编译」请用 `npx tsc --noEmit --listFiles`，**不要用 `verify_report(kind="compiled")`**
+   —— 后者只认 MSBuild 工程（本仓 0 个），会给出假 fail。
+
+### 12.2 `MemberAddedData.model` 的必填可空约定
+
+落地为 **`readonly model: { provider: string; model: string } | null`**（必填、可空）。
+
+- **不用可选 `?`**：本文件既有写法 `X: Y | null` 共 6 处、`?: Y | null` **零处**。
+  做成可选会让**「写入方忘了」与「确实未知」在账本上不可区分** —— 在**不可改写的账本**上这是**语义级**差异。
+- **`null` 是真实产品状态**：`src/client/locales.ts:76` 的 `modelFollowDefault: '跟随全局默认'`
+  ⇒ 成员可以不持有自己的具体模型，此时 `null` 是**如实表达**。
+- **折叠语义**：`projection` 取不到 `model`（缺键 / `null` / 形状不合法）时**一律如实保持 `null`**，
+  **不得计为 `malformed`** —— 既有账本里的事件是**旧形态**（那时还没有该字段）且账本不可改写 ⇒
+  判成畸形会让**每份历史账本在每次折叠时反复报假「数据损坏」，把真实损坏信号淹掉**。

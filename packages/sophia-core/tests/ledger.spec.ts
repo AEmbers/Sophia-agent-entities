@@ -1170,12 +1170,14 @@ describe('只追加契约的其他边界（t4 范围内的反恒真配套）', (
     expect(ledger.read({ limit: 1001 }).events).toHaveLength(1)
   })
 
-  it('全部 19 种 kind 都能提交并读回（载荷与 kind 的映射不被提交路径破坏）', () => {
+  it('全部 20 种 kind 都能提交并读回（载荷与 kind 的映射不被提交路径破坏）', () => {
     const ledger = newMemoryLedger()
     const spec = { name: '新团', roster: [{ position: '灵台郎', count: 1 }], tasks: ['t'] }
     const payloads: Record<LedgerEventKind, unknown> = {
       'team/initialized': { teamId: teamA, kind: 'persistent', createdByHostSessionId: null },
       'team/created': { teamId: teamA, kind: 'persistent', ownerMemberId: null, parentTeamId: null, name: '甲团' },
+      // ⚠ 2026-09-24 新增 `team/destroyed`（团队级中止）：本表是 `Record<LedgerEventKind, unknown>` ⇒ 必加。
+      'team/destroyed': { teamId: teamA, reason: null },
       'team/member-added': { teamId: teamA, member: memberIdentity, lifecycle: 'active' },
       'team/member-renamed': { teamId: teamA, memberId, from: '灵台郎', to: '灵台郎-2' },
       'team/member-suspended': { teamId: teamA, memberId, from: 'active', to: 'suspended' },
@@ -1192,6 +1194,14 @@ describe('只追加契约的其他边界（t4 范围内的反恒真配套）', (
       },
       'team/channel-created': { channelId: 'ch-1', teamId: teamA, title: '频道' },
       'team/thread-started': { threadId: 'th-1', channelId: 'ch-1', title: '线程', assigneeMemberId: null },
+      // ⚠ 因新增 `team/message-sent` 而必加（A 类）：本表是 `Record<LedgerEventKind, unknown>`。
+      'team/message-sent': {
+        messageId: 'msg-1',
+        channelId: 'ch-1',
+        threadId: 'th-1',
+        senderMemberId: memberId,
+        body: '正文',
+      },
       'plan/approved': { planId: plan1, mode: 'persistent-team', operator: 'human-1' },
       'spawn/awaiting-human-approval': {
         requestId: 'req-1',
@@ -1238,14 +1248,16 @@ describe('只追加契约的其他边界（t4 范围内的反恒真配套）', (
     }
 
     const kinds = Object.keys(payloads) as LedgerEventKind[]
-    expect(kinds).toHaveLength(19)
+    // ⚠ 19 → 20 → 21：**因新增 `team/message-sent`、`team/destroyed` 而必更**（A 类）。
+    expect(kinds).toHaveLength(21)
     for (const kind of kinds) {
       commit(ledger, { kind, data: payloads[kind], actor: humanActor })
     }
 
     const readBack = ledger.read({ limit: 1000 })
     expect(readBack.events.map((event) => event.kind)).toEqual(kinds)
-    expect(ledger.verifyIntegrity()).toEqual({ ok: true, sequence: 19, brokenAt: null })
+    // 21 条全部落账 ⇒ 序号即 21（跟着上面的条数一起更，不是独立的事实）。
+    expect(ledger.verifyIntegrity()).toEqual({ ok: true, sequence: 21, brokenAt: null })
     // 每条都被 changeScopesOf 处理过（穷尽性由 tsc 保证，这里是运行期确认不抛）。
     for (const event of readBack.events) {
       expect(() => changeScopesOf(event)).not.toThrow()
