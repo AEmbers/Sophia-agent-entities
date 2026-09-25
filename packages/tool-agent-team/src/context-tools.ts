@@ -6,11 +6,11 @@
  * result is durably appended. `concludeTurn()` rides the success result of
  * `context_rollover` and `context_checkpoint`, so sibling calls settle in model
  * order before the turn closes.
- * @module @wowyuarm/dsh-agent-team/context-tools
+ * @module dsh-sophia-entities/context-tools
  */
 
 import { createHash } from 'node:crypto'
-import type { AgentTeamContextCheckpointRef } from '@wowyuarm/dsh-agent-team/types'
+import type { AgentTeamContextCheckpointRef } from 'dsh-sophia-entities/types'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { member, service } from './host-access.ts'
 

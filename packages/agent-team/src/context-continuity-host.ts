@@ -13,7 +13,7 @@
  * The projection state this host hands the coordinator is the engine's own
  * (`ContextProjectionState`), read from the unit `context-projection.ts`
  * registers once per Host — one state shape, one fold, no translation.
- * @module @wowyuarm/dsh-agent-team/context-continuity-host
+ * @module dsh-sophia-entities/context-continuity-host
  */
 
 import type { Agent } from '@deepseek-ai/dsh-agent'

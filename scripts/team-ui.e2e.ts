@@ -271,7 +271,7 @@ it('drives the complete opt-in Agent Team journey in real Web', async () => {
   const ordinaryComposer = page.locator('[data-composer-input][contenteditable="true"][data-placeholder="描述你想要构建的内容, / 调用指令, @ 文件或对话"]')
   await expect.poll(() => ordinaryComposer.count()).toBe(1)
 
-  expect(scaffold.ctx.clientModules.graph().entries.some(entry => entry.id === '@wowyuarm/dsh-agent-team')).toBe(true)
+  expect(scaffold.ctx.clientModules.graph().entries.some(entry => entry.id === 'dsh-sophia-entities')).toBe(true)
   const teamTrigger = page.getByRole('button', { name: '团队' })
   const settingsTrigger = page.getByRole('button', { name: '设置' })
   const [teamBox, settingsBox] = await Promise.all([teamTrigger.boundingBox(), settingsTrigger.boundingBox()])

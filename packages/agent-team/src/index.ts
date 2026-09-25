@@ -3,7 +3,7 @@
  *
  * The Host owns the append-only collaboration ledger and all Member lifecycle
  * effects. Session history and browser state are projections, never Team facts.
- * @module @wowyuarm/dsh-agent-team
+ * @module dsh-sophia-entities
  */
 
 import { randomUUID } from 'node:crypto'
@@ -149,7 +149,7 @@ export { humanAvatarsRoot } from './human-avatar.ts'
 export { AGENT_TEAM_TOOL_NAMES } from './member-runtime.ts'
 
 /** Process-stable marker carried by the final Team message tool definition. */
-export const AGENT_TEAM_PRESET_MARKER = Symbol.for('@wowyuarm/dsh-agent-team.preset')
+export const AGENT_TEAM_PRESET_MARKER = Symbol.for('dsh-sophia-entities.preset')
 
 
 const INBOX_NOTICE_SUMMARY = 'Team Inbox has unread work.'

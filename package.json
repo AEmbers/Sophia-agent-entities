@@ -1,12 +1,8 @@
 {
-  "name": "@wowyuarm/dsh-agent-team",
+  "name": "dsh-sophia-entities",
   "version": "0.1.15",
   "license": "MIT",
-  "description": "A persistent agent team for long-running collaboration in DeepSeek Harness",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/wowyuarm/dsh-agent-team.git"
-  },
+  "description": "Sophia Entities for DeepSeek Harness - dual-mode agent teams (persistent ledger teams + DAG task teams) with card-based mode selection and tiered approval. Derived from @wowyuarm/dsh-agent-team v0.1.15 (MIT).",
   "private": false,
   "type": "module",
   "packageManager": "pnpm@11.7.0",

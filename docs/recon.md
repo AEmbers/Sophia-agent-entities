@@ -31,7 +31,7 @@ C:/Users/Administrator/WorkBuddy/2026-09-25-14-50-12/
 
 | 项 | 值 |
 |---|---|
-| 包名 | `@wowyuarm/dsh-agent-team` |
+| 包名 | `dsh-sophia-entities` |
 | 版本 | 0.1.15 |
 | 定位 | A persistent agent team for long-running collaboration |
 | 形态 | `bundle` + `client`（platform: web） |
@@ -271,7 +271,7 @@ dsh-sophia-entities/
 
 | 项 | 值 |
 |---|---|
-| 基线提交 | `a90875c` — chore: import @wowyuarm/dsh-agent-team v0.1.15 as development baseline |
+| 基线提交 | `a90875c` — chore: import dsh-sophia-entities v0.1.15 as development baseline |
 | 入库文件数 | 553 |
 | 上游来源 | `wowyuarm/dsh-agent-team` @ `b70a80fb8c28485aa578df3f6e59ecac0404f86b`（v0.1.15） |
 
@@ -279,7 +279,7 @@ dsh-sophia-entities/
 
 ### 仍未开始（等待主人指令）
 
-- 包名 / patch id / ModuleLoader id **尚未改名**，当前仍是上游的 `@wowyuarm/dsh-agent-team`。
+- 包名 / patch id / ModuleLoader id **尚未改名**，当前仍是上游的 `dsh-sophia-entities`。
 - **尚未引入 `dsh-agent-teams` 的任何代码**（它只在旁路目录 `../dsh-agent-teams/` 待命）。
 - 尚未执行 `pnpm install`，未执行任何构建或测试。
 

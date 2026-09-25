@@ -1,4 +1,4 @@
-# @wowyuarm/dsh-agent-team/client
+# dsh-sophia-entities/client
 
 [English](README.md) | 中文
 

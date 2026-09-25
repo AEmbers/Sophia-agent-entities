@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
-import type { AgentTeamHumanProfileResult } from '@wowyuarm/dsh-agent-team/types'
+import type { AgentTeamHumanProfileResult } from 'dsh-sophia-entities/types'
 
 /**
  * The Client's one projection of the Human identity.

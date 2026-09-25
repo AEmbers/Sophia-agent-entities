@@ -2,7 +2,7 @@
 
 [English](README.md) | 简体中文
 
-[![npm](https://img.shields.io/npm/v/@wowyuarm/dsh-agent-team?style=flat-square)](https://www.npmjs.com/package/@wowyuarm/dsh-agent-team)
+[![npm](https://img.shields.io/npm/v/dsh-sophia-entities?style=flat-square)](https://www.npmjs.com/package/dsh-sophia-entities)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/wowyuarm/dsh-agent-team?include_prereleases&style=flat-square)](https://github.com/wowyuarm/dsh-agent-team/releases)
 [![Listed on Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com/p/wowyuarm/dsh-agent-team/)
@@ -50,7 +50,7 @@ npx @deepseek-ai/dsh web
 先停止它，再把 Agent Team 安装到 `web` profile：
 
 ```sh
-dsh plugin --profile web add @wowyuarm/dsh-agent-team
+dsh plugin --profile web add dsh-sophia-entities
 ```
 
 ### 2. 启动 Web UI
@@ -100,7 +100,7 @@ Team mode
 从 profile 移除 bundle，同时会移除它组合进来的层：
 
 ```sh
-dsh plugin --profile web remove @wowyuarm/dsh-agent-team
+dsh plugin --profile web remove dsh-sophia-entities
 ```
 
 ## 提供的能力

@@ -2,7 +2,7 @@
 
 English | [中文](release-runbook.zh.md)
 
-This document is the procedure for publishing a version of `@wowyuarm/dsh-agent-team`. It exists so that a maintainer can run a release from this page alone, including the checks that were added because a defect once reached users. It is not a behaviour specification: source and tests define behaviour, and [`dsh-release-compatibility.md`](dsh-release-compatibility.md) owns the separate question of *which* DSH line the bundle supports. Certification decides the peer range; this runbook decides how a version carrying that decision reaches npm.
+This document is the procedure for publishing a version of `dsh-sophia-entities`. It exists so that a maintainer can run a release from this page alone, including the checks that were added because a defect once reached users. It is not a behaviour specification: source and tests define behaviour, and [`dsh-release-compatibility.md`](dsh-release-compatibility.md) owns the separate question of *which* DSH line the bundle supports. Certification decides the peer range; this runbook decides how a version carrying that decision reaches npm.
 
 ## 1. Who decides what
 
@@ -75,10 +75,10 @@ Tag after the release commit's own CI run is green on both lanes. A tag may be r
 
 ## 6. Post-publish verification
 
-1. `npm view @wowyuarm/dsh-agent-team version dist-tags.latest` — both equal `X.Y.Z`.
+1. `npm view dsh-sophia-entities version dist-tags.latest` — both equal `X.Y.Z`.
 2. The GitHub Release exists, carries an explicit title, and renders both language sections.
 3. The pinned compatibility discussion shows the new release comment.
-4. The stable profile installs the release by **exact version**: `dsh plugin --profile web add @wowyuarm/dsh-agent-team@X.Y.Z`. A plain `update` can report "Already up to date" because the lockfile pins the resolution; the profile must not be left reading a newer ledger with an older bundle, since both profiles share `$DSH_HOME/storages/`.
+4. The stable profile installs the release by **exact version**: `dsh plugin --profile web add dsh-sophia-entities@X.Y.Z`. A plain `update` can report "Already up to date" because the lockfile pins the resolution; the profile must not be left reading a newer ledger with an older bundle, since both profiles share `$DSH_HOME/storages/`.
 5. A **fresh install in an empty directory** loads the bundle from the registry — not from the checkout, and not through a source symlink.
 6. The prose corrected in §2 step 4 still says the right thing when read back from `raw.githubusercontent.com`, not just from the working tree.
 7. `npm run check:public-baseline` is green against the published version.

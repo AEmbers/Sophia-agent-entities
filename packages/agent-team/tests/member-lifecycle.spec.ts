@@ -199,9 +199,9 @@ async function realHarness(
   // shipped cordis.patch.yml declares; bare internal loader names resolve
   // through the self-linked node_modules.
   const teamMemberPlugins: PresetDefinition['plugins'] = [
-    { id: 'member-context', name: '@wowyuarm/dsh-agent-team/member-context' },
-    { id: 'member-time-context', name: '@wowyuarm/dsh-agent-team/member-time-context' },
-    { id: 'team-tools', name: '@wowyuarm/dsh-agent-team/tools' },
+    { id: 'member-context', name: 'dsh-sophia-entities/member-context' },
+    { id: 'member-time-context', name: 'dsh-sophia-entities/member-time-context' },
+    { id: 'team-tools', name: 'dsh-sophia-entities/tools' },
     { id: 'compaction', name: 'cordis:group', group: true, isolate: { compaction: true }, config: [
       { id: 'compaction-stub', name: pathToFileURL(compactionStub).href },
     ] },
@@ -1354,7 +1354,7 @@ describe('Agent Team Member lifecycle', () => {
   it('validates the final Team tool marker during unpublished setup', async () => {
     expect(AGENT_TEAM_TOOL_NAMES).toEqual(['team_inbox', 'team_thread', 'team_message', 'team_claim', 'team_view', 'context_rollover', 'context_checkpoint', 'context_timeline'])
     const definition = markAgentTeamPreset({ name: 'team_message' })
-    expect(Reflect.get(definition, Symbol.for('@wowyuarm/dsh-agent-team.preset'))).toBe(true)
+    expect(Reflect.get(definition, Symbol.for('dsh-sophia-entities.preset'))).toBe(true)
   })
 
   it('surfaces an actionable diagnostic for the tsx source-mode dsh-scope mismatch', () => {

@@ -2,7 +2,7 @@
 
 > 版本：v1（需求基线）
 > 日期：2026-09-25
-> 基座：`@wowyuarm/dsh-agent-team` v0.1.15（commit `b70a80fb`）
+> 基座：`dsh-sophia-entities` v0.1.15（commit `b70a80fb`）
 > 能力来源：`@nanmicoder/dsh-agent-teams` v0.1.21（commit `f60d40d7`）
 > 状态：**设计方案，待主人确认后进入实施**
 
@@ -67,7 +67,7 @@
 | 审批策略 | `agent.approvalPolicy: auto-approve`；`permission.defaultPreset: danger-full-access` | `settings.yaml` |
 | **基座已在运行** | `~/.dsh/agent-team/{human,members}` + `~/.dsh/storages/agent_team.sqlite` | 文件系统实存 |
 | node / pnpm | `v22.22.2` / `11.22.0` | 命令行 |
-| **harness 源码 checkout** | **不存在**（无 `deepseek-harness/`、无 `tsconfig.base.json`、无 `packages/client/tsdown.client.ts`） | 全盘查找 |
+| **harness 源码 checkout** | ✅ **已就位**：`../deepseek-harness` @ `dsh-v0.1.7-rc.2`（浅克隆，13,850 文件，`tsconfig.base.json` 含 501 条 paths） | `git clone --depth 1 --branch dsh-v0.1.7-rc.2` |
 
 ### 2.2 两个上游的形态对比
 
@@ -113,13 +113,39 @@
 
 **代价与收益**：仓库体积变大约 1.6 倍，换来的是 **0 行重写**。这是满足需求 2（"较少的源码修改"）的唯一可行路径——因为两套系统的内核假设完全不同（一个以"Human 参与的持久协作"为中心，一个以"任务 DAG 自动编排"为中心），强行统一数据模型会变成重写两遍。
 
-### D2 · 构建链：换用 teams 的自包含 tsdown 链
+### D2 · 构建链：获取 harness 官方源码检出（P0 实测修正）
 
-**决策**：废弃基座的 `clientBundle`（harness 依赖），改用 teams 的 `tsdown.config.ts` 模式，提升为仓库级构建配置。
+> **修正记录（2026-09-25 · P0 实施中）**
+> 本节原决策为"废弃基座的 `clientBundle`（harness 依赖），改用 teams 的自包含 tsdown 链"。
+> P0 实测后该路径被推翻——它只能解决问题的一小部分，代价却最大。现修正如下。
 
-**依据**：C1 是本机的硬阻塞。teams 的配置**自包含**——它自己定义 `PLATFORM_MODULES`、纯度门禁、CSS Modules 注入、`PLUGIN_ID` 动态读取、CJS closure-factory 的 banner/footer。不依赖任何外部 checkout。
+**决策**：把 DeepSeek Harness 的**官方开源检出**放到 `../deepseek-harness`，基座对 harness 的三层依赖**原样保留，一行不改**。
 
-**实施要点**：为基座 client 与新增 dag-team client 各跑一次同等配置；`PLUGIN_ID` 统一从根 `package.json.name` 读取，天然满足 C8。
+**依据**：
+
+1. **harness 是 MIT 开源项目**：`https://github.com/deepseek-ai/deepseek-harness`，tag 齐全（`dsh-v0.1.5-rc.1` … `dsh-v0.1.7-rc.2`），`--depth 1` 浅克隆**仅需 8 秒**。
+2. **基座对 harness 的依赖是深度耦合的，共三层**，原方案只能替代其中一层：
+
+   | 层 | 依赖点 | 原方案（换 teams 链）能否解决 |
+   |---|---|---|
+   | ① 类型解析 | 三个 tsconfig 共 **506 条 paths**，涉及 **316 个 `@deepseek-ai/*` 包**，全部指向 `../deepseek-harness/packages/*/src` 与 `lib/types` | ❌ 不能。需逐个从 npm 装 316 个包 |
+   | ② typert RPC 生成 | `scripts/generate-typert.mjs` 用 harness 的 `WorkspaceAnalyzer` + `FaceModelEmitter` 生成 `typert.host.js` / `typert.remote-client.js` | ❌ 不能。除非重写 RPC 层 |
+   | ③ client 打包 | `scripts/build-client.mjs` 动态 import harness 的 `packages/client/tsdown.client.ts` | ✅ 能。teams 有自己的等价实现 |
+   | ④ 包链接 | `scripts/link-harness-packages.mjs` 把 harness 包 link 进 node_modules | ❌ 不能 |
+
+   即：原方案是用最大的改动量去解决四分之一的问题。
+3. **为什么不从 npm 装那 316 个包**：`~/.dsh/profiles/node_modules/@deepseek-ai/` 里虽有 247 个运行时包，但它们**已剥离类型声明**（`lib/types/` 下是 `.js` 而非 `.d.ts`，实测 `find -name "*.d.ts"` 返回 0），无法用于 typecheck。而 npm 上 `latest` tag 停在 `0.1.0-rc.6`（`dsh-session` / `dsh-tools` 等更只有 `0.0.1-rc.1` 占位版），只有 `next` tag 指向 `0.1.7-rc.2`——逐个装 316 个包既不可靠也无必要。
+
+**实施要点**：
+
+- 检出位置：工作区同级 `../deepseek-harness`（正是 `harness-dir.mjs` 的默认路径契约，`DSH_HARNESS_DIR` 环境变量不必设）
+- 版本：**`dsh-v0.1.7-rc.2`**（基座 peerDeps 要求 `>=0.1.7-rc.1 <0.1.8`，也是 teams `compatibility.json` 的 `recommendedHost`）
+- 需在 harness 内执行 `pnpm install` 与构建，产出 `packages/*/lib/types/*.d.ts`
+- 完成后基座的 `sync-paths.mjs` / `generate-typert.mjs` / `link-harness-packages.mjs` / `build-client.mjs` 全部可原样运行
+
+**收益**：基座构建链 **0 行修改**——比原方案（改 tsconfig 生成器 + 重写构建脚本 + 手写 typert 替代）干净得多，且完全符合需求 2（"尽量少的源码修改"）。
+
+**代价**：引入一个外部检出依赖（`../deepseek-harness`），它必须在位才能构建。这是**构建期依赖**，不影响运行与分发。
 
 ### D3 · 双模式团队：统一门面 + 双后端
 
@@ -540,8 +566,8 @@ Fastest 落地方式是先在 `dag` 模式跑通（数据契约完全对齐）�
 
 | 位置 | 当前值 | 目标值 |
 |---|---|---|
-| `package.json.name` | `@wowyuarm/dsh-agent-team` | 见 §10 D1 |
-| `cordis.patch.yml` 的 insert `name` | `@wowyuarm/dsh-agent-team` | 同上 |
+| `package.json.name` | `dsh-sophia-entities` | 见 §10 D1 |
+| `cordis.patch.yml` 的 insert `name` | `dsh-sophia-entities` | 同上 |
 | `__ModuleLoader__.load({ id })` | 由 harness preset 从 manifest 读 | 同上（tsdown 配置从 `package.json` 读取，天然一致） |
 
 新增的 dag-team client 需注册**第二个** ModuleLoader id —— 但宿主按包名查找 bundle，所以**只能有一个 client bundle**。因此 dag-team 的 client 必须与基座 client **打进同一个 bundle**（同一个 `lib/client.js`）。这是 D7 里 `dag-team-client` 独立成包后必须注意的构建约束：包独立，产物合并。
@@ -627,8 +653,8 @@ Fastest 落地方式是先在 `dag` 模式跑通（数据契约完全对齐）�
 | # | 任务 | 验收 |
 |---|---|---|
 | 0.1 | 改名三处 id（`package.json` / patch / 构建配置）；确定最终包名 | `node scripts/verify-id-consistency.mjs` 通过 |
-| 0.2 | 落地仓库级 `tsdown.config.ts`，替换 `build-client.mjs` | `pnpm run build` 通过，产出 `lib/` |
-| 0.3 | 探明本机 harness 缺失的替代路径（见 O1） | 能构建且能装进 web profile |
+| 0.2 | **克隆 harness 官方开源检出到 `../deepseek-harness`**（原计划"落地仓库级 tsdown.config.ts"已废弃，见 D2 修正） | `harness-dir.mjs` 解析成功，`sync-paths.mjs` 生成 506 条映射无报错 |
+| 0.3 | harness 内 `pnpm install` + 构建出 `lib/types` | `deepseek-harness/packages/*/lib/types/*.d.ts` 存在 |
 | 0.4 | 冒烟：加一条 `sophia-hello` 命令 + `GET /plugins/<id>/health` + 一个可见 UI 标记 | 浏览器可见，无 `plugin tree failed to load` / `slot entry crashed` |
 | 0.5 | 装进 `~/.dsh/profiles/web` 并重启 web | 宿主启动日志干净 |
 

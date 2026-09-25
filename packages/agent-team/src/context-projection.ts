@@ -25,7 +25,7 @@
  * boundary by, and carried-message resolution — the engine keys carry
  * candidates by message id, and the durable log is where the message body
  * lives.
- * @module @wowyuarm/dsh-agent-team/context-projection
+ * @module dsh-sophia-entities/context-projection
  */
 
 import { createHash } from 'node:crypto'

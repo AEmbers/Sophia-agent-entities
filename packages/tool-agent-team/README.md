@@ -1,4 +1,4 @@
-# @wowyuarm/dsh-agent-team/tools
+# dsh-sophia-entities/tools
 
 English | [中文](README.zh.md)
 

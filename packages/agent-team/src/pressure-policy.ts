@@ -12,7 +12,7 @@
  * cancelled, or does not advance the durable surface must block the model
  * request (reject the step) rather than knowingly submit over the Team limit.
  * A blocked Member keeps its log and reports a recoverable error.
- * @module @wowyuarm/dsh-agent-team/pressure-policy
+ * @module dsh-sophia-entities/pressure-policy
  */
 
 import type { Agent } from '@deepseek-ai/dsh-agent'

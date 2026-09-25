@@ -19,13 +19,13 @@
  * context-continuity engine's codec, which Team constructs with its own plugin
  * identity and prose (`context-continuity-host.ts`): one writer, so the
  * envelope Team reads back can never drift from the one it wrote.
- * @module @wowyuarm/dsh-agent-team/context-source
+ * @module dsh-sophia-entities/context-source
  */
 
 import type { ContextFormed, ContextSnapshotSection, MessageSource, UserMessage } from '@deepseek-ai/dsh-llm'
 
 /** The producer kind attributing every Agent Team message source. */
-export const AGENT_TEAM_PLUGIN_ID = '@wowyuarm/dsh-agent-team'
+export const AGENT_TEAM_PLUGIN_ID = 'dsh-sophia-entities'
 
 /**
  * The kind the Harness's V4 read-time conversion renames this plugin's

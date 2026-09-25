@@ -17,22 +17,22 @@ const cleaned = raw
 const base = JSON.parse(cleaned)
 
 const own = {
-  '@wowyuarm/dsh-agent-team/host': ['./packages/agent-team/src/index.ts'],
-  '@wowyuarm/dsh-agent-team/invariant': ['./packages/agent-team/src/invariant.ts'],
-  '@wowyuarm/dsh-agent-team/types': ['./packages/agent-team/src/types.ts'],
-  '@wowyuarm/dsh-agent-team/typert': ['./packages/agent-team/lib/typert.host.d.ts'],
-  '@wowyuarm/dsh-agent-team/remote': ['./packages/agent-team/lib/typert.remote-client.js'],
-  '@wowyuarm/dsh-agent-team/sqlite-backend': ['./packages/agent-team/src/vendor/storage-sqlite/index.ts'],
-  '@wowyuarm/dsh-agent-team/member-context': ['./packages/agent-team/src/member-context.ts'],
-  '@wowyuarm/dsh-agent-team/mentions': ['./packages/agent-team/src/mentions.ts'],
-  '@wowyuarm/dsh-agent-team/member-skills': ['./packages/agent-team/src/member-skills.ts'],
-  '@wowyuarm/dsh-agent-team/tools': ['./packages/tool-agent-team/src/index.ts'],
-  '@wowyuarm/dsh-agent-team/client': ['./packages/client-agent-team/src/client/index.ts'],
+  'dsh-sophia-entities/host': ['./packages/agent-team/src/index.ts'],
+  'dsh-sophia-entities/invariant': ['./packages/agent-team/src/invariant.ts'],
+  'dsh-sophia-entities/types': ['./packages/agent-team/src/types.ts'],
+  'dsh-sophia-entities/typert': ['./packages/agent-team/lib/typert.host.d.ts'],
+  'dsh-sophia-entities/remote': ['./packages/agent-team/lib/typert.remote-client.js'],
+  'dsh-sophia-entities/sqlite-backend': ['./packages/agent-team/src/vendor/storage-sqlite/index.ts'],
+  'dsh-sophia-entities/member-context': ['./packages/agent-team/src/member-context.ts'],
+  'dsh-sophia-entities/mentions': ['./packages/agent-team/src/mentions.ts'],
+  'dsh-sophia-entities/member-skills': ['./packages/agent-team/src/member-skills.ts'],
+  'dsh-sophia-entities/tools': ['./packages/tool-agent-team/src/index.ts'],
+  'dsh-sophia-entities/client': ['./packages/client-agent-team/src/client/index.ts'],
 }
 
 const ownTypes = {
   ...own,
-  '@wowyuarm/dsh-agent-team/remote': ['./packages/agent-team/lib/typert.remote-client.d.ts'],
+  'dsh-sophia-entities/remote': ['./packages/agent-team/lib/typert.remote-client.d.ts'],
 }
 
 const harnessSrc = {
@@ -63,17 +63,17 @@ const harnessTypes = Object.fromEntries(
 )
 
 const buildOwn = {
-  '@wowyuarm/dsh-agent-team/host': ['./packages/agent-team/lib/types/index.d.ts'],
-  '@wowyuarm/dsh-agent-team/invariant': ['./packages/agent-team/lib/types/invariant.d.ts'],
-  '@wowyuarm/dsh-agent-team/types': ['./packages/agent-team/lib/types/types.d.ts'],
-  '@wowyuarm/dsh-agent-team/typert': ['./packages/agent-team/lib/typert.host.d.ts'],
-  '@wowyuarm/dsh-agent-team/remote': ['./packages/agent-team/lib/typert.remote-client.d.ts'],
-  '@wowyuarm/dsh-agent-team/sqlite-backend': ['./packages/agent-team/lib/types/vendor/storage-sqlite/index.d.ts'],
-  '@wowyuarm/dsh-agent-team/member-context': ['./packages/agent-team/lib/types/member-context.d.ts'],
-  '@wowyuarm/dsh-agent-team/mentions': ['./packages/agent-team/lib/types/mentions.d.ts'],
-  '@wowyuarm/dsh-agent-team/member-skills': ['./packages/agent-team/lib/types/member-skills.d.ts'],
-  '@wowyuarm/dsh-agent-team/tools': ['./packages/tool-agent-team/lib/types/index.d.ts'],
-  '@wowyuarm/dsh-agent-team/client': ['./packages/client-agent-team/lib/types/client/index.d.ts'],
+  'dsh-sophia-entities/host': ['./packages/agent-team/lib/types/index.d.ts'],
+  'dsh-sophia-entities/invariant': ['./packages/agent-team/lib/types/invariant.d.ts'],
+  'dsh-sophia-entities/types': ['./packages/agent-team/lib/types/types.d.ts'],
+  'dsh-sophia-entities/typert': ['./packages/agent-team/lib/typert.host.d.ts'],
+  'dsh-sophia-entities/remote': ['./packages/agent-team/lib/typert.remote-client.d.ts'],
+  'dsh-sophia-entities/sqlite-backend': ['./packages/agent-team/lib/types/vendor/storage-sqlite/index.d.ts'],
+  'dsh-sophia-entities/member-context': ['./packages/agent-team/lib/types/member-context.d.ts'],
+  'dsh-sophia-entities/mentions': ['./packages/agent-team/lib/types/mentions.d.ts'],
+  'dsh-sophia-entities/member-skills': ['./packages/agent-team/lib/types/member-skills.d.ts'],
+  'dsh-sophia-entities/tools': ['./packages/tool-agent-team/lib/types/index.d.ts'],
+  'dsh-sophia-entities/client': ['./packages/client-agent-team/lib/types/client/index.d.ts'],
 }
 
 const shared = {

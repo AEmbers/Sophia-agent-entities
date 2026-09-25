@@ -20,37 +20,37 @@
     ],
     "noEmit": true,
     "paths": {
-      "@wowyuarm/dsh-agent-team/host": [
+      "dsh-sophia-entities/host": [
         "./packages/agent-team/lib/types/index.d.ts"
       ],
-      "@wowyuarm/dsh-agent-team/invariant": [
+      "dsh-sophia-entities/invariant": [
         "./packages/agent-team/lib/types/invariant.d.ts"
       ],
-      "@wowyuarm/dsh-agent-team/types": [
+      "dsh-sophia-entities/types": [
         "./packages/agent-team/lib/types/types.d.ts"
       ],
-      "@wowyuarm/dsh-agent-team/typert": [
+      "dsh-sophia-entities/typert": [
         "./packages/agent-team/lib/typert.host.d.ts"
       ],
-      "@wowyuarm/dsh-agent-team/remote": [
+      "dsh-sophia-entities/remote": [
         "./packages/agent-team/lib/typert.remote-client.d.ts"
       ],
-      "@wowyuarm/dsh-agent-team/sqlite-backend": [
+      "dsh-sophia-entities/sqlite-backend": [
         "./packages/agent-team/lib/types/vendor/storage-sqlite/index.d.ts"
       ],
-      "@wowyuarm/dsh-agent-team/member-context": [
+      "dsh-sophia-entities/member-context": [
         "./packages/agent-team/lib/types/member-context.d.ts"
       ],
-      "@wowyuarm/dsh-agent-team/mentions": [
+      "dsh-sophia-entities/mentions": [
         "./packages/agent-team/lib/types/mentions.d.ts"
       ],
-      "@wowyuarm/dsh-agent-team/member-skills": [
+      "dsh-sophia-entities/member-skills": [
         "./packages/agent-team/lib/types/member-skills.d.ts"
       ],
-      "@wowyuarm/dsh-agent-team/tools": [
+      "dsh-sophia-entities/tools": [
         "./packages/tool-agent-team/lib/types/index.d.ts"
       ],
-      "@wowyuarm/dsh-agent-team/client": [
+      "dsh-sophia-entities/client": [
         "./packages/client-agent-team/lib/types/client/index.d.ts"
       ],
       "@deepseek-ai/dsh-storage-sqlite": [
@@ -274,6 +274,9 @@
       ],
       "@deepseek-ai/dsh-api-workspace-controller/client": [
         "../deepseek-harness/packages/api/workspace-controller/lib/types/client/index.d.ts"
+      ],
+      "@deepseek-ai/dsh-api-workspace-controller/default-workspace": [
+        "../deepseek-harness/packages/api/workspace-controller/lib/types/default-workspace.d.ts"
       ],
       "@deepseek-ai/dsh-api-workspace-controller/types": [
         "../deepseek-harness/packages/api/workspace-controller/lib/types/types.d.ts"
@@ -680,6 +683,15 @@
       "@deepseek-ai/dsh-client-test-runtime": [
         "../deepseek-harness/packages/test-support/client-runtime/lib/types"
       ],
+      "@deepseek-ai/dsh-client-shortcuts/protocol": [
+        "../deepseek-harness/packages/client/shortcuts/lib/types/protocol.d.ts"
+      ],
+      "@deepseek-ai/dsh-client-shortcuts": [
+        "../deepseek-harness/packages/client/shortcuts/lib/types"
+      ],
+      "@deepseek-ai/dsh-client-ui-shortcuts": [
+        "../deepseek-harness/packages/client/ui-shortcuts/lib/types"
+      ],
       "@deepseek-ai/dsh-client-ui-layout": [
         "../deepseek-harness/packages/client/ui-layout/lib/types"
       ],
@@ -800,6 +812,9 @@
       "@deepseek-ai/dsh-client-ui-theme": [
         "../deepseek-harness/packages/client/ui-theme/lib/types"
       ],
+      "@deepseek-ai/dsh-client-ui-theme/brand-font.css": [
+        "../deepseek-harness/packages/client/ui-theme/lib/types/styles/brand-font.css"
+      ],
       "@deepseek-ai/dsh-client-ui-settings": [
         "../deepseek-harness/packages/client/ui-settings/lib/types"
       ],
@@ -880,6 +895,9 @@
       ],
       "@deepseek-ai/dsh-util-values": [
         "../deepseek-harness/packages/util/values/lib/types"
+      ],
+      "@deepseek-ai/dsh-util-code-language": [
+        "../deepseek-harness/packages/util/code-language/lib/types"
       ],
       "@deepseek-ai/dsh-util-time": [
         "../deepseek-harness/packages/util/time/lib/types"
@@ -1096,6 +1114,12 @@
       ],
       "@deepseek-ai/dsh-llm-deepseek": [
         "../deepseek-harness/packages/llm/llm-deepseek/lib/types"
+      ],
+      "@deepseek-ai/dsh-llm-deepseek-account": [
+        "../deepseek-harness/packages/llm/llm-deepseek-account/lib/types"
+      ],
+      "@deepseek-ai/dsh-llm-deepseek-api-key": [
+        "../deepseek-harness/packages/llm/llm-deepseek-api-key/lib/types"
       ],
       "@deepseek-ai/dsh-llm-mock-server": [
         "../deepseek-harness/packages/test-support/llm-mock-server/lib/types"

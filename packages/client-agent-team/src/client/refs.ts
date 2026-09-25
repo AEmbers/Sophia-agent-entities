@@ -5,7 +5,7 @@ import type {
   AgentTeamChannel, AgentTeamChannelRef, AgentTeamClientMemberStatus, AgentTeamMemberId,
   AgentTeamResolveTaskRefsRequest, AgentTeamResolveTaskRefsResult, AgentTeamResolveThreadRefsRequest, AgentTeamResolveThreadRefsResult,
   AgentTeamTaskRef, AgentTeamThreadRef,
-} from '@wowyuarm/dsh-agent-team/types'
+} from 'dsh-sophia-entities/types'
 
 /** Navigation facts for one branded Task ref, resolved once per session. */
 export interface ResolvedTaskRef {

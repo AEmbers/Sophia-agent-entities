@@ -1,4 +1,4 @@
-import type { AgentTeamAttachmentId, AgentTeamGetAttachmentRequest, AgentTeamGetAttachmentResult } from '@wowyuarm/dsh-agent-team/types'
+import type { AgentTeamAttachmentId, AgentTeamGetAttachmentRequest, AgentTeamGetAttachmentResult } from 'dsh-sophia-entities/types'
 
 /** Base64 one file payload in chunks so large uploads stay off the call-stack limit. */
 export function bytesToBase64(bytes: Uint8Array): string {
