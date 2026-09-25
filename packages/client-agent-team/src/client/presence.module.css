@@ -1,0 +1,6 @@
+.target {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 14px;
+  justify-content: center;
+}

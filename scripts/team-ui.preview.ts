@@ -1,0 +1,34 @@
+import { cp, mkdir, readFile, rm } from 'node:fs/promises'
+import { join } from 'node:path'
+import { afterAll, beforeAll, it } from 'vitest'
+import { launchWebScaffold, type WebScaffold } from './scaffold.ts'
+
+const TEAM_ROOT = '__TEAM_ROOT__'
+const HOME = '__HOME__'
+const STAGED_BUNDLE = join(HOME, 'profiles', 'node_modules', '@wowyuarm', 'dsh-agent-team')
+let scaffold: WebScaffold
+
+beforeAll(async () => {
+  await rm(HOME, { recursive: true, force: true })
+  const scope = `${HOME}/profiles/node_modules/@wowyuarm`
+  await mkdir(scope, { recursive: true })
+  await cp(TEAM_ROOT, `${scope}/dsh-agent-team`, {
+    recursive: true,
+    filter: source => !source.includes('/node_modules') && !source.includes('/src') && !source.includes('/artifacts') && !source.includes('/.hoplite'),
+  })
+  // Production installs the bundle's regular dependencies with it; stage the
+  // same closure inside the staged dir, whose nearest node_modules is what its
+  // own imports resolve through.
+  const { dependencies } = JSON.parse(await readFile(join(TEAM_ROOT, 'package.json'), 'utf8')) as { dependencies: Record<string, string> }
+  for (const name of Object.keys(dependencies)) {
+    await cp(join(TEAM_ROOT, 'node_modules', name), join(STAGED_BUNDLE, 'node_modules', ...name.split('/')), { recursive: true, dereference: true })
+  }
+  scaffold = await launchWebScaffold({ harnessHome: HOME, profile: { packages: [{ dir: STAGED_BUNDLE, enabled: true }] } })
+  process.stdout.write(`AGENT_TEAM_PREVIEW_URL=${scaffold.baseUrl}\n`)
+})
+
+afterAll(async () => { await scaffold.close() })
+
+it('serves the Agent Team preview until stopped', async () => {
+  await new Promise<void>(() => {})
+}, 2_147_000_000)

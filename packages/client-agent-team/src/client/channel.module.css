@@ -1,0 +1,28 @@
+.headerMeta {
+  align-items: center;
+  color: var(--dsw-alias-label-tertiary);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  gap: 6px;
+  line-height: 18px;
+  margin-top: 7px;
+}
+
+.headerMeta span + span::before {
+  content: '·';
+  margin-right: 6px;
+}
+
+/* The roster is a scrollable window of shared Member rows; the row owns its
+   own identity, action and failure line. */
+.memberList {
+  display: grid;
+  gap: 2px;
+  margin: 0 -6px;
+}
+
+.modalBody {
+  max-height: min(65vh, 520px);
+  overflow-y: auto;
+}

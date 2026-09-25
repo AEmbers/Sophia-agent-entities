@@ -1,0 +1,21 @@
+name: Feature request
+description: Propose a capability or an improvement for the plugin.
+title: "[Feature] "
+labels: ["enhancement"]
+
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What do you need?
+      description: The situation and the friction. Concrete examples from your own use carry the most weight.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expectation
+    attributes:
+      label: What do you expect?
+      description: The behavior you want, and where you would expect it.
+    validations:
+      required: true

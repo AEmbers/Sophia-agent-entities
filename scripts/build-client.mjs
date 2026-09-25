@@ -1,0 +1,33 @@
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { spawn } from 'node:child_process'
+import { join, resolve } from 'node:path'
+import { harnessDir } from './harness-dir.mjs'
+
+const projectRoot = resolve(import.meta.dirname, '..')
+const harnessRoot = harnessDir
+const clientRoot = join(projectRoot, 'packages/client-agent-team')
+const temporaryPackage = await mkdtemp(join(harnessRoot, 'packages/external-agent-team-'))
+const manifestDirectory = join(temporaryPackage, 'bundle')
+
+const run = () => new Promise((resolveRun, reject) => {
+  // On Windows the pnpm .bin shims are .cmd files and Node 22+ refuses to
+  // spawn them without a shell (EINVAL, CVE-2024-27980 follow-up); the POSIX
+  // side keeps the direct spawn. shell:true needs the command quoted as one
+  // string because the argument list is re-parsed by the shell.
+  const bin = join(harnessRoot, 'node_modules/.bin/tsdown')
+  const useShell = process.platform === 'win32'
+  const child = useShell
+    ? spawn(`"${bin}.cmd"`, { shell: true, cwd: clientRoot, stdio: 'inherit', env: { ...process.env, DSH_AGENT_TEAM_BUILD_RUNTIME: '1' } })
+    : spawn(bin, [], { cwd: clientRoot, stdio: 'inherit', env: { ...process.env, DSH_AGENT_TEAM_BUILD_RUNTIME: '1' } })
+  child.once('error', reject)
+  child.once('exit', code => code === 0 ? resolveRun() : reject(new Error(`tsdown exited with ${String(code)}`)))
+})
+
+try {
+  await mkdir(manifestDirectory)
+  const manifest = JSON.parse(await readFile(join(projectRoot, 'package.json'), 'utf8'))
+  await writeFile(join(manifestDirectory, 'package.json'), JSON.stringify({ name: manifest.name, dsh: manifest.dsh }))
+  await run()
+} finally {
+  await rm(temporaryPackage, { recursive: true, force: true })
+}

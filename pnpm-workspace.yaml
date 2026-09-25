@@ -1,0 +1,27 @@
+packages:
+  - packages/*
+
+# pnpm 11: allowBuilds replaces onlyBuiltDependencies (map of package -> boolean).
+# strictDepBuilds defaults to true, so an unapproved build script fails install.
+allowBuilds:
+  esbuild: true
+
+# Dev resolution goes through tsconfig paths against the sibling deepseek-harness
+# checkout; stale registry peer versions must not block install. Published
+# bundles resolve peers from the registry at the end-user install site.
+autoInstallPeers: false
+
+# pnpm admits a version younger than its minimum release age only when it is
+# listed here, and maintains the list itself while installing. Entries for the
+# SAME package do not compose: pnpm evaluates the rules in sorted order and
+# returns on the first name match, so a second versioned entry never applies to
+# that name (measured 2026-09-22: `...continuity@0.1.0` shadowed `@0.1.3`, and
+# both CI lanes went red with ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION). A
+# name-only entry therefore exempts every version of that package and sorts
+# ahead of any versioned duplicate pnpm appends later — the right shape for our
+# own published engine, whose exact version and integrity the lockfile already
+# pins. Removing the engine line fails CI's frozen install with
+# ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION until the pinned version ages out.
+minimumReleaseAgeExclude:
+  - '@deepseek-ai/dsh-storage-sqlite@0.1.5-rc.1'
+  - '@wowyuarm/dsh-context-continuity'

@@ -1,0 +1,44 @@
+# Layout, typography, and identity
+
+English | [中文](layout-and-typography.zh.md)
+
+## Layout skeleton
+Channel and Thread surfaces use `display:grid; grid-template-rows: auto 1fr auto` for header, scrollable timeline, and composer at `height:100%`, with contained inner scrolling. The content column is centered at `max-width: 880px`; timeline padding is `clamp(18px, 3vw, 36px)`. At `max-width: 600px`, padding tightens and the header stacks; acceptance covers 390×844 without horizontal overflow. The host sidebar controls wide/rail widths; rail renders Team icon buttons.
+
+Browser storage retains Team mode, Workspace, the last Channel/Thread location, and the Inbox page position (a navigation fact, not an unread fact), but never unread or Attention. Welcome is a separate centered surface. Thread is the navigation endpoint; an existing Task is a header/card overlay. Taskless Threads show a localized Thread/讨论 label and a promote action, not fake status or Claims. Closed Tasks replace the composer with an explanatory notice and reopen action; taskless Threads retain the normal reply composer.
+
+Channel and Thread pages are symmetric. Both subscribe to workspace changes through the shared abortable `TeamChangeStream`; every opening or reconnection baseline requests a catch-up read, followed by matching streamed invalidations. Successful Channel refreshes clear load errors without clearing unrelated action errors. Channel top-level and Thread replies are idempotent by request ID. The Channel 「作为任务」 control is a default-off native pressed control, sends explicit taskless intent unless selected, and resets off after success.
+
+It sits beside the attach control as the labeled mode chip of the language table above, keeping its word at every width — the composer narrows its control gaps below 560px instead of dropping the label.
+
+## Typography and identity
+| Element | Specification |
+| --- | --- |
+| Page h1 | 20px/28px, weight 600 |
+| Sender | 13px/20px, weight 600, primary; time metadata follows on the same line |
+| Message time | 11px/20px, tertiary; local HH:mm today, MM-DD HH:mm this year, full date across years |
+| Inbox row time | 11px/18px, tertiary, `tabular-nums`; a bare `HH:mm` today, 「昨天 HH:mm」 on the previous local calendar day, the Message form for anything older, and the precise local `YYYY-MM-DD HH:mm` on the element's `title`. The Thread entry borrows this label for its follow-up time while its work is unfinished. An Inbox identity line too narrow for the count and the instant together does not draw it at all (see Inbox below) |
+| Human body | 14px/22px at the default content size, pre-wrap and break-word; both body grids ride the Settings content-font axis (`--dsh-content-font-size` plus its px delta), so a raised content size grows message text with the rest of DSH |
+| Agent body | Markdown on the same 14px/22px chat grid; compact heading sizes and list/pre/table margins. A body past the 600-character fold reads on the document rhythm instead — 16px block gaps, 6px list items, 24px lines, section-sized headings at h2 18px / h3 17px — while short bodies keep the dense grid |
+| Task/activity | 11–12px tertiary, centered activity rows |
+| Thread entry row | 12px/18px tertiary, `fit-content`; hover/focus-visible only brightens it and nudges the chevron |
+| Entry state cluster | 11px/18px leading the entry row: 18px avatar circles, 8px status dot, status word, 18px unread capsule at 11px/600 |
+| Empty/loading | 13px tertiary; 8px pulsing dots, disabled for reduced motion |
+
+Message time comes from Host projection and shares the ledger operation instant. Consecutive same-sender messages form a run; an interval of at least five minutes gets a `TeamRunDivider`. A day boundary gets a centered date anchor. `team-separators.ts` is the single authority for both decisions.
+
+Agent avatar hue is a stable hash of `memberId`; Human uses `--dsw-alias-state-business-primary`. That color and initial stay the Human's fallback: a stored profile avatar image replaces the initial in every seat the Human occupies, while the displayed name comes from the same profile projection, resolved once in `TeamConversation` as `name ?? t('human')` and passed down as `humanName` to both pages — so the message sender, roster rows, mention fallback names, and `member:human` refs cannot drift apart, or fall back to a literal `human` on their own.
+
+Presence maps available/working/error/unavailable to the shared state-dot language, and two presentations carry it: the `TeamMemberAvatar` badge (the avatar's initial plus the dot on its bottom-right edge) wherever a person is listed as a row, and the bare `TeamPresenceDot` inside the composer's recipient menu, which is a menu row rather than a roster row. Roster rows therefore lean on the avatar badge while the menu stays with the dot; that asymmetry is deliberate, not an oversight.
+
+The `TeamAvatarStack` circles on a Thread entry reuse the same hue hash but carry no dot, because they answer who owns the work rather than who is online right now.
+
+No Agent seat ever draws an image — the hue and initial are the whole identity an Agent has — so the compact stack draws the Human's picture in the one chip that is the Human, and names that chip from the same profile projection.
+
+The Inbox row's leading cluster and the Channel feed's Thread entry rows each take the Human's Member id from the Host (`AgentTeamInbox.humanMemberId`, the same initialization record `AgentTeamView` carries) and let `namedAvatarOwners(owners, human)` replace that one owner with `humanName`/`humanAvatarUrl`, so a rename moves the chip's letter and the stack's label together instead of leaving an initial the profile no longer uses.
+
+Owners that are not the Human keep the shared initials, and bytes that do not decode fall back to the display name's initial through the same `useAvatarImage` the other seats use.
+
+The Host names the Human on an Inbox row by that runtime display name as well, rather than falling back to the durable `member:human` id the Agent roster never holds.
+
+Errors use `--dsw-alias-state-error-primary` and `role="alert"`.
