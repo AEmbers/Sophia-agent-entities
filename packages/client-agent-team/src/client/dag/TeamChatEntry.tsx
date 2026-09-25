@@ -7,7 +7,7 @@ import { teamCardsForTurn } from './agent-teams-card-definition.ts'
 import { LEAD_ART } from './artwork.ts'
 import css from './AgentTeamsCard.module.css'
 
-export function TeamChatEntry({ sessionId, t }: PropsRuntime<'conversation.session.header.actions'> & PropsLocale<'agentTeams'>) {
+export function TeamChatEntry({ sessionId, t }: PropsRuntime<'conversation.session.header.actions'> & PropsLocale<'sophiaEntities'>) {
   const { teams, archivedTeams } = useSyncExternalStore(subscribeActivitySnapshots, getActivitySnapshotsSnapshot)
   const team = [...teams, ...archivedTeams].find(team => team.captainSessionId === sessionId)
   if (!team) return null
@@ -17,7 +17,7 @@ export function TeamChatEntry({ sessionId, t }: PropsRuntime<'conversation.sessi
   </button>
 }
 
-export function TeamTurnCard({ sessionId, turn, useChat, t, openMember }: PropsRuntime<'conversation.chat.turnTail'> & PropsLocale<'agentTeams'> & AgentTeamsCardInjected) {
+export function TeamTurnCard({ sessionId, turn, useChat, t, openMember }: PropsRuntime<'conversation.chat.turnTail'> & PropsLocale<'sophiaEntities'> & AgentTeamsCardInjected) {
   const nodes = useChat(snapshot => snapshot.nodes)
   const cards = teamCardsForTurn(nodes.values(), turn.turn)
   if (turn.status !== 'closed' || cards.length === 0) return null

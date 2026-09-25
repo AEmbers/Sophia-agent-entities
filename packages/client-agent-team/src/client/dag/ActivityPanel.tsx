@@ -6,7 +6,7 @@
  * dragged into a floating window, resized, and folded into an activity badge.
  * On wide viewports the docked panel makes the conversation column yield
  * space; narrow viewports keep a simple inset overlay. It
- * polls the host `/plugins/dsh-agent-teams/state` route for
+ * polls the host `/plugins/dsh-sophia-entities/state` route for
  * server-side snapshots (durable files + live subagent activity), with a
  * collapsed badge that auto-expands once when activity appears. Archived
  * teams stay available for the owning conversation after live work ends.
@@ -797,7 +797,7 @@ export type ActivityPanelProps = {
   readonly sessionsList: ObservableSnapshot<SessionListState>
   readonly modelDirectories: ModelDirectoryResolver
   readonly openMember: (parentId: SessionId, childId: SessionId) => void
-} & PropsLocale<'agentTeams'>
+} & PropsLocale<'sophiaEntities'>
 
 export function ActivityPanel({ sessionsList, modelDirectories, openMember, t, conversationVisible = true }: ActivityPanelProps) {
   // Navigating to a member's subagent transcript is an explicit departure:

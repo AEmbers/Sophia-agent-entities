@@ -35,6 +35,24 @@ async function bench(persisted: string | null = null) {
   } as never)
   const uiWorkspace = { openSession: vi.fn(), startSession: vi.fn(), connectWorkspace: vi.fn(async () => 'workspace:one') }
   ctx.provide('uiWorkspace', uiWorkspace as never)
+  // The union inject (teamInject ∪ dagTeamInject) gates on the DAG half's
+  // services too; the bench never drives model selection, the layout frame, or
+  // the conversation assembly, so it supplies inert stand-ins that satisfy the
+  // dependency surface without wiring any of them.
+  ctx.provide('layout', { toggleSidebar: vi.fn() } as never)
+  ctx.provide('modelDirectories', {
+    directoryFor: (sessionId: string) => ({
+      store: {
+        getSnapshot: () => ({ current: null, routable: null, groups: [], failures: [], status: 'idle', pending: null, error: null }),
+        subscribe: () => () => {},
+      },
+      load: async () => ({ current: null, routable: null, groups: [], failures: [], status: 'ready', pending: null, error: null }),
+      select: async () => ({ ok: true, value: undefined }),
+      dispose: () => {},
+      resetConnected: () => {},
+    }),
+  } as never)
+  ctx.provide('uiConversation', { events: { register: vi.fn() } } as never)
   ctx.provide('connection', { api: { llm: { models: vi.fn(async () => ({ result: { ok: true, value: { groups: [], failures: [] } } })) } } } as never)
   ctx.provide('workspaces', {
     list: workspaceFeed(),

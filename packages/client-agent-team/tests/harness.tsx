@@ -61,6 +61,27 @@ export async function runtimeWithTeam(options?: { mode?: 'team'; workspaceId?: s
   runtime.ctx.provide('locale', locale)
   runtime.slots.installLocale(locale)
   runtime.ctx.provide('layout', { toggleSidebar: vi.fn() })
+  // rc.2: the shipped sidebar injects 'shortcuts' (catalog snapshot); the bench
+  // provides an empty one so the sidebar shell mounts without a keyboard
+  // provider double.
+  runtime.ctx.provide('shortcuts', {
+    catalog: { getSnapshot: () => [], subscribe: () => () => {} },
+  } as never)
+  // rc.2: the DAG half injects 'modelDirectories'; the bench provides an empty
+  // resolver so the WorkspaceActivity seat receives a directory handle without
+  // wiring a model-selection provider.
+  runtime.ctx.provide('modelDirectories', {
+    directoryFor: (sessionId: string) => ({
+      store: {
+        getSnapshot: () => ({ current: null, routable: null, groups: [], failures: [], status: 'idle', pending: null, error: null }),
+        subscribe: () => () => {},
+      },
+      load: async () => ({ current: null, routable: null, groups: [], failures: [], status: 'ready', pending: null, error: null }),
+      select: async () => ({ ok: true, value: undefined }),
+      dispose: () => {},
+      resetConnected: () => {},
+    }),
+  } as never)
   // rc.1: the shipped sidebar injects 'uiWorkspace'; the takeover bench
   // provides a minimal navigation double whose openSession mirrors the
   // shipped selection contract — retire the previous `mainView` reference,

@@ -34,7 +34,7 @@ export interface AgentTeamsCardInjected {
 /** Complete keyed Chat renderer props. */
 export type AgentTeamsCardProps =
   PropsRuntime<'conversation.chat.node', 'agent-teams'>
-  & PropsLocale<'agentTeams'>
+  & PropsLocale<'sophiaEntities'>
   & AgentTeamsCardInjected
 
 /** Open the matching team view, carrying this team's summary
@@ -63,7 +63,7 @@ export function AgentTeamsCard({ node, openMember, sessionId, t, workspaceBridge
   return <AgentTeamsSummary data={node.data} openMember={openMember} sessionId={sessionId} t={t} />
 }
 
-export function AgentTeamsSummary({ data, openMember, sessionId, t }: AgentTeamsCardInjected & PropsLocale<'agentTeams'> & {
+export function AgentTeamsSummary({ data, openMember, sessionId, t }: AgentTeamsCardInjected & PropsLocale<'sophiaEntities'> & {
   data: AgentTeamsCardData; sessionId: string
 }) {
   // `conversation.chat.node` is session-scoped, so its framework-owned id is

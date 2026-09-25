@@ -50,7 +50,7 @@ const WEB_SERVER_KEYS = ['webServer', 'httpServer'] as const
 /** Workspace registry service key candidates, newest first. */
 const WORKSPACE_KEYS = ['workspaceRegistry', 'workspace'] as const
 
-export const name = 'agent-teams'
+export const name = 'dsh-sophia-entities/dag-team'
 export const inject = ['tools', 'llm', 'subagents', 'systemPrompt', 'agents']
 
 /** Plugin configuration. */
@@ -214,7 +214,7 @@ export function apply(ctx: Context, config: Config): void {
     // Code desktop watcher's server-side snapshot pattern.
     ctx.effect(() => webServer.register({
     kind: 'exact',
-    path: '/plugins/dsh-agent-teams/state',
+    path: '/plugins/dsh-sophia-entities/state',
     handler: async (req, res) => {
       const url = new URL(req.url ?? '/', 'http://x')
       const roots = workspaceRegistry.list().map((workspace) => ({
@@ -236,7 +236,7 @@ export function apply(ctx: Context, config: Config): void {
 
     ctx.effect(() => webServer.register({
       kind: 'exact',
-      path: '/plugins/dsh-agent-teams/halt',
+      path: '/plugins/dsh-sophia-entities/halt',
       handler: async (req, res) => {
         if (req.method !== 'POST') {
           res.writeHead(405, { allow: 'POST', 'cache-control': 'no-store' })
@@ -291,7 +291,7 @@ export function apply(ctx: Context, config: Config): void {
 
     ctx.effect(() => webServer.register({
       kind: 'exact',
-      path: '/plugins/dsh-agent-teams/plan',
+      path: '/plugins/dsh-sophia-entities/plan',
       handler: async (req, res) => {
         if (req.method !== 'POST') {
           res.writeHead(405, { allow: 'POST', 'cache-control': 'no-store' })
@@ -442,7 +442,7 @@ export function apply(ctx: Context, config: Config): void {
   ])
     ctx.effect(() => webServer.register({
       kind: 'prefix',
-      path: '/plugins/dsh-agent-teams/assets',
+      path: '/plugins/dsh-sophia-entities/assets',
     handler: async (req, res) => {
       let name: string
       try {
@@ -472,6 +472,56 @@ export function apply(ctx: Context, config: Config): void {
       }
       },
     }), 'agent-teams: artwork route')
+
+  // OC (original character) portraits: 20 member posts as 512x512 WebP in a
+  // flat slug directory (see docs/material-integration.md §4/§5). Same
+  // allowlist-guarded single-segment handler as the whale artwork above.
+  const ocArtDir = fileURLToPath(new URL('../assets/sophia-avatars-webp/', import.meta.url))
+  const OC_ALLOWLIST = new Set([
+    'lead-ceo.webp',
+    'product-director.webp', 'program-director.webp',
+    'resource-admin.webp', 'risk-compliance.webp',
+    'requirement-analyst.webp', 'product-manager.webp',
+    'ux-designer.webp', 'ui-designer.webp',
+    'client-success.webp', 'architect.webp',
+    'backend-engineer.webp', 'frontend-engineer.webp',
+    'data-engineer.webp', 'algorithm-engineer.webp',
+    'business-qa.webp', 'test-engineer.webp',
+    'ops-engineer.webp', 'code-reviewer.webp',
+    'docs-writer.webp',
+  ])
+    ctx.effect(() => webServer.register({
+      kind: 'prefix',
+      path: '/plugins/dsh-sophia-entities/sophia-assets',
+    handler: async (req, res) => {
+      let name: string
+      try {
+        name = decodeURIComponent(new URL(req.url ?? '/', 'http://x').pathname.split('/').pop() ?? '')
+      } catch {
+        // Malformed percent-encoding: treat as an unknown asset, not a 400.
+        res.writeHead(404)
+        res.end()
+        return
+      }
+      if (!OC_ALLOWLIST.has(name)) {
+        res.writeHead(404)
+        res.end()
+        return
+      }
+      try {
+        const data = await readFile(join(ocArtDir, name))
+        res.writeHead(200, {
+          'content-type': 'image/webp',
+          'cache-control': 'public, max-age=86400',
+        })
+        res.end(data)
+      } catch (error: unknown) {
+        ctx.logger.warn(`agent-teams: OC artwork read failed for ${name}: ${String(error)}`)
+        res.writeHead(404)
+        res.end()
+      }
+      },
+    }), 'agent-teams: OC artwork route')
   }
 
   registerWebSurface()

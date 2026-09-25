@@ -1,7 +1,7 @@
-/** `agentTeams` namespace dictionaries for every plugin-owned Web surface. */
+/** `sophiaEntities` namespace dictionaries for every plugin-owned Web surface. */
 
 /** Dictionary namespace owned by the AgentTeams client plugin. */
-export const AGENT_TEAMS_LOCALE_NAMESPACE = 'agentTeams'
+export const AGENT_TEAMS_LOCALE_NAMESPACE = 'sophiaEntities'
 
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {

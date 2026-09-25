@@ -21,7 +21,7 @@ export interface PanelBounds {
   readonly anchorRight: number
 }
 
-export const PANEL_LAYOUT_STORAGE_KEY = 'dsh-agent-teams:activity-panel:v1'
+export const PANEL_LAYOUT_STORAGE_KEY = 'dsh-sophia-entities:activity-panel:v1'
 export const PANEL_COMPACT_BREAKPOINT = 960
 export const PANEL_DEFAULT_WIDTH = 388
 export const PANEL_DEFAULT_HEIGHT = 640

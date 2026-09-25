@@ -13,7 +13,7 @@ import type { ActivityMember, ActivityTask, ActivityTeam } from './activity-moni
 import type { AgentTeamsTranslate } from './locales.ts'
 import css from './ActivityPanel.module.css'
 
-const PLAN_URL = '/plugins/dsh-agent-teams/plan'
+const PLAN_URL = '/plugins/dsh-sophia-entities/plan'
 
 type PlanFeedback = {
   readonly tone: 'success' | 'error'

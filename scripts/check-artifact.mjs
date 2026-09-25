@@ -111,8 +111,9 @@ for (const file of jsFiles) {
   }
   for (const match of source.matchAll(/(?:require\(|from\s+)['"](\.[^'"]+)['"]/g)) {
     checked += 1
-    const target = normalize(join(dirname(file), match[1]))
-    const candidates = [target, `${target}.js`, `${target}.json`, `${target}.cjs`, `${target}.mjs`, join(target, 'index.js')]
+    const target = normalize(join(dirname(file), match[1])).replaceAll('\\', '/')
+    const suffix = candidates => candidates.map(candidate => candidate.replaceAll('\\', '/'))
+    const candidates = suffix([target, `${target}.js`, `${target}.json`, `${target}.cjs`, `${target}.mjs`, join(target, 'index.js')])
     if (!candidates.some(candidate => shipped.has(candidate))) missing.push(`${file} -> ${match[1]}`)
   }
 }

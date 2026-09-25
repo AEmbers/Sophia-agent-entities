@@ -38,8 +38,8 @@ const PERSONA_CHARACTER_BUDGET = 15000
 // row; these assertions scope to exactly that row, from its `- id:` marker to
 // the group's host row that follows it.
 function teamMemberPresetText(patch: string): string {
-  const start = patch.indexOf('        - id: wowyuarm-agent-team-preset-team-member')
-  const end = patch.indexOf('        - id: wowyuarm-agent-team-host')
+  const start = patch.indexOf('        - id: sophia-entities-preset-team-member')
+  const end = patch.indexOf('    - id: sophia-entities-host')
   return start >= 0 && end > start ? patch.slice(start, end) : ''
 }
 
@@ -83,10 +83,10 @@ describe('Agent Team shipping contract', () => {
     // Extraction guard: a renamed definition-row id would silently empty the
     // slice and make every preset assertion below vacuous.
     expect(preset).toContain("name: '@deepseek-ai/dsh-agent-preset'")
-    expect(patch).toContain('id: wowyuarm-agent-team-scope')
+    expect(patch).toContain('id: sophia-entities-scope')
     expect(patch).toContain("name: '@deepseek-ai/dsh-agent-preset-registry'")
     expect(patch).toContain('default: team-member')
-    expect(patch).toContain('id: wowyuarm-agent-team-preset-team-member')
+    expect(patch).toContain('id: sophia-entities-preset-team-member')
     expect(patch).toContain('id: team-member')
     expect(patch).toContain('agentPresets: true')
     expect(patch).toContain("name: 'dsh-sophia-entities/host'")
@@ -127,14 +127,14 @@ describe('Agent Team shipping contract', () => {
     // patch all address it by the constant, so the two must not drift.
     // The row also has to stay the isolating group's nested row — a second
     // top-level row with this id duplicates it and fails the boot sweep.
-    const scopeStart = patch.indexOf('    - id: wowyuarm-agent-team-scope')
-    const scopeEnd = patch.indexOf('    - id: wowyuarm-agent-team-client')
+    const scopeStart = patch.indexOf('    - id: sophia-entities-scope')
+    const scopeEnd = patch.indexOf('    - id: sophia-entities-client')
     expect(scopeStart).toBeGreaterThanOrEqual(0)
     expect(scopeEnd).toBeGreaterThan(scopeStart)
     expect(patch.slice(scopeStart, scopeEnd)).toMatch(new RegExp(`^ {8}- id: ${HUMAN_PROFILE_SETTINGS_NAMESPACE}$`, 'm'))
     // The composition mounts it as that group's nested row, with no `config`
     // of its own: the schema defaults are the profile until the Human edits it.
-    const scopeGroup = composed.find(entry => entry.id === 'wowyuarm-agent-team-scope')
+    const scopeGroup = composed.find(entry => entry.id === 'sophia-entities-scope')
     const nestedRows = (Array.isArray(scopeGroup?.config) ? scopeGroup.config : []) as { id?: string; name?: string; config?: unknown }[]
     const hostRow = nestedRows.find(entry => entry.id === HUMAN_PROFILE_SETTINGS_NAMESPACE)
     expect(hostRow?.name).toBe('dsh-sophia-entities/host')

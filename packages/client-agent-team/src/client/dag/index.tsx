@@ -33,7 +33,7 @@ import { openAgentTeamMember, type AgentTeamsLayoutNavigator, type AgentTeamsSes
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
     /** AgentTeams conversation card and activity monitor copy. */
-    agentTeams: AgentTeamsLocaleKey
+    sophiaEntities: AgentTeamsLocaleKey
   }
 }
 
@@ -78,7 +78,7 @@ export function apply(ctx: ClientContext): void {
       console.warn(`agent-teams: failed to open member transcript ${childId}: ${String(error)}`)
     })
   }
-  const Panel = ({ t, usePanelInfo }: PropsLocale<'agentTeams'> & PanelNavigationProps) => {
+  const Panel = ({ t, usePanelInfo }: PropsLocale<'sophiaEntities'> & PanelNavigationProps) => {
     // A host's standard hook set is fixed for this mounted plugin instance.
     const usePanel = usePanelInfo ?? useLegacyPanelInfo
     const conversationVisible = usePanel(panel => panel.activePanelId === null)

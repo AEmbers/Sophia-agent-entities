@@ -28,7 +28,7 @@ import { parse } from 'yaml'
  * runs under its caller's context, so that lookup names the RPC gateway's row.
  * `shipping.spec.ts` pins the constant to the row the composition declares.
  */
-export const HUMAN_PROFILE_SETTINGS_NAMESPACE = 'wowyuarm-agent-team-host'
+export const HUMAN_PROFILE_SETTINGS_NAMESPACE = 'sophia-entities-host'
 
 /** Fallback display name before any user override is stored. */
 export const HUMAN_PROFILE_DEFAULT_NAME = 'human'
