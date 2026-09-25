@@ -660,6 +660,85 @@ Fastest 落地方式是先在 `dag` 模式跑通（数据契约完全对齐）�
 
 **门禁**：0.4/0.5 未通过，不得进入 P1。
 
+---
+
+### ✅ P0 完成记录（2026-09-25）
+
+**实测结果**
+
+| 项 | 结果 |
+|---|---|
+| 构建 | `lib/client.js` 640.31 kB（gzip 117.46 kB）；typert RPC 层生成成功 |
+| 三处 id 一致性（C8） | `package.json.name` = `ModuleLoader id` = patch insert `name` = **`dsh-sophia-entities`** ✅ |
+| 安装 | 独立 profile `~/.dsh/profiles/sophia-entities`（**link 方式**，全程未触碰主人的 `web` / `desktop` profile） |
+| 启动 | `dsh --profile sophia-entities` → **加载成功**，UI 服务在 `127.0.0.1:3080`，无 `plugin tree failed to load` |
+
+**构建链：基座源码 0 行修改**。只需把官方开源检出放到同级的 `../deepseek-harness`（`harness-dir.mjs` 的默认契约路径），基座原有的 `sync-paths` / `generate-typert` / `link-harness-packages` / `build-client` 全部原样可用。
+
+**新增发现 · 宿主兼容性（O2 的具体形态，已在 P0 解决）**
+
+基座构建用的是 harness **`0.1.7-rc.2`**（其 `peerDependencies` 要求的版本），而本机宿主实际是 **`0.1.5-rc.2`**。harness 0.1.7 改了 typert 的 codec 协议：
+
+| 版本 | codec 形态 |
+|---|---|
+| 0.1.5 | `{ mode, typeSymbol, schema: <zod 对象> }` |
+| 0.1.7 | `{ mode, typeSymbol, create: <懒求值函数> }` |
+
+宿主的 `dsh-typert-loader` 以鸭子类型校验（注意：**不是 `instanceof`**，所以"双 zod 实例"不是问题）：
+
+```js
+if (typeof codec.schema !== "object" || codec.schema === null
+    || !("_zod" in codec.schema)
+    || typeof codec.schema.parse !== "function") throw ...
+```
+
+因此 0.1.7 形态的 manifest 会失败：`typert-loader: <pkg> invocation "<ns>/<method>" parameter codec is not backed by a zod v4 schema`。
+
+**解法**：`scripts/patch-typert-compat.mjs`（已挂进 `build` 脚本）——把产物降级回 0.1.5 形态：
+1. `create:` → `schema:`（3 个产物共 198 处）
+2. `schema: <thunk>` → `schema: <thunk>()`（强制求值成 zod 对象，共 198 处）
+
+两个替换均幂等，重建后自动生效。**宿主升级到 ≥ 0.1.7-rc.1 后即可删除该脚本**（脚本头部有说明）。
+
+**⚠️ 同一问题的第二张脸（排查值得记）**
+
+第一版脚本只修好了 **host 侧**，插件的 Node 半加载正常、启动无报错，但**浏览器界面**仍然弹 "Failed to load plugins"，报的是：
+
+```
+typert: dsh-sophia-entities#agentTeam/addMember **result** strict codec has no parse() method
+```
+
+注意措辞变了：从 **parameter** 变成 **result**，从 "not backed by a zod v4 schema" 变成 "no parse() method" —— 说明这是**另一处** codec，而且来自**客户端 bundle**。
+
+根因：第一版正则要求 `schema: <name>` **后面必须跟逗号**，因为 host 侧与 remote-client 的 manifest 是**美化过**的（`schema: x,\n`）。但 `client.js` 是 **minify 产物**（63 万字符 / 14964 行），`schema` 恰好是每个 codec 对象的**最后一个字段**，后面**直接跟 `}`**：
+
+```js
+{ mode: "strict", typeSymbol: "...", schema: foo$schema }   // ← 没有逗号
+```
+
+于是 66 处客户端 codec **一处都没被改到**，`schema` 仍是未被调用的 thunk → 没有 `parse()` 方法。
+
+**修正**：把正则末尾的 `,` 换成**前瞻断言** `(?=\s*[,}])`，同时兼容美化与压缩两种布局。修正后实测：
+
+```
+patched typert.host.js            (rename 66, materialise 66)
+patched typert.remote-client.js   (rename 66, materialise 66)
+patched client.js                 (rename 66, materialise 66)   ← 由 0 变 66
+typert-compat: 198 renames, 198 materialisations
+```
+
+**教训**：构建产物补丁必须同时覆盖**美化**与**压缩**两种布局；只验证 Node 半的加载日志会漏掉浏览器半的问题——**界面上报的错和日志里报的错可能是同一个根因的两张脸**。
+
+**用法教训（已踩过，务必记住）**
+
+- `dsh web` 是 **`--profile web` 的别名**；启动自定义 profile 必须用 **`dsh --profile <name>`**（写成 `dsh web --profile X` 会被解析成启动 web profile，把 `--profile X` 当参数丢给 web app）
+- `dsh plugin --profile <name> --help` 会**真的创建**那个 profile
+- 新建 profile 只带 `@deepseek-ai/dsh-base`；要跑 Web UI 需手动把 **`@deepseek-ai/dsh-web-app`** 加进 `dsh.profile.bundles`（否则 `webServer` 服务不存在，插件会 pending）
+- `@deepseek-ai` 宿主包从 **`~/.dsh/profiles/node_modules`** 提升解析（各 profile 自己的 `node_modules` 里没有）
+- `dsh --dump-config --profile <name>` 是查看组合树的只读正路
+
+**与主人环境的隔离性说明**：`~/.dsh/profiles/web` 本身处于不完整状态（bundles 里只有 3 个第三方插件、缺 `dsh-base`，`--dump-config` 报 `patch: entry "webserver" not found`）——这是**既有状态，非本次操作造成**；43120 端口上运行的是更早启动的实例。本次所有改动仅落在一个新建的隔离 profile 内。
+
 ### P1 · DAG 后端迁入（R5）
 
 | # | 任务 | 验收 |
