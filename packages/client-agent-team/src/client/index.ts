@@ -58,9 +58,26 @@ export { TeamNavigation } from './navigation.ts'
 
 const NS = 'team'
 
-export const inject = [
+// DAG team half, ported verbatim from @nanmicoder/dsh-agent-teams 0.1.21 into
+// ./dag/ (see docs/development-plan.md §D1/D7). A DSH plugin package owns
+// exactly one client entry — `lib/client.js`, whose ModuleLoader id must equal
+// the package name — so the two halves cannot ship as two bundles. They are
+// composed here instead: one union of runtime services, one `apply` driving
+// both surfaces.
+import { apply as applyDagTeam, inject as dagTeamInject } from './dag/index.tsx'
+
+const teamInject = [
   'slots', 'workspaces', 'locale', 'remote', 'remote.session', 'sessions', 'connection', 'conversation', 'uiWorkspace',
 ]
+
+/**
+ * Union of both halves' service requirements. The module activates only once
+ * every name here is available, so the DAG half's services (uiConversation,
+ * modelDirectories, layout) gate the Team half too — intentional: a missing
+ * service would otherwise crash a slot at render time instead of parking the
+ * plugin, which is exactly the failure mode that silently erased the UI before.
+ */
+export const inject = [...new Set<string>([...teamInject, ...dagTeamInject])]
 
 /**
  * 0.1.7 moved the conversation selection into the workspace service: the
@@ -360,4 +377,9 @@ export async function apply(ctx: ClientContext): Promise<void> {
   const disposeRemote = await ctx.remote.$mount(agentTeamRemote)
   ctx.effect(() => () => { void disposeRemote() }, 'agent-team: remote')
   ctx.inject(['remote.agentTeam'], ready => { applyUi(ready as ClientContext) })
+
+  // DAG team surfaces: the activity floater (shell overlay) and the in-chat
+  // team card. Independent of the Team half above — it mounts no remote of its
+  // own — so it is applied unconditionally rather than behind `remote.agentTeam`.
+  applyDagTeam(ctx)
 }

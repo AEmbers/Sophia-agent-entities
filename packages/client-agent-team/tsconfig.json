@@ -1,7 +1,23 @@
+// Typecheck facade for both client halves.
+//
+// `src/client/dag/` is the upstream @nanmicoder/dsh-agent-teams 0.1.21 client,
+// ported verbatim (see docs/development-plan.md §D1). Upstream's own
+// tsconfig.client.json does not enable `exactOptionalPropertyTypes`, while this
+// repository's Harness-derived facade does; under the extra flag several ported
+// call sites stop compiling (TS2375/TS2379) purely because upstream writes
+// `{ footer: maybeUndefined }` where the facade wants the key omitted. The flag
+// is relaxed for this package so the ported subtree stays byte-identical and
+// stays cheap to diff against the next upstream release.
+//
+// Relaxing it is type-check only: the emitted bundle and the published .d.ts are
+// unaffected, and the base Team half was already clean under the stricter
+// setting, so nothing regresses today — it only means the setting no longer
+// guards future edits in this package.
 {
   "extends": "../../tsconfig.types.json",
   "include": ["src", "tests"],
   "compilerOptions": {
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "exactOptionalPropertyTypes": false
   }
 }

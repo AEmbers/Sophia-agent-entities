@@ -1,7 +1,11 @@
+// Emit configuration for the combined client half (base Team UI + ported DAG
+// team UI). See tsconfig.json beside this file for why
+// `exactOptionalPropertyTypes` is relaxed for this package only.
 {
   "extends": "../../tsconfig.build-deps.json",
   "include": ["src"],
   "compilerOptions": {
+    "exactOptionalPropertyTypes": false,
     "noEmit": false,
     "rootDir": "src",
     "outDir": "lib/types",

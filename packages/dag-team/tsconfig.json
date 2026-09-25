@@ -1,0 +1,19 @@
+// The dag-team half is the upstream @nanmicoder/dsh-agent-teams 0.1.21 source
+// tree, ported verbatim (see docs/development-plan.md §D1). Its own tsconfig
+// enables `strict` but NOT `exactOptionalPropertyTypes`, which this repository's
+// Harness-derived facade does turn on. Under that extra flag several upstream
+// call sites stop compiling (TS2375/TS2379, "Type 'X | undefined' is not
+// assignable to type 'X'") purely because upstream writes
+// `{ memberModel: maybeUndefined }` where the facade wants the key omitted.
+//
+// Upstream is therefore compiled under its own strictness level here, so the
+// ported tree stays byte-identical and stays cheap to diff against the next
+// upstream release. Relaxing the flag is type-check only: emitted JavaScript and
+// the published .d.ts of this package are unaffected.
+{
+  "extends": "../../tsconfig.types.json",
+  "include": ["src"],
+  "compilerOptions": {
+    "exactOptionalPropertyTypes": false
+  }
+}

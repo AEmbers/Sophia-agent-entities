@@ -194,6 +194,22 @@
                     tailChars: 1024
         - id: sophia-entities-host
           name: 'dsh-sophia-entities/host'
+        # DAG team backend, ported verbatim from @nanmicoder/dsh-agent-teams
+        # 0.1.21 into packages/dag-team/ (see docs/development-plan.md §D1/D7).
+        # Mounted BESIDE the host plugin inside the same isolated group rather
+        # than replacing it: the two backends own disjoint namespaces
+        # (`team_*` vs `agent_teams_*`), disjoint state directories and
+        # disjoint HTTP routes, so both run untouched. The `agent_teams_*`
+        # tools register into the shared `tools` registry and one usage
+        # section into the global system prompt, so the plugin needs no realm.
+        # Team state lives at `<captain workspace>/.agent-teams/<teamId>/`
+        # (team.json + inbox/*.jsonl).
+        - id: sophia-entities-dag-team
+          name: 'dsh-sophia-entities/dag-team'
+          config:
+            stateDir: .agent-teams
+            # Provider used to spawn member subagents ('spawn' or 'fork').
+            memberProvider: spawn
     - id: sophia-entities-client
       name: 'dsh-sophia-entities'
     - id: sophia-entities-invariants

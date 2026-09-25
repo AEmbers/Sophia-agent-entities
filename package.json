@@ -31,8 +31,8 @@
     "preview:ui": "npm run build && node scripts/run-ui-preview.mjs",
     "lint": "corepack pnpm dlx oxlint@1.76.0 --disable-typescript-plugin packages scripts",
     "duplication": "jscpd --config .jscpd.json packages scripts",
-    "typecheck": "npm run generate:typert && tsc -p packages/agent-team/tsconfig.json && tsc -p packages/tool-agent-team/tsconfig.json && tsc -p packages/client-agent-team/tsconfig.json",
-    "build": "npm run clean:build-outputs && npm run generate:typert && tsc -p packages/agent-team/tsconfig.build.json && tsc -p packages/tool-agent-team/tsconfig.build.json && tsc -p packages/client-agent-team/tsconfig.build.json && node scripts/build-client.mjs && node scripts/patch-typert-compat.mjs"
+    "typecheck": "npm run generate:typert && tsc -p packages/agent-team/tsconfig.json && tsc -p packages/tool-agent-team/tsconfig.json && tsc -p packages/dag-team/tsconfig.json && tsc -p packages/client-agent-team/tsconfig.json",
+    "build": "npm run clean:build-outputs && npm run generate:typert && tsc -p packages/agent-team/tsconfig.build.json && tsc -p packages/tool-agent-team/tsconfig.build.json && tsc -p packages/dag-team/tsconfig.build.json && tsc -p packages/client-agent-team/tsconfig.build.json && node scripts/build-client.mjs && node scripts/patch-typert-compat.mjs"
   },
   "dsh": {
     "bundle": {
@@ -51,7 +51,12 @@
         "@deepseek-ai/dsh-client-ui-conversation",
         "@deepseek-ai/dsh-client-ui-input-trigger",
         "@deepseek-ai/dsh-client-ui-workspace",
-        "@deepseek-ai/dsh-client-locale"
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-sidebar-right",
+        "@deepseek-ai/dsh-client-ui-model-selection",
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-client-ui-chat"
       ]
     }
   },
@@ -132,6 +137,10 @@
     "./tools": {
       "types": "./packages/tool-agent-team/lib/types/index.d.ts",
       "default": "./packages/tool-agent-team/lib/index.js"
+    },
+    "./dag-team": {
+      "types": "./packages/dag-team/lib/types/index.d.ts",
+      "default": "./packages/dag-team/lib/index.js"
     },
     "./client": {
       "types": "./packages/client-agent-team/lib/types/client/index.d.ts",

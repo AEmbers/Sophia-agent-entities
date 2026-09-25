@@ -749,6 +749,45 @@ typert-compat: 198 renames, 198 materialisations
 | 1.4 | 活动树浮层跑通（`shell.overlay`） | 创建 DAG 团队后活动树显示成员树 + 任务 DAG |
 | 1.5 | 质量门禁与自动修复循环验证 | 构造一个 review 失败的任务，确认生成 repair + review 下轮 |
 
+### ✅ P1 完成记录（2026-09-25）
+
+**结论：DAG 后端已迁入并跑通，宿主加载零报错、浏览器零崩溃。**
+
+| # | 任务 | 状态 | 实证 |
+|---|---|---|---|
+| 1.1 | teams Node 侧迁入 | ✅ | `packages/dag-team/src/` 17 个文件，`tsc` **0 错误**，产出 17 `.js` + 17 `.d.ts` |
+| 1.2 | 工具注册 | ✅ | 保持 `agent_teams_*` 原名（与 `team_*` 不冲突），宿主启动日志干净 |
+| 1.3 | client 侧迁入 | ✅ | `packages/client-agent-team/src/client/dag/` 18 个文件；bundle 640 KB → **856 KB** |
+| 1.4 | 活动树/卡片 | ✅（待建队实测） | 浏览器实测 `[data-agent-teams-card]` = 1；`data-agent-teams-activity` 需真实团队才渲染 |
+| 1.5 | 质量门禁 | ⏳ | 未构造失败 review，留待端到端验收 |
+
+**为什么 P1 比预想顺利（三条关键事实，实测确认）**
+
+1. **teams 官方就支持 0.1.5-rc.2**——其 `compatibility.json` 把 `0.1.5-rc.2` 列为 legacy 支持版本，`peerDependencies` 亦然。所以**不需要新增任何宿主兼容补丁**。
+2. **teams 完全不用 typert codec**（全仓库零 `codec`/`typert` 引用），走 `defineTool` 注册 → 躲开了 P0 那个 codec 协议坑。
+3. **teams 的图标本来就用数字尺寸**（`IconBranchOutline16` / `IconChevronDownOutline14`）→ 躲开了 P0 那个图标命名坑。
+
+**与原计划的三处偏差（均为实测后修正，理由已写进代码注释）**
+
+| 原计划 | 实际做法 | 理由 |
+|---|---|---|
+| 新增 `packages/dag-team-client/` 独立包 | client 侧作为 `client-agent-team/src/client/dag/` 子目录，并在统一入口组合 | DSH 插件包**只有一个** client 入口（`lib/client.js`，ModuleLoader id 必须等于包名），两套 client 无法出两个 bundle。组合点放在基座 client 的 `apply` 里，两半的 `inject` 取并集。 |
+| — | `packages/dag-team/tsconfig*.json` 与 `packages/client-agent-team/tsconfig*.json` 局部关闭 `exactOptionalPropertyTypes` | 该开关来自 harness 派生的 facade，上游 teams 未启用；开启后移植代码报 TS2375/TS2379 若干。关闭**只影响类型检查**，不改产物与 `.d.ts`，且让上游源码保持逐字不变（便于与下个上游版本 diff）。 |
+| — | `dag/index.tsx` 内 2 处 `ctx.sessions` 桥接（`as unknown as ...`） | 我们的 facade 把裸包名指向 harness **源码**、`/client` 子路径指向**编译产物**，同一服务出现两份声明且不相互兼容。基座 client 早已用同样方式（`ctx.sessions as unknown as ISessions`）跨这道缝，本次沿用同一模式，**纯类型层、行为不变**。 |
+
+**实证清单（本轮）**
+
+```
+构建          pnpm run build → 0 错误；四包 lib 齐全；client.js 856 KB
+组合树        dsh --dump-config --profile sophia-entities → 第 875 行 sophia-entities-dag-team
+宿主启动      dsh --profile sophia-entities → 无 "failed to load"，无 error
+浏览器        agent-browser：crashed = 0；[data-team-action] 可见；[data-agent-teams-card] = 1
+HTTP 路由     GET /plugins/dsh-agent-teams/state → 401（存在且受鉴权保护）
+              对照 GET /plugins/dsh-agent-teams/nope → 404
+```
+
+**尚未覆盖**：创建真实 DAG 团队后的活动树渲染、质量门禁 repair 循环、跨模式互操作（P2~P4 范围）。
+
 ### P2 · 编排层（R1/R6/R7）
 
 | # | 任务 | 验收 |
