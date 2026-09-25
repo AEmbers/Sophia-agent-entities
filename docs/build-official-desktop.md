@@ -124,3 +124,33 @@ ImportError: DLL load failed while importing _elementpath: 文件名或扩展名
   不会并排装第二份。
 - 版本是 **0.1.7-rc.2**：从 0.1.5 升上来会**断开 0.1.5 时代编译的插件**
   （详见 `docs/host-upgrade-compat.md`）。装之前先看那份报告。
+
+---
+
+## 十二、构建工具链已被清理（2026-09-25）——恢复方法
+
+本次环境清理把官方源码检出删了（`deepseek-harness/` 5.5 GB），要**重新编译**必须先找回工具链：
+
+```bash
+cd <工作区根目录>
+git clone --depth 1 --branch dsh-v0.1.7-rc.2 https://github.com/deepseek-ai/deepseek-harness.git
+cd deepseek-harness
+pnpm install
+node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc -b tsconfig.host.json     # 1372 个 host 类型
+node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc -b tsconfig.client.json   # 833 个 client 类型
+node node_modules/tsdown/dist/run.mjs --env.DSH_BUILD_FACE host                            # 120 个 typert 声明
+```
+
+注意：`tsdown` 那一步**别用 `pnpm exec`**（它会因为根包 postinstall 留下的 stale lock 转而去跑 `pnpm install`），直接调 `dist/run.mjs`。
+
+再回到插件目录：
+
+```bash
+cd ../dsh-sophia-entities
+node scripts/sync-paths.mjs              # 重新生成 502 条 harness 路径映射
+pnpm install
+node scripts/link-harness-packages.mjs   # 321 个包 junction 进 node_modules（/client 这类子路径导出必须靠它）
+CODEBUDDY_SAFE_DELETE_ENABLED=0 pnpm run build
+```
+
+`dsh-sophia-entities` 里**已构建好的 `lib/` 产物与 `node_modules` 仍然完整**，所以插件本身还能装、能用；只有"改完源码要重新编译"时才需要先按上面补齐工具链。
