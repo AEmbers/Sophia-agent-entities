@@ -101,6 +101,32 @@ DSH 主机在启动时读取 `~/.dsh/.env`，其 HTTP 栈会走这个代理。�
 | `%APPDATA%\npm\node_modules\@deepseek-ai` | 267 MB | 全局 dsh CLI，可随时 `npm i -g` 装回 |
 | `%LOCALAPPDATA%\Temp\dsh-*` 等 | 1572 个目录（几乎全为 0 字节） | 旧测试残留 |
 
-这三类需要**永久删除（不进回收站）**才能清掉，索菲亚在动手前会单独征求主人同意。
+这三类因机制问题**没能进回收站**，索菲亚**没有做永久删除**，而是把它们整体移到备份区的 `moved-out/`（可逆）：
+
+| 项 | 体积 | 处置 |
+|---|---|---|
+| `~/.dsh/storages/`（3 个 sqlite） | 108 KB | → `moved-out/nested/storages`（源目录那 3 个文件回收站 3 次拒绝，但文件本身可写、未被占用；已留有副本） |
+| `%APPDATA%\npm\node_modules\@deepseek-ai` | 267 MB | → `moved-out/nested/npm-scope-@deepseek-ai`（需要时 `npm i -g` 装回即可） |
+| `%LOCALAPPDATA%\Temp\dsh-*` 等 | 1572 个目录 | → `moved-out/temp-probes/` |
+
+备份区总计 **463 MB / 28183 个文件**（含 `moved-out` 424 MB）。
+
+---
+
+## 七、执行结果（最终核对）
+
+- **官方桌面版已重装**：`AppData\Local\Programs\DeepSeek Harness`（1.1 GB），进程正常运行。
+- **`~/.dsh` 已由官方版重建**（20:30）：只有 `.anonymous-user-id`、`.credentials.yaml`、`profiles/`、`sessions/`、`storages/`，**没有 `.env`**（代理元凶自然消失）。
+- **登录已成功**：新 `.credentials.yaml`（540 B）里已写入 `deepseek-account-platform/default`、`deepseek-account-platform/device`、`client-connection/browser-session` 三条 grant。这也反向证明了"`.env` 代理"就是之前登录转圈的真因。
+- **新 desktop profile 是干净的**：`bundles = ["@deepseek-ai/dsh-base","@deepseek-ai/dsh-web-app"]`，第三方插件数 **0**。
+- **我们的插件完好**：`dsh-sophia-entities`（131 MB，`lib/` 构建产物与 `node_modules` 都在）。
+- **工作区只剩**：`dsh-sophia-entities/` + `_archive-predecessor-20260925/`。
+- **磁盘**：C 盘可用 233 GB，D 盘可用 797 GB。⚠️ 删除物进了回收站（C 盘回收站 7.3 GB / D 盘 19 GB），**要真正腾出空间需要清空回收站**。
+
+### 未触碰（不是 DSH，且是别的项目在用的）
+`~/.dsh/sophia-work/`（游戏私服保活脚本，Windows 计划任务 `SophiaUnifiedSupervisor` 依赖它）、`D:\sophia(world)模型项目`（29 GB）、`D:\sophia-backup`、`D:\sophia-rollback`。
+
+### 仍保留、待主人一句话
+`_archive-predecessor-20260925/`（131 MB，前身仓库 git bundle = 旧历史唯一副本）——主人之前没对它表态，索菲亚按"留"处理了。
 
 *记录生成于 2026-09-25，所有体积均为实测值。*
