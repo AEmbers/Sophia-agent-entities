@@ -10,13 +10,18 @@
 
 ```
 C:/Users/Administrator/WorkBuddy/2026-09-25-14-50-12/
-├── dsh-agent-team/          # 上游基座（只读参考，不直接改）
-├── dsh-agent-teams/         # 上游能力来源（只读参考，不直接改）
-└── dsh-sophia-entities/     # 我们的项目工作目录（当前仅含 docs/）
-    └── docs/recon.md        # 本文件
+├── dsh-agent-team/          # 上游基座（只读参考，保留原始 git 历史）
+├── dsh-agent-teams/         # 上游能力来源（只读参考，保留原始 git 历史）
+└── dsh-sophia-entities/     # 我们的项目工作目录（已导入基座源码 + 独立 git 仓库）
+    ├── docs/recon.md        # 本文件
+    ├── packages/            # ← 由 dsh-agent-team 导入的源码
+    ├── scripts/  docs/  assets/  .github/
+    ├── cordis.patch.yml  package.json  pnpm-workspace.yaml
+    └── tsconfig*.json  vitest.config.ts
 ```
 
 两个上游仓库均已克隆完毕，`git` 历史完整，可随时 `git log` / `git diff` 对照。
+`dsh-sophia-entities/` 已从一个纯空目录变为**完整的基座快照仓库**，详见第七节。
 
 ---
 
@@ -219,6 +224,8 @@ dsh-sophia-entities/
    | dsh-agent-team | 0.1.15 | `b70a80fb8c28485aa578df3f6e59ecac0404f86b` | 2026-09-24 15:10:55 +0800 | chore: release 0.1.15 |
    | dsh-agent-teams | 0.1.21 | `f60d40d7dddbdd2283a2d79f823a9c9852e19d13` | 2026-09-25 03:21:53 +0800 | feat: release 0.1.21 with compact native team workspace |
 
+9. **`.gitignore` 与分发方式存在矛盾（需决策）**：上游 `.gitignore` 第 2 行忽略了 `lib/`，即构建产物**不入 git**；但 `package.json.files` 却把 `packages/agent-team/lib/**/*` 等列为分发内容。这相当于"产物靠 `npm pack` / CI 现场构建"。若我们后续选择 **git 源分发**（DSH 插件常见做法，通常要求构建产物入库，否则安装端拿不到 `lib/`），需要把 `lib/` 从 `.gitignore` 摘掉，或改为 CI 构建 + npm 分发。
+
 ---
 
 ## 六、待主人拍板的决策项
@@ -234,4 +241,48 @@ dsh-sophia-entities/
 
 ---
 
-*本报告完成于侦察阶段，未修改任何源码，未执行任何构建。等待主人下一步指令。*
+---
+
+## 七、进度更新日志
+
+### 2026-09-25 · 第一步：基座源码导入（已完成）
+
+将 `dsh-agent-team` 全量源码导入 `dsh-sophia-entities/`，共 **553 个文件**（含本报告）。
+
+**排除项**（有意不带）：
+
+- `.git/` — 上游 git 历史。带去会让我们这个仓库的 remote / 历史与上游纠缠，不利于独立演进。
+- `packages/agent-team/node_modules/` — 依赖残留（实际仅 1 个文件）。
+
+**导入后的完整可构建结构**：
+
+| 路径 | 文件数 | 说明 |
+|---|---|---|
+| `packages/agent-team/` | 71 | 核心运行时 + `core-skills/` |
+| `packages/tool-agent-team/` | 11 | 工具暴露层 |
+| `packages/client-agent-team/` | 89 | Web UI（含全部 `.module.css`） |
+| `scripts/` | 25 | 构建与校验脚本 |
+| `docs/` | — | 上游架构文档全量（architecture / development / frontend-design / team-collaboration 等，均含中英双语） |
+| 其它 | — | `assets/`、`.github/`、`AGENTS.md`、`CHANGELOG.md`、`CONTRIBUTING*`、`LICENSE` |
+
+配置文件全部就位：`package.json`、`cordis.patch.yml`（19KB）、`pnpm-workspace.yaml`、`pnpm-lock.yaml`、`tsconfig.json` / `tsconfig.build-deps.json` / `tsconfig.types.json` / `tsconfig.scripts.json`、`vitest.config.ts`、`.jscpd.json`、`.npmrc`。
+
+**已初始化独立 git 仓库**（分支 `main`），导入结果作为首个提交：
+
+| 项 | 值 |
+|---|---|
+| 基线提交 | `a90875c` — chore: import @wowyuarm/dsh-agent-team v0.1.15 as development baseline |
+| 入库文件数 | 553 |
+| 上游来源 | `wowyuarm/dsh-agent-team` @ `b70a80fb8c28485aa578df3f6e59ecac0404f86b`（v0.1.15） |
+
+该提交即**纯净基座快照**，后续任何改动都可与之 `git diff a90875c` 对照。
+
+### 仍未开始（等待主人指令）
+
+- 包名 / patch id / ModuleLoader id **尚未改名**，当前仍是上游的 `@wowyuarm/dsh-agent-team`。
+- **尚未引入 `dsh-agent-teams` 的任何代码**（它只在旁路目录 `../dsh-agent-teams/` 待命）。
+- 尚未执行 `pnpm install`，未执行任何构建或测试。
+
+---
+
+*本报告随开发推进持续更新。*
