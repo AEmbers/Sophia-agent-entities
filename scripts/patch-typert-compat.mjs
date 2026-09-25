@@ -11,25 +11,25 @@
 // 1. typert codec shape
 //      0.1.5   codec: { mode, typeSymbol, schema: <zod object> }
 //      0.1.7   codec: { mode, typeSymbol, create: <lazy thunk> }
-//    The host's typert loader/registry validates with duck typing — NOT
-//    `instanceof`, so a duplicated zod instance is irrelevant (host runs zod
-//    4.6.2, this plugin 4.4.3):
+//    The host validates with duck typing — NOT `instanceof`, so a duplicated
+//    zod instance is irrelevant (host zod 4.6.2, plugin 4.4.3):
 //      typeof codec.schema === 'object' && '_zod' in codec.schema
 //                                        && typeof codec.schema.parse === 'function'
-//    A 0.1.7-shaped manifest dies with either
-//      typert-loader: <pkg> invocation "<ns>/<method>" parameter codec is not
-//      backed by a zod v4 schema
-//    or
-//      typert: <pkg>#<ns>/<method> result strict codec has no parse() method
+//    A 0.1.7-shaped manifest dies with "parameter codec is not backed by a zod
+//    v4 schema" or "result strict codec has no parse() method".
 //
-// 2. icon naming
-//      0.1.5   IconAgentPresetOutline
-//      0.1.7   IconAgentPresetOutlineRegular
-//    The plugin asks `@deepseek-ai/dsh-client-ui-primitives` for the suffixed
-//    names; the 0.1.5 platform seed exports only the unsuffixed ones. Every
-//    icon therefore resolves to `undefined`, React throws while rendering, and
-//    the plugin's entire UI silently never appears — while the Node half and
-//    the module loading pipeline both report success.
+// 2. icon naming — 0.1.7 switched from NUMERIC sizes to NAMED sizes
+//      0.1.5   IconAgentPresetOutline16        (numeric: 12 / 14 / 16 / 20)
+//      0.1.7   IconAgentPresetOutlineRegular   (named: Regular / Medium)
+//    The plugin asks for the named forms; the 0.1.5 platform seed exports only
+//    the numeric ones. Every icon resolves to `undefined`, React throws
+//    "Minified React error #130" (element type is invalid) while rendering the
+//    sidebar entry, and the plugin's ENTIRE UI silently never appears — while
+//    the Node half, the module loader and the boot log all report success.
+//    (A first pass mistakenly mapped `...OutlineRegular` to plain
+//    `...Outline`; the host has no such export. The real map below was derived
+//    by dumping the host's actual 123 primitives exports at runtime and
+//    matching each requested name against them.)
 //
 // 3. minified vs pretty-printed layouts
 //    The host / remote-client manifests are pretty-printed (`schema: x,\n`),
@@ -37,7 +37,7 @@
 //    codec object (`schema: x\n}`). A rewrite that insists on a trailing comma
 //    silently skips all 66 client-side codecs.
 //
-// All three rewrites are idempotent.
+// All rewrites are idempotent.
 //
 // ⚠️ THIS IS A BUILD-ARTIFACT PATCH, NOT A SOURCE FIX.
 // It exists only to bridge a local host older than the build checkout. Delete
@@ -61,11 +61,34 @@ const CODEC_FIELD = /\bcreate:/g
  */
 const CODEC_THUNK = /(schema:\s*)([A-Za-z0-9_$][A-Za-z0-9_$]*)(?=\s*[,}])/g
 
-/** Icon size suffix introduced in 0.1.7. */
-const ICON_OUTLINE_SUFFIX = /(Icon[A-Za-z]+)Outline(?:Regular|Medium)\b/g
-
-/** The one icon that carries no `Outline` segment before its size suffix. */
-const ICON_FOLDER_OPEN = /IconFolderOpenRegular\b/g
+/**
+ * Icon names: 0.1.7 named-size form -> 0.1.5 numeric-size form.
+ *
+ * Derived by dumping the host's primitives exports in the browser and matching
+ * each requested name against them. Two names have both a 14 and a 16 variant
+ * on the host; 16 (the standard size) is chosen for both. Picking the other
+ * would only change icon size, never correctness.
+ */
+const ICON_MAP = Object.freeze({
+  IconAgentPresetOutlineRegular: 'IconAgentPresetOutline16',
+  IconArchiveOutlineRegular: 'IconArchiveOutline20',
+  IconChecklistOutlineMedium: 'IconChecklistOutline14',
+  IconChecklistOutlineRegular: 'IconChecklistOutline14',
+  IconChevronDownOutlineRegular: 'IconChevronDownOutline14',
+  IconChevronLeftOutlineRegular: 'IconChevronLeftOutline14',
+  IconChevronRightOutlineRegular: 'IconChevronRightOutline14',
+  IconEditOutlineRegular: 'IconEditOutline16',
+  IconEllipsisOutlineRegular: 'IconEllipsisOutline16',
+  IconFolderOpenRegular: 'IconFolderOpen16',
+  IconListPenOutlineRegular: 'IconListPenOutline16',
+  IconPaperclipOutlineMedium: 'IconPaperclipOutline16',
+  IconPlayOutlineRegular: 'IconPlayOutline16',
+  IconPlusOutlineRegular: 'IconPlusOutline16',
+  IconQueueOutlineRegular: 'IconQueueOutline14',
+  IconRefreshOutlineRegular: 'IconRefreshOutline16',
+  IconSendOutlineRegular: 'IconSendOutline16',
+  IconUserOutlineRegular: 'IconUserOutline16',
+})
 
 /** Depth-first walk yielding every `.js` file under `dir`. */
 function* walk(dir) {
@@ -94,8 +117,7 @@ for (const root of LIB_ROOTS) {
     // `String.match` with /g ignores lastIndex, so these are safe to reuse.
     const hasField = before.includes('create:')
     const hasThunk = (before.match(CODEC_THUNK) ?? []).length > 0
-    const hasIcon = (before.match(ICON_OUTLINE_SUFFIX) ?? []).length > 0
-      || (before.match(ICON_FOLDER_OPEN) ?? []).length > 0
+    const hasIcon = Object.keys(ICON_MAP).some(name => before.includes(name))
     if (!hasField && !hasThunk && !hasIcon) continue
 
     const renames = (before.match(CODEC_FIELD) ?? []).length
@@ -104,11 +126,12 @@ for (const root of LIB_ROOTS) {
     const thunks = (after.match(CODEC_THUNK) ?? []).length
     after = after.replace(CODEC_THUNK, '$1$2()')
 
-    const iconHits = (after.match(ICON_OUTLINE_SUFFIX) ?? []).length
-      + (after.match(ICON_FOLDER_OPEN) ?? []).length
-    after = after
-      .replace(ICON_OUTLINE_SUFFIX, '$1Outline')
-      .replace(ICON_FOLDER_OPEN, 'IconFolderOpenOutline')
+    let iconHits = 0
+    for (const [from, to] of Object.entries(ICON_MAP)) {
+      if (!after.includes(from)) continue
+      iconHits += after.split(from).length - 1
+      after = after.split(from).join(to)
+    }
 
     if (after === before) continue
     writeFileSync(file, after)
