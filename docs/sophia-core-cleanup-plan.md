@@ -118,3 +118,66 @@
 
 *本方案由索菲亚在 2026-09-25 生成，所有体积与路径均为实测值。*
 *配套报告：`docs/host-upgrade-compat.md`（插件兼容性梳理）。*
+
+---
+
+# 执行记录（2026-09-25 18:00–18:55）
+
+主人指令：**「全删，包括对应的仓库，然后把仓库名改为 dsh-sophia-entities，让它变成一个空仓库」**
+
+## 已完成
+
+| # | 动作 | 结果 |
+|---|---|---|
+| 0 | **备份**（先做） | `_archive-predecessor-20260925/predecessor-sophia-agent-entities.bundle`（**128 MB**，`git bundle verify` 通过：7 个引用、records a complete history） |
+| 1 | 归档不可恢复的小件 | `ledger.sqlite`（244 K）、**47 份研究报告**（1.5 M）、`settings.yaml.bak-*`、未跟踪文件 `__t7_negcontrol__.md`、profile 原配置备份 |
+| 2 | 从 desktop profile 停用 `@sophia/core` | `dsh.profile.bundles` 23 → **22**；`dependencies` 22 → **21**；JSON 校验通过 |
+| 3 | 移除符号链接 `node_modules/@sophia/core` | 已移除，**源目录 328 个文件毫发无损**（已核验） |
+| 4 | 删除本地前身仓库 | `C:/Users/Administrator/Sophia-agent-entities`（**346 MB** / 3826 文件，含 5 卷共 88 MB 的成员素材分卷）→ 已删除 |
+| 5 | 删除 `~/.dsh/sophia/` | 已删除（3.1 M，含账本与 5 个成员会话目录） |
+| 6 | 清理 `~/.dsh/sophia-work/` | 63 个顶层子项中 **61 个已清理**；余 `spec-004` + `supervisor` 共 1.1 M（原因见下） |
+| 7 | 重命名 GitHub 仓库 | `AEmbers/Sophia-agent-entities` → **`AEmbers/dsh-sophia-entities`** |
+| 8 | 清空 GitHub 仓库 | 强推一个空提交覆盖 `main`，删除 7 个遗留分支；**`main` 树文件数 = 0** ✅ |
+| 9 | 配置我们项目的远端 | `origin = https://github.com/AEmbers/dsh-sophia-entities.git`（**只配不推**，等插件做好再发布） |
+
+## ⚠️ 意外发现（未处理，需主人拍板）
+
+### 1. 前身留了一个**常驻守护进程**在运行
+
+删除 `sophia-work` 时被 `Permission denied` / 回收站 `trash-failed` 反复拒绝，
+查出真因：**PID 12424 `pwsh.exe` 正在运行 `~/.dsh/sophia-work/supervisor/sophia-supervisor.ps1`**，
+它握着目录句柄，导致删除与改名全部失败。该进程已被终止。
+
+### 2. 系统里有两个**计划任务**（不是文件，是系统状态）
+
+| 任务名 | 状态 | 指向 |
+|---|---|---|
+| `SophiaUnifiedSupervisor` | **Ready（登录时自启）** | `pwsh -File ~/.dsh/sophia-work/supervisor/sophia-supervisor.ps1` |
+| `SophiaAgentLoopGuard` | Disabled | `node.exe` |
+
+### 3. 这个守护脚本同时在**保活主人的游戏私服**
+
+`supervisor/sophia-supervisor.ps1` 的注释写明它合并了 4 段常驻：
+
+| 段 | 周期 | 对象 |
+|---|---|---|
+| 私服段 | 20 s | `C:\sophia(world)\test\dev\ssh_game-development-workspace\shoujo-kaisen-fan-project`（Python） |
+| CDP 段 | 30 s | 探 9222 端口，只重连 ws，不重启客户端 |
+| AgyProxy 段 | 30 s | 10810 端口 |
+| Guard 段 | 15 min | `sophia-work/spec-004/_t44-guard.mjs` —— **主人 2026-09-19 已裁定停用** |
+
+**所以：删掉 `sophia-work/supervisor/` 会让 `SophiaUnifiedSupervisor` 计划任务失效，
+连带停掉游戏私服的保活。** 两件事索菲亚都没有动，等主人决定。
+
+> 已确认：两个 `python.exe` 进程仍在运行（Services 会话），**游戏私服本体没被杀**；
+> 被终止的只是那个保活循环。要恢复保活，重新登录或手动跑一次该脚本即可。
+
+## 仍需主人操作 / 决定
+
+1. **清空回收站**：本次 346 MB 仓库 + ~10 MB 残留都进了回收站（按 Windows 删除机制，
+   **空间要清空回收站才真正释放**）。索菲亚可代跑，但涉及永久删除，等主人一句话。
+2. **`sophia-work` 剩的 1.1 MB**：
+   - 若还要用那个守护脚本 → 建议把 `supervisor/` 挪到别处（如 `C:\sophia(world)\`），再删 `sophia-work`
+   - 若不再需要 → 索菲亚连同两个计划任务一起清掉
+3. **归档文件夹 `_archive-predecessor-20260925/`（131 MB）**：确认无碍后可整体删除。
+   注意里面那个 128 MB 的 bundle **是旧历史的唯一副本**（GitHub 上的旧提交已不可达）。
