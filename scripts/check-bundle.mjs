@@ -42,7 +42,15 @@ const paths = (listing) => listing.split('\n').map(line => line.trim()).filter(B
 // the artifacts it will eventually move are still being written. Only the
 // emitted bundle directories are the thing a Git-address install hands out
 // without building, so only those are compared.
-const ARTIFACTS = ['packages/*/lib']
+//
+// The trailing `/*` is load-bearing. A git pathspec names the entries that are
+// in the index, and `packages/*/lib` is a directory: it matches no file, so
+// `git diff --name-only HEAD -- packages/*/lib` prints nothing and this gate
+// passes no matter what the build did. `packages/*/lib/**` is not a substitute
+// either — without `:(glob)` a bare `**` is an ordinary `*` here, and the
+// pattern still bottoms out on a directory. `packages/*/lib/*` matches every
+// emitted file at any depth, which is the contract this check states.
+const ARTIFACTS = ['packages/*/lib/*']
 
 const moved = [
   ...paths(git('diff', '--name-only', 'HEAD', '--', ...ARTIFACTS)).map(path => `moved     ${path}`),
