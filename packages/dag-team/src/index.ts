@@ -532,3 +532,8 @@ export function apply(ctx: Context, config: Config): void {
     }
   })
 }
+
+// Orchestration plane: the DAG `TeamBackend` builder, pre-wired for hosts that
+// already hold the `AgentTeamsRuntime` from `registerAgentTeamsTools`. See
+// packages/dag-team/src/sophia-dag-backend.ts.
+export { sophiaDagBackendFor } from './sophia-dag-backend.ts'

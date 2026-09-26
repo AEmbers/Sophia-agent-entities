@@ -13,6 +13,25 @@ const { default: ts } = await import(pathToFileURL(join(harnessRoot, 'node_modul
 const packageRoot = resolve(projectRoot, 'packages/agent-team')
 const tempPackage = await mkdtemp(join(harnessRoot, 'packages/external-agent-team-'))
 const aggregate = join(tempPackage, 'tsconfig.host.json')
+// The temp analysis package sits inside the harness checkout, so the plugin's
+// own orchestration package is not resolvable from it: the harness tree has
+// no dsh-sophia-entities/orchestration, and the WorkspaceAnalyzer pins every
+// analysed program's rootDir to the harness root, so a path alias pointing at
+// the plugin repo (outside the harness) would trip TS6059. Land a copy of the
+// zero-import contract module (packages/orchestration/src/types.ts) inside
+// the harness instead — under its own temp dir, OUTSIDE the analysed package,
+// so checkProject's isWithin(registration.root) filter keeps it out of the
+// face model — and alias the subpath to that copy. The plugin repo's own
+// sync-paths.mjs maps the same subpath at packages/orchestration/src/types.ts
+// for plugin-internal typechecks; this copy must stay in sync with that file.
+const contractDir = await mkdtemp(join(harnessRoot, 'orchestration-types-'))
+const baseConfig = ts.readConfigFile(join(harnessRoot, 'tsconfig.base.json'), ts.sys.readFile)
+if (baseConfig.error !== undefined) throw new Error(ts.flattenDiagnosticMessageText(baseConfig.error.messageText, '\n'))
+const basePaths = baseConfig.config?.compilerOptions?.paths ?? {}
+const analysisPaths = Object.fromEntries(
+  Object.entries(basePaths).map(([key, targets]) => [key, targets.map(target => resolve(harnessRoot, target))]),
+)
+analysisPaths['dsh-sophia-entities/orchestration'] = [join(contractDir, 'types.ts')]
 
 try {
   await cp(join(packageRoot, 'src'), join(tempPackage, 'src'), { recursive: true })
@@ -80,6 +99,7 @@ try {
   await mkdir(engineTarget, { recursive: true })
   await cp(join(continuityDir, 'package.json'), join(engineTarget, 'package.json'))
   await cp(join(continuityDir, 'lib'), join(engineTarget, 'lib'), { recursive: true })
+  await cp(join(projectRoot, 'packages/orchestration/src/types.ts'), join(contractDir, 'types.ts'))
   await writeFile(join(tempPackage, 'tsconfig.json'), JSON.stringify({
     extends: '../../tsconfig.base.json',
     include: ['src'],
@@ -88,6 +108,17 @@ try {
       rootDir: 'src',
       noUnusedLocals: false,
       noUnusedParameters: false,
+      // The temp analysis package sits inside the harness checkout, so the
+      // plugin's own orchestration package is not resolvable from it. The
+      // backend factories import the contract through its declared subpath;
+      // map that subpath to the harness-local copy of types.ts (paths values
+      // are absolute so they resolve regardless of the temp package's
+      // location, and the analyzer pins rootDir to the harness root so the
+      // copy must live inside the harness tree, not the plugin repo). The
+      // plugin repo's own sync-paths.mjs maps the same subpath at
+      // packages/orchestration/src/types.ts (a zero-import contract module);
+      // this copy must stay in sync with that file.
+      paths: analysisPaths,
     },
     references: [{ path: '../../packages/typert/protocol' }],
   }))
@@ -127,4 +158,5 @@ try {
   await writeFile(join(output, 'typert.remote-client.d.ts.map'), artifact.remote.dtsMap)
 } finally {
   await rm(tempPackage, { recursive: true, force: true })
+  await rm(contractDir, { recursive: true, force: true })
 }

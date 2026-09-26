@@ -38,6 +38,7 @@ import {
   recordRetiredMemberIds,
   releaseMailboxDelivery,
   readTeam,
+  readTeamSync,
   sanitizeKey,
   transitionError,
   unsatisfiedDependencies,
@@ -68,6 +69,7 @@ import {
   spawnMember,
   steerCaptainReport,
   validateMemberLlmSelections,
+  type MemberLlmSelection,
   type MemberRuntimeConfig,
 } from './members.ts'
 import { TERMINAL_TASK_STATUSES, type TeamMember, type TeamState, type TeamTask } from './types.ts'
@@ -134,6 +136,29 @@ export interface AgentTeamsRuntime {
   approveStagedTeam(captain: Agent, teamId: string, signal?: AbortSignal): Promise<{ teamId: string; members: number; tasks: number }>
   continueStagedPlanning(captain: Agent, teamId: string): Promise<{ teamId: string; alreadyWaiting: boolean }>
   discardStagedTeam(captain: Agent, teamId: string): Promise<{ teamId: string }>
+  /**
+   * Orchestration approval-materialization entry: commit an already-approved
+   * plan (the orchestration layer's ApprovalPlan) as a *running* team and kick
+   * it. Equivalent to `agent_teams_create` with `approval=automatic`, but
+   * driven by the approval flow (verdicts decided upstream) instead of a model
+   * turn. `stateRoot` is the caller-provided absolute state root; it MUST equal
+   * the captain's `join(workspaceOf(captain), config.stateDir)` for the
+   * scheduler kick to observe the committed team.
+   */
+  materializePlan(
+    captain: Agent,
+    input: {
+      stateRoot: string
+      teamId: string
+      teamName: string
+      goal?: string
+      plan: {
+        members: { name: string; role?: string; provider?: string; model?: string; reasoningEffort?: string }[]
+        tasks: { id: string; subject: string; description?: string; assignee?: string; dependencies?: string[] }[]
+      }
+    },
+    signal?: AbortSignal,
+  ): Promise<{ teamId: string; members: number; tasks: number }>
 }
 
 /** The caller agent, or a loud failure for non-agent callers. */
@@ -695,6 +720,92 @@ export function registerAgentTeamsTools(ctx: Context, config: ToolsConfig): Agen
     return { teamId: discarded.teamId }
   }
 
+  /**
+   * Orchestration approval-materialization path: the orchestration layer has
+   * already collected the required owner/captain verdicts, so an approved plan
+   * is committed directly as a *running* team (no staging phase, no
+   * planReviewState — the exact equivalent of `agent_teams_create` with
+   * approval=automatic, but driven by the approval flow instead of a model
+   * turn) and kicked. Members are committed unspawned (`id: ''`; the scheduler
+   * spawns them on first dispatch) and tasks reference members by NAME, which
+   * is how the scheduler's ownedOpenTask / nextReadyTask resolve assignees;
+   * the caller's plan task ids are preserved so dependency edges stay
+   * referentially intact.
+   */
+  const materializePlan: AgentTeamsRuntime['materializePlan'] = async (captain, input, signal) => {
+    const workspace = workspaceOf(captain)
+    const resolved = await withTeamLock(teamLockKey(input.stateRoot, input.teamId), async () => {
+      // Materializing an already-approved plan is idempotent-guarded by the
+      // team id: a second delivery of the same approval (same stateRoot +
+      // sanitized teamId) must never clobber the live team.
+      const existing = readTeamSync(input.stateRoot, input.teamId)
+      if (existing !== undefined) {
+        throw new Error(`materialize: team id "${input.teamId}" already exists in ${input.stateRoot}`)
+      }
+      const now = Date.now()
+      // Resolve every member's LLM route first: providers/models named in the
+      // approved plan win; otherwise the plugin's memberModel fallback applies
+      // (mirrors initializeProfileTeam). Kept zipped with its member so the
+      // committed rows below never index past the resolution list.
+      const resolved: { member: (typeof input.plan.members)[number]; selection: MemberLlmSelection }[] = []
+      for (const member of input.plan.members) {
+        resolved.push({
+          member,
+          selection: await resolveMemberLlmSelection(ctx, captain, {
+            provider: member.provider,
+            model: member.model,
+            defaultModel: config.memberModel,
+            reasoningEffort: member.reasoningEffort,
+            fallback: config.fallback,
+          }, signal),
+        })
+      }
+      await validateMemberLlmSelections(ctx, resolved.map(({ selection }) => selection), signal)
+      const draft: TeamState = {
+        name: input.teamName,
+        id: input.teamId,
+        description: input.goal,
+        captainSessionId: captain.id,
+        createdAt: now,
+        members: resolved.map(({ member, selection }) => ({
+          id: '',
+          name: member.name,
+          role: member.role,
+          provider: selection.provider,
+          model: selection.model,
+          reasoningEffort: selection.reasoningEffort,
+          executionPrompt: config.executionPrompt,
+          joinedAt: now,
+          status: 'idle',
+        })),
+        tasks: input.plan.tasks.map((task, index) => ({
+          id: task.id.trim() === '' ? `t${index + 1}` : task.id,
+          subject: task.subject,
+          description: task.description,
+          status: 'pending',
+          assignee: task.assignee,
+          dependencies: task.dependencies ?? [],
+          attempt: 0,
+          createdAt: now,
+          updatedAt: now,
+        })),
+        taskSeq: input.plan.tasks.length,
+      }
+      await createTeamDir(input.stateRoot, draft)
+      return draft
+    })
+    // The commit is durable; now kick the materialized team. The scheduler
+    // reads teams from join(workspaceOf(captain), config.stateDir), so
+    // input.stateRoot must equal that path for the kick to dispatch (host
+    // wiring contract; see the interface comment).
+    try {
+      await scheduler.kickTeam(workspace, resolved.id, captain)
+    } catch (error: unknown) {
+      ctx.logger.warn(`agent-teams: materialize kick failed for "${resolved.id}": ${String(error)}`)
+    }
+    return { teamId: resolved.id, members: resolved.members.length, tasks: resolved.tasks.length }
+  }
+
   const runtime: AgentTeamsRuntime = {
     isPendingMember: memberSelections.isPendingMember,
     updateStagedPlan,
@@ -702,6 +813,7 @@ export function registerAgentTeamsTools(ctx: Context, config: ToolsConfig): Agen
     approveStagedTeam,
     continueStagedPlanning,
     discardStagedTeam,
+    materializePlan,
   }
 
   ctx.tools.register(defineTool({

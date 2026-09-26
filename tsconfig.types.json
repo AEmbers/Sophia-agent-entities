@@ -53,6 +53,9 @@
       "dsh-sophia-entities/client": [
         "./packages/client-agent-team/src/client/index.ts"
       ],
+      "dsh-sophia-entities/orchestration": [
+        "./packages/orchestration/src/types.ts"
+      ],
       "@deepseek-ai/dsh-storage-sqlite": [
         "../deepseek-harness/packages/storage/storage-sqlite/lib/types"
       ],

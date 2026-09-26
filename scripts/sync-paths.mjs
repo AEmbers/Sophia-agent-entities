@@ -28,6 +28,11 @@ const own = {
   'dsh-sophia-entities/member-skills': ['./packages/agent-team/src/member-skills.ts'],
   'dsh-sophia-entities/tools': ['./packages/tool-agent-team/src/index.ts'],
   'dsh-sophia-entities/client': ['./packages/client-agent-team/src/client/index.ts'],
+  // Contract seam: orchestration/src/index.ts re-exports strict-incompatible
+  // store/router/facade/tools/routes (that package deliberately relaxes
+  // exactOptionalPropertyTypes), so consumers resolve to its dependency-free
+  // types.ts — the full ApprovalRequest/TeamBackend contract surface.
+  'dsh-sophia-entities/orchestration': ['./packages/orchestration/src/types.ts'],
 }
 
 const ownTypes = {
@@ -74,6 +79,7 @@ const buildOwn = {
   'dsh-sophia-entities/member-skills': ['./packages/agent-team/lib/types/member-skills.d.ts'],
   'dsh-sophia-entities/tools': ['./packages/tool-agent-team/lib/types/index.d.ts'],
   'dsh-sophia-entities/client': ['./packages/client-agent-team/lib/types/client/index.d.ts'],
+  'dsh-sophia-entities/orchestration': ['./packages/orchestration/lib/types/index.d.ts'],
 }
 
 const shared = {
