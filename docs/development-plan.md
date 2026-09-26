@@ -407,10 +407,11 @@ declare module '@deepseek-ai/dsh-client-ui-chat/client' {
 
 **落定（2026-09-26 补）**：卡片是从不可变的会话记录折出来的，所以 `state` 在 transcript 里**永远是 `pending_*`**——上述条件只决定「要不要渲染这张卡」，不能决定「卡上还要不要按钮」。实际做法：卡片自己持有一份落定状态（`sophia-approval-settlement.ts` 的 `settlementOf(resultState, live)`），来源有两条——(a) 每次动作 POST 的返回值本身就是判决（`routes.ts` 的 `runApprovalPlanAction` 返回 `{request_id, state, mode, materialized, team_ref}`），(b) 挂载时对活队列 `GET /plugins/dsh-sophia-entities/approvals` 对账一次（该路由只列**还待批**的请求，所以查不到 = 已被处理）。两者都判不出决定时按「仍在待批」处理：**只有真正落定才撤下模式选择器与 [批准][退回]**。漏了这一步时，退回/批准其实都成功了，但卡片继续显示按钮，再点一次就被宿主以 `request <id> is not awaiting owner decision (<state>)` 拒绝——表现成「按钮点了没反应」。
 
+**物化的 host 状态（2026-09-26 补）**：落定只解决「卡上有没有按钮」，还解决不了「批准到底成不成」。`SophiaTeamFacade.materialize` 调的是 `backend.create(this, request)`——传进去的是 **facade 本体**，而 facade 上没有队伍状态；DAG 后端的 `create` 却必须拿到 `captain`（`Agent`，物化后的队长兼工作区归属）与 `stateRoot`（队伍落在哪个工作区），缺任一即抛 `dag backend create: ctx.captain is required — the host must pass the captain agent` / `… ctx.stateRoot is required …`。原实现里这两项**从来没有被任何地方赋过值**，于是任何 `dag` 提议的 approve 都在 `materializeOrHalt` 里被包成 `MaterializeError`、以 HTTP 500 回到卡片——状态仍是 `pending_owner`，表现就是「批准没用」；`list()` / `activity()` 同样拿不到 `stateRoot`，已物化的 dag 队伍也永远列不出来。改法：审批平面持有一份 `{ stateRoot, captain? }` 并把它作为 **`hostContext` provider** 交给后端（每次调用现读，不缓存一次——state root 跟着队长的工作区走，captain 只有在真的有人拍板时才存在），`create`/`describe`/`list` 统一走 `hostOf(ctx)`（**传进来的 `ctx` 字段优先**，保住 facade 日后自己带状态的余地）；HTTP 的 plan 路由在跑动作**之前**把当前会话 `bindDagCaptain(agent)` 绑上，于是批准物化出来的队伍，队长就是拍板的那个人、落在他的工作区里。回归测试见 `packages/dag-team/tests/sophia-dag-backend.spec.ts`。
+
 #### 4.4.2 模式选择交互
 
 复用宿主 `@deepseek-ai/dsh-client-ui-primitives` 的 `Menu`（teams 的 `StagedModelPicker` 已证明该包在白名单内可 value import）：
-
 ```
 ┌──────────────────────────────────────────────┐
 │  🐋 新建团队提议                              │
