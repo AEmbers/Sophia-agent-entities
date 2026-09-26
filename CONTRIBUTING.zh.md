@@ -20,7 +20,7 @@
 | `packages/agent-team/core-skills/` 下的 skill | `npm run check:core-skills` |
 | 类型、Host 逻辑、测试 | `npm run typecheck` 与 `npm test` |
 | 可见 UI、Client 加载、slot takeover、Remote 激活 | 以上全部，加 `npm run test:browser` |
-| 构建产物、`exports`、manifest、发布布局 | 以上全部，加 `npm run build` 与 `npm pack --dry-run` |
+| 构建产物、`exports`、manifest、发布布局 | 以上全部，加 `npm run build`、`npm run check:bundle` 与 `npm pack --dry-run` |
 
 `npm test` 会先跑生成产物、文档、core skill 与 package 边界四项检查，再跑 Vitest。完整阶梯（含 `lint`、`duplication`）见 [`docs/development/start-and-checks.zh.md`](docs/development/start-and-checks.zh.md) §「检查梯度」。
 

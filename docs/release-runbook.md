@@ -20,6 +20,7 @@ This document is the procedure for publishing a version of `dsh-sophia-entities`
    - Advance these spots only in the pass that publishes the version they name.
 4. **Sweep the prose for statements this release falsifies.** Grep the maintained documents for sentences conditioned on the release *not* having happened — `latest` is `<previous version>`, a capability described as unpublished, a peer range described as pending. Correcting a document's current-state claim belongs in the release commit; rewriting shipped history does not (§7).
 5. **Confirm the working tree carries no uncommitted build input.** `prepack` is `npm run build` and `packages/*/lib/**` is inside the published `files` allowlist, so an uncommitted `src/` edit ships in the tarball. Untracked files outside the allowlist (`scripts/`, `.scratch/`) cannot ship and do not block a release. Never stash or revert another member's work to clear the tree — establish whose it is first.
+   - `packages/*/lib/**` is committed as well, and a Git-address install packs the allowlist without building: `npm run check:bundle` must be clean, so the release commit carries a build that matches `src/`.
 6. **Know what CI will and will not do.** The release commit's own run must be green on **both lanes** before tagging (§5). A documentation-only push produces no run at all: `ci.yml` ignores `**.md`, `docs/**`, and `assets/**`, so its evidence is `git diff --check`, link resolution, and a read-back from the remote.
 
 ## 3. Check ladder
@@ -31,6 +32,7 @@ Run in this order; a failure stops the release, and a fix re-runs from the faile
 | `npm run typecheck` | Type errors against the certified harness checkout. |
 | `npm test` | Test failures, and the four mechanical gates it bundles: `check:docs`, `check:core-skills`, `check:boundaries`, `check:versions`. |
 | `npm run build` | Build errors; also what `prepack` will run at publish time. |
+| `npm run check:bundle` | Committed `packages/*/lib` that a fresh build no longer reproduces — a stale bundle would reach Git-address installs silently. Run it immediately after `npm run build`. |
 | `npm run lint` | Lint findings. |
 | `npm run test:browser` | Broken composition, Remote mounting, slot takeover, or ordinary-DSH restoration. Needs the adjacent `../deepseek-harness` checkout; browser acceptance is a local step and never runs in CI. |
 | `npm pack --dry-run` | Nothing by itself — record the file count for the release report. |

@@ -121,16 +121,18 @@ dsh plugin --profile web remove dsh-sophia-entities
 
 The Team is one collaboration domain per DSH home. Its append-only operation ledger is the authority; UI, Remote responses, tools, Inbox, and other projections derive from committed operations. Ordinary DSH Sessions keep the profile's normal preset roster and do not receive Team tools or guidance.
 
-## Install from a local checkout
+## Install from the registry, a Git address, or a checkout
 
-For development, install the local bundle into the same profile:
+All three carry the built bundles, so none of them runs a build. Install into the same profile, then start the Web UI:
 
 ```sh
+dsh plugin --profile web add dsh-sophia-entities
+dsh plugin --profile web add https://github.com/AEmbers/dsh-sophia-entities
 dsh plugin --profile web add /absolute/path/to/dsh-sophia-entities
 dsh web
 ```
 
-Published packages include built artifacts. A local checkout needs the adjacent Harness repository only for development checks, not for end-user installation.
+Only the development checks need the adjacent Harness repository.
 
 ## Development
 
@@ -143,6 +145,7 @@ corepack pnpm install
 npm run typecheck
 npm test
 npm run build
+npm run check:bundle
 npm run lint
 npm run test:browser
 npm pack --dry-run

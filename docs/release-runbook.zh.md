@@ -20,6 +20,7 @@
    - 这些位置只在该版本真正发布的同一轮里推进。
 4. **扫正文里被本次发布证伪的句子。** 在维护文档里检索那些以「发布尚未发生」为前提的表述——`latest` 是 `<上一个版本>`、某项能力被描述为尚未发布、某个 peer 范围被描述为待定。修正文档的当前状态声明确实属于发布提交的一部分；改写已发布的历史则不属于（§7）。
 5. **确认工作树没有未提交的构建输入。** `prepack` 是 `npm run build`，而 `packages/*/lib/**` 在发布的 `files` 白名单内，所以未提交的 `src/` 改动会被打进 tarball。白名单之外的未跟踪文件（`scripts/`、`.scratch/`）不会被打包，也不阻塞发布。绝不要为了让工作树干净而 stash 或回退其他成员的工作——先弄清那是谁的。
+   - `packages/*/lib/**` 同样已入库，而 Git 地址安装只按白名单打包、不跑构建：`npm run check:bundle` 必须干净，发布提交里因此带着与 `src/` 一致的构建。
 6. **清楚 CI 会做什么、不会做什么。** 发布提交自身那一次运行必须在**两条 lane** 上都绿，然后才打 tag（§5）。纯文档推送根本不会产生运行：`ci.yml` 忽略 `**.md`、`docs/**`、`assets/**`，所以它的证据是 `git diff --check`、链接解析，以及从远端读回。
 
 ## 3. 检查阶梯
@@ -31,6 +32,7 @@
 | `npm run typecheck` | 针对已认证 harness checkout 的类型错误。 |
 | `npm test` | 测试失败，以及它捆绑的四道机械门：`check:docs`、`check:core-skills`、`check:boundaries`、`check:versions`。 |
 | `npm run build` | 构建错误；这也是发布时 `prepack` 会跑的东西。 |
+| `npm run check:bundle` | 入库的 `packages/*/lib` 与刚跑完的构建不一致——过期产物会无声流向从 Git 地址安装的用户。紧接 `npm run build` 之后运行。 |
 | `npm run lint` | lint 发现的问题。 |
 | `npm run test:browser` | 组合、Remote 挂载、slot 接管或普通 DSH 恢复被破坏。需要相邻的 `../deepseek-harness` checkout；浏览器验收是本地步骤，从不在 CI 运行。 |
 | `npm pack --dry-run` | 本身不拦什么——把文件数记进发布报告。 |

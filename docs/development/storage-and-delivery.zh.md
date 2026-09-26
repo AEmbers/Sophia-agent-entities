@@ -38,6 +38,7 @@ JSON 整文件重写的单次写成本随历史线性增长（1k→10k 涨了约
 - 改动没有偷偷加入 shipped DSH defaults。
 - package README、manifest、导出和可见行为保持一致。
 - Remote 变更已经重新生成，不存在手写 artifact。
+- 入库的 `packages/*/lib` 正是刚跑完的 `npm run check:bundle` 能复现的那一份。
 - Client 改动有真实 composition 或 browser 证据，而不只有组件单测。
 - 测试和 lint 命令实际执行过，汇报时只写真实结果。
 - `git diff --check` 通过。

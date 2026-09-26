@@ -25,6 +25,8 @@ Do not edit these directly:
 - `tsconfig.types.json`
 - `tsconfig.build-deps.json`
 
+The Typert artifacts, and `packages/*/lib` as a whole, are committed. After regenerating anything, `npm run check:bundle` refuses a tree whose committed bundles a fresh build no longer reproduces.
+
 Remote artifacts come from `scripts/generate-typert.mjs`; TypeScript path facades come from `scripts/sync-paths.mjs`:
 
 ```sh

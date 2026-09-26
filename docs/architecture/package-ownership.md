@@ -15,6 +15,8 @@ packages/agent-team
 
 These three directories are the build and export seams of one published package, `dsh-sophia-entities`, declared by the root `package.json`; none has a manifest of its own. Dependency direction is one-way: Host never imports Client or tool implementation internals, tools resolve the live Host service at execution time, and Client consumes typed Remote plus public types and Harness slots — never another seam's generated `lib/` by relative path.
 
+Those `lib/` directories are committed: a DSH install from a Git address clones the branch and packs the root `files` allowlist without running a build, so the bundles cannot live only inside a tarball, and `npm run check:bundle` refuses a tree whose committed bundles a fresh build no longer reproduces.
+
 [`generated-and-seams.md`](../development/generated-and-seams.md) owns the seam mechanics, the Host module layout, and the operation-extension checklist.
 
 - `packages/agent-team` owns Team capability. Its service keeps ledger, handles, notifications, and recovery orchestration, and its modules split as:

@@ -121,16 +121,18 @@ dsh plugin --profile web remove dsh-sophia-entities
 
 一个 DSH home 对应一个 Team 协作域。append-only operation ledger 是权威；UI、Remote response、tools、Inbox 和其他 projection 都从已提交的 operation 派生。普通 DSH Session 继续使用 profile 原有 preset roster，不会获得 Team tools 或 guidance。
 
-## 从本地 checkout 安装
+## 从 registry、Git 地址或本地 checkout 安装
 
-开发时，可以把本地 bundle 安装到同一个 profile：
+三种来源都带着构建产物，都不会跑构建。装进同一个 profile 后启动 Web UI：
 
 ```sh
+dsh plugin --profile web add dsh-sophia-entities
+dsh plugin --profile web add https://github.com/AEmbers/dsh-sophia-entities
 dsh plugin --profile web add /absolute/path/to/dsh-sophia-entities
 dsh web
 ```
 
-发布包已经包含构建产物。只有开发检查需要相邻的 Harness repository，终端用户安装不需要它。
+终端用户都不需要相邻的 Harness repository，只有开发检查需要。
 
 ## 开发
 
@@ -143,6 +145,7 @@ corepack pnpm install
 npm run typecheck
 npm test
 npm run build
+npm run check:bundle
 npm run lint
 npm run test:browser
 npm pack --dry-run

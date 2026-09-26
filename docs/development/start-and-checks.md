@@ -6,7 +6,7 @@ English | [中文](start-and-checks.zh.md)
 This document records maintenance workflows for the repository. Exact command definitions remain authoritative in the root `package.json`, package manifests, and `scripts/`; update configuration first when a command changes, then update this document.
 
 ## Start developing
-This repository is an independent external DSH bundle. End users install the published package; local development and real Web verification require the adjacent `../deepseek-harness` checkout.
+This repository is an independent external DSH bundle. End users install the published package or the repository address; neither runs a build, because the built bundles are committed. Local development and real Web verification require the adjacent `../deepseek-harness` checkout.
 
 ```text
 ../
@@ -34,6 +34,7 @@ npm run check:boundaries
 npm run check:versions
 npm test
 npm run build
+npm run check:bundle
 npm run lint
 npm run duplication
 npm pack --dry-run
@@ -53,6 +54,7 @@ Their responsibilities are:
 - `check:versions` mechanically enforces the certified-version consistency rule: the CI tag, the setup tag, the development guide, the READMEs, the architecture doc, the compatibility baseline, and the bug-report placeholder must all state the same DSH baseline (in both languages), and that baseline must be the lower bound of every `@deepseek-ai/dsh-*` peer range. It asserts mutual agreement, never a hardcoded version, so it passes unchanged on every release lane. Run it on its own after touching any version string.
 - `test` regenerates Typert, runs `check:docs`, `check:core-skills`, `check:boundaries`, and `check:versions`, then runs Vitest. `scripts/isolate-dsh-home.setup.ts` gives each test file an isolated `DSH_HOME`; tests needing a particular home must save and restore it. Startup does not prune ledger-unknown Member directories; explicit Member removal removes that Member's private memory.
 - `build` uses the restricted Node cleaner to clear package `lib/` directories, regenerates Typert, builds all three source trees, and uses Harness `tsdown` for the Client bundle. The published artifact remains one root npm package.
+- `check:bundle` compares a fresh `build` against the artifacts committed under `packages/*/lib` and fails when the build moved, dropped, or added one. Those bundles ship in the tree (see [`package-ownership.md`](../architecture/package-ownership.md)), so a stale one would reach a GitHub-address install silently. Run it right after `build`; CI runs both steps back to back.
 - `lint` runs oxlint.
 - `duplication` runs jscpd over `packages` and `scripts` using `.jscpd.json`; treat its output as a place to look, never as a verdict, because it reports moved and restructured code as readily as copied code.
 - `pack --dry-run` checks the root bundle's published contents; `prepack` runs the full build first, so it is a release prerequisite rather than an everyday check.

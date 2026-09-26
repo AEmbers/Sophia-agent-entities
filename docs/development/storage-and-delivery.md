@@ -26,6 +26,7 @@ For a focused run: `npm run test:browser -- -t "four same-origin"`. Run the comp
 - No shipped DSH defaults were changed accidentally.
 - Package README, manifest, exports, and visible behavior agree.
 - Remote changes were regenerated; no artifacts were hand-edited.
+- The committed `packages/*/lib` is what a fresh `npm run check:bundle` reproduces.
 - Client changes have real composition or browser evidence, not only component tests.
 - Reports contain only checks that actually ran.
 - `git diff --check` passes.

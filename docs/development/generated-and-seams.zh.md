@@ -25,6 +25,8 @@
 - `tsconfig.types.json`
 - `tsconfig.build-deps.json`
 
+Typert artifacts 以及整个 `packages/*/lib` 都是入库内容。重新生成任何一项之后，刚跑完的构建若无法复现入库产物，`npm run check:bundle` 会直接失败。
+
 Remote artifacts 使用 `scripts/generate-typert.mjs` 生成；TypeScript path facades 使用 `scripts/sync-paths.mjs` 生成。修改输入后重新运行生成脚本，并检查生成结果是否稳定。
 
 ```sh

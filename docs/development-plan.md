@@ -608,7 +608,7 @@ Fastest 落地方式是先在 `dag` 模式跑通（数据契约完全对齐）�
 | `packages/client-agent-team/src/client/sidebar-sections.ts` | `TeamSidebarSectionKind` 增 `'activity'` | 小 |
 | `scripts/build-client.mjs` | 改为调用仓库级 `tsdown.config.ts`（废弃 harness 依赖） | 中 |
 | `packages/client-agent-team/tsdown.config.ts` | 删除或改为 re-export 仓库级配置 | 小 |
-| `.gitignore` | 摘掉 `lib/`（若选 git 源分发，见 §10 D6） | 小 |
+| `.gitignore` | 摘掉 `lib/`（**已实施**：选定 git 源分发，见 §10 D6；产物入库并由 `npm run check:bundle` 钉住新鲜度） | 小 |
 | `README.md` / `LICENSE` / `CHANGELOG.md` | 重写为项目自身说明；保留上游 LICENSE 与出处声明 | 小 |
 
 ### 5.3 明确不动的文件
@@ -864,7 +864,7 @@ HTTP 路由     GET /plugins/dsh-agent-teams/state → 401（存在且受鉴权�
 | 5.1 | 上游 skill 库并入或引用 | ⏳ 引用 | 上游 `dsh-agent-teams` checkout 已清理（技能源不可再本地 copy）；仓库自身已带纪律化 `packages/agent-team/core-skills/`（`check:core-skills` 门禁），11 个上游插件开发 skill 记录于 `docs/recon.md:137` 作参考，不并入仓库避免与自带 core-skills 重复 |
 | 5.2 | 边界检查脚本适配新包 | ✅ | `check-package-boundaries.mjs` 已含 5 包 125 source files，`npm run test` 中的边界门全绿 |
 | 5.3 | 文档回填 | ✅ | README/README.zh/CHANGELOG/CONTRIBUTING/LICENSE + 全文档品牌统一为 `dsh-sophia-entities`；本开发文档 P2–P5 完成态本表 |
-| 5.4 | 分发方式落地 | ✅ | `git remote origin=https://github.com/AEmbers/dsh-sophia-entities.git`（git 源分发，`.gitignore` 含 `lib/` 不追构建产物）；§10 D6 本地目录/git 源/npm 三态均已覆盖 |
+| 5.4 | 分发方式落地 | ✅ | `git remote origin=https://github.com/AEmbers/dsh-sophia-entities.git`；**分发方式定为 git 源（构建产物入库）**：`.gitignore` 摘掉 `lib/`，`packages/*/lib` 380 个文件入库（5.0 MB），产物新鲜度由 `npm run check:bundle` + CI 双 lane 钉住；`dsh plugin add <Git 地址>`／本地目录／npm 三种来源均可安装，§10 D6 三态已覆盖 |
 
 ---
 
@@ -943,7 +943,7 @@ dsh web
 | **D3** | 目录结构 | 基座三包 + 新增 3 包（D7 方案）/ 全部并进基座三包 | D7 方案——保留边界检查与 diff 清晰度 |
 | **D4** | 活动树主落点 | `shell.overlay` 浮层（零改基座）/ 基座侧栏第三段（小改）/ 两者都做 | 两阶段：先浮层（P1），后侧栏段（P4） |
 | **D5** | 美术资源 | 沿用 teams 的鲸鱼图 / 换成主人自己的 / 纯图标 | 沿用，先跑通功能；主人有需求再换 |
-| **D6** | 分发方式 | git 源（构建产物入库）/ 本地目录 / npm | 本地目录（本体就是本机自用）；这决定 `.gitignore` 里 `lib/` 是否摘掉 |
+| **D6** | 分发方式 | git 源（构建产物入库）/ 本地目录 / npm | **已改为 git 源（构建产物入库）**：主人要求「GitHub 地址安装」必须可用，而官方安装器对 Git 依赖只做克隆＋按 `files` 白名单打包、不跑任何构建，故产物只能入库；`.gitignore` 已摘掉 `lib/`，本地目录与 npm 两种来源同时保留 |
 | **D7** | 宿主版本 | 维持 0.1.5-rc.1 / 升级到 0.1.7-rc.x | 先维持（不动主人现有环境），待 O2 实测结果再定 |
 | **D8** | 队长审核是"真 agent 裁决"还是"规则自动 + 队长可覆写" | 前者更符合原话，后者更省 token | 真 agent 裁决 + 超时升级兜底（原话要求"队长审核"） |
 

@@ -6,7 +6,7 @@
 本文记录本仓库的维护流程。命令的具体定义仍以根目录 `package.json`、各 package manifest 和 `scripts/` 为准；如果命令发生变化，先改配置，再更新本文。
 
 ## 开始开发
-本仓库是独立的外部 DSH bundle。最终用户只需要安装发布包；本地开发和真实 Web 验证需要相邻的 `../deepseek-harness` checkout。
+本仓库是独立的外部 DSH bundle。最终用户安装发布包或仓库地址即可，两者都不跑构建，因为构建产物已入库；本地开发和真实 Web 验证需要相邻的 `../deepseek-harness` checkout。
 
 ```text
 ../
@@ -34,6 +34,7 @@ npm run check:boundaries
 npm run check:versions
 npm test
 npm run build
+npm run check:bundle
 npm run lint
 npm run duplication
 npm pack --dry-run
@@ -52,6 +53,7 @@ git diff --check
 - `npm run check:versions`：把已认证版本一致性变成机械检查——CI tag、setup tag、开发指南、README、架构文档、兼容性基线、bug 报告占位符必须声明同一个 DSH 基线（双语都要），且该基线必须是每个 `@deepseek-ai/dsh-*` peer 区间的下界。它只断言互相一致，从不写死版本号，因此在任何 release lane 上都不用改门。动过任何版本字符串后单独跑它。
 - `npm test`：先生成 Typert、跑 `check:docs`、`check:core-skills`、`check:boundaries` 与 `check:versions`，再运行 Vitest。Vitest 通过 `scripts/isolate-dsh-home.setup.ts` 给每个测试文件一个一次性的 `DSH_HOME`，隔离 Member activation 创建或复用的 `$DSH_HOME/agent-team/members/member:*` 私有 memory。需要特定 home 的测试自行设置并保存/恢复该变量（见 `member-lifecycle.spec.ts`）。启动不会自动清理账本不认识的 Member 目录；显式 Member remove 才删除该 Member 的私有 memory，因此介质重置后如需清理旧目录，由操作者手动删除对应 `member:` 目录。
 - `npm run build`：先由受限 Node cleaner 清空 Host、tools 与 Client 三个 package 的 `lib/`，再生成 Typert、构建三个源码目录，并用 Harness 的 `tsdown` 构建 Client bundle；这样删除源码后遗留的旧产物不会进入 pack。最终发布物仍是一个根 npm 包。
+- `npm run check:bundle`：把刚跑完的 `build` 与提交在 `packages/*/lib` 下的产物比对，只要构建移动、丢弃或新增了其中一个文件就失败。这些 bundle 随仓库一起分发（见 [`package-ownership.md`](../architecture/package-ownership.md)），产物过期会无声地流向从 GitHub 地址安装的用户。紧接 `build` 之后运行；CI 把这两步背靠背跑。
 - `npm run lint`：运行 oxlint。
 - `npm run duplication`：用 `.jscpd.json` 对 `packages` 与 `scripts` 跑 jscpd。它的输出只是"值得看一眼的地方"，不是结论——移动或重构过的代码同样会被报成重复。
 - `npm pack --dry-run`：检查根 bundle 的发布内容；`prepack` 会先跑完整 build，所以它是发布前置步骤，不是日常检查。
