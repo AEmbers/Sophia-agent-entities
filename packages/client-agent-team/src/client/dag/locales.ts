@@ -242,6 +242,8 @@ export const zh = {
   'approval.review.downgrade_to_dag': '降级为 DAG 团队',
   'approval.review.downgradeReason': '队长将其降级为 DAG 团队',
   'approval.review.reject': '拒绝',
+  'approval.badge.title': '待审批',
+  'approval.badge.label': '{count} 个团队提议等待批准',
 } satisfies Record<string, string>
 
 /** AgentTeams namespace key union. */
@@ -486,6 +488,8 @@ export const en = {
   'approval.review.downgrade_to_dag': 'Downgrade to DAG team',
   'approval.review.downgradeReason': 'Captain downgraded the proposal to a DAG team',
   'approval.review.reject': 'Reject',
+  'approval.badge.title': 'Awaiting approval',
+  'approval.badge.label': '{count} team proposal(s) awaiting approval',
 } satisfies Record<AgentTeamsLocaleKey, string>
 
 /** Translation function consumed by pure view helpers. */

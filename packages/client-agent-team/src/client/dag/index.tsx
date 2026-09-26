@@ -27,6 +27,7 @@ import type { ActivityPanelProps } from './ActivityPanel.tsx'
 import { agentTeamsCardDefinition } from './agent-teams-card-definition.ts'
 import { sophiaApprovalCardDefinition } from './sophia-approval-card-definition.ts'
 import SophiaApprovalCard, { type SophiaApprovalCardInjected } from './SophiaApprovalCard.tsx'
+import SophiaApprovalBadge, { type SophiaApprovalBadgeInjected } from './SophiaApprovalBadge.tsx'
 import {
   AGENT_TEAMS_LOCALE_NAMESPACE, en, zh, type AgentTeamsLocaleKey,
 } from './locales.ts'
@@ -161,4 +162,16 @@ export function apply(ctx: ClientContext): void {
     locale: AGENT_TEAMS_LOCALE_NAMESPACE,
     inject: (): SophiaApprovalCardInjected => ({ reviewer: false }),
   }, SophiaApprovalCard))
+
+  // P4.2 pending-approval badge: an additive footer action that stacks beside
+  // the Team-mode footer action (own id, distinct order) and polls the host
+  // approval queue. Renders nothing while the queue is empty, so a host with
+  // no pending proposals contributes only its slot bookkeeping.
+  ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
+    name: 'sidebar.footer.action',
+    id: 'sophia-approval-badge',
+    order: 150,
+    locale: AGENT_TEAMS_LOCALE_NAMESPACE,
+    inject: (): SophiaApprovalBadgeInjected => ({}),
+  }, SophiaApprovalBadge))
 }

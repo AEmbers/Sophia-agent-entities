@@ -94,7 +94,9 @@ describe('Team Client slot takeover', () => {
     expect(slots.entriesOfSlot('sidebar.workspaces')).toHaveLength(1)
     expect(slots.entriesOfSlot('main')).toHaveLength(1)
     expect(slots.entriesOfSlot('sidebar.settings')).toHaveLength(1)
-    expect(slots.entries('sidebar.footer.action')).toHaveLength(1)
+    // Team chrome ships its footer action plus the approval-plane badge
+    // (an additive `list`-slot row, order 150), so the raw ledger holds two.
+    expect(slots.entries('sidebar.footer.action')).toHaveLength(2)
 
     ctx.teamNavigation.actions().enterTeam()
     expect(slots.entries('sidebar.workspaces')).toHaveLength(2)

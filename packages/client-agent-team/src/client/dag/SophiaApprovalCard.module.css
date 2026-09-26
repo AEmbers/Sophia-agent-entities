@@ -198,3 +198,58 @@
   font-size: 11px;
   line-height: 16px;
 }
+
+/* P4.2 pending-approval badge (sidebar.footer.action additive row). */
+
+.badgeAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  position: relative;
+}
+
+.badgeWide {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 2px 8px;
+  box-sizing: border-box;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 24px;
+  cursor: pointer;
+}
+
+.badgeRail {
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.badgeText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badgeDot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background: var(--dsw-alias-state-danger, #e5484d);
+  color: var(--dsw-alias-label-primary-inverted, #fff);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+}
