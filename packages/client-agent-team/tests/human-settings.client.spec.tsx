@@ -20,7 +20,7 @@ const readFailure = (message: string): RemoteResult<AgentTeamHumanProfileResult>
 const PROFILE = {
   name: 'Ada',
   version: '0.1.13',
-  repoUrl: 'https://github.com/wowyuarm/dsh-agent-team',
+  repoUrl: 'https://github.com/AEmbers/dsh-sophia-entities',
   updateAvailable: false,
 }
 

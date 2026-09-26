@@ -1,4 +1,4 @@
-# dsh-agent-team / deepseek-harness Navigation
+# dsh-sophia-entities / deepseek-harness Navigation
 
 English | [中文](harness-navigation.zh.md)
 
@@ -64,7 +64,7 @@ dsh --profile team-demo
 Local development installation:
 
 ```sh
-dsh plugin --profile team-demo add /absolute/path/to/dsh-agent-team
+dsh plugin --profile team-demo add /absolute/path/to/dsh-sophia-entities
 dsh --profile team-demo
 ```
 

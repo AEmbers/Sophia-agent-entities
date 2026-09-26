@@ -2,7 +2,7 @@
 
 English | [中文](dsh-release-compatibility.zh.md)
 
-This document defines the fixed process for certifying an external `dsh-agent-team` bundle against new DeepSeek Harness (DSH) releases. A DSH version is supported only after installation, composition, and runtime have been proven. A DSH release triggers certification; it does not automatically trigger a Team release.
+This document defines the fixed process for certifying an external `dsh-sophia-entities` bundle against new DeepSeek Harness (DSH) releases. A DSH version is supported only after installation, composition, and runtime have been proven. A DSH release triggers certification; it does not automatically trigger a Team release.
 
 This is not a Team behavior specification. Team behavior is defined by `packages/` source and tests; the DSH interface is defined by the adjacent Harness checkout's source, tests, and published packages.
 

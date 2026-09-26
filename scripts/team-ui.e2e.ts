@@ -2426,7 +2426,7 @@ it('configures the Human profile from Settings in real Web', async () => {
   // settings pages, a bare 「我的资料」 leaves the reader guessing.
   expect(await panel.textContent()).toContain('这是 Agent Team 的资料页')
   expect(await panel.textContent()).toMatch(/版本 \d+\.\d+\.\d+/)
-  expect(await panel.getByRole('link', { name: 'GitHub' }).getAttribute('href')).toBe('https://github.com/wowyuarm/dsh-agent-team')
+  expect(await panel.getByRole('link', { name: 'GitHub' }).getAttribute('href')).toBe('https://github.com/AEmbers/dsh-sophia-entities')
   expect(await panel.getByRole('button', { name: '移除头像' }).count()).toBe(0)
 
   // Keyboard rename, no pointer involved: typing makes the field dirty, Tab

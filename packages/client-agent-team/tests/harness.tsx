@@ -453,7 +453,7 @@ export async function runtimeWithTeam(options?: { mode?: 'team'; workspaceId?: s
   let humanProfileValue: { name: string; avatarRef?: string; version: string; repoUrl: string; updateAvailable: boolean; latestVersion?: string } = {
     name: 'human',
     version: '0.1.13',
-    repoUrl: 'https://github.com/wowyuarm/dsh-agent-team',
+    repoUrl: 'https://github.com/AEmbers/dsh-sophia-entities',
     updateAvailable: false,
     ...options?.humanProfile,
   }

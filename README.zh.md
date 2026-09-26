@@ -1,13 +1,13 @@
-# dsh-agent-team — DeepSeek Harness 持久 Agent 团队
+# dsh-sophia-entities — DeepSeek Harness 持久 Agent 团队
 
 [English](README.md) | 简体中文
 
 [![npm](https://img.shields.io/npm/v/dsh-sophia-entities?style=flat-square)](https://www.npmjs.com/package/dsh-sophia-entities)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/wowyuarm/dsh-agent-team?include_prereleases&style=flat-square)](https://github.com/wowyuarm/dsh-agent-team/releases)
-[![Listed on Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com/p/wowyuarm/dsh-agent-team/)
+[![Release](https://img.shields.io/github/v/release/AEmbers/dsh-sophia-entities?include_prereleases&style=flat-square)](https://github.com/AEmbers/dsh-sophia-entities/releases)
+[![Listed on Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com/p/AEmbers/dsh-sophia-entities/)
 
-**dsh-agent-team** 给 DeepSeek Harness 一批不会归零的 Agent。每个 Agent 是持久的 Member，带着自己的 memory、notes 与 skills——上周你配好的成员，这周还是它，哪怕会话结束、上下文 rollover 或 DSH 重启过。方向由你定；Workspace 按项目组织团队，Channel 路由职责，Task Thread 保持一条推进线。
+**dsh-sophia-entities** 给 DeepSeek Harness 一批不会归零的 Agent。每个 Agent 是持久的 Member，带着自己的 memory、notes 与 skills——上周你配好的成员，这周还是它，哪怕会话结束、上下文 rollover 或 DSH 重启过。方向由你定；Workspace 按项目组织团队，Channel 路由职责，Task Thread 保持一条推进线。
 
 一个为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 提供的按需启用插件：只在需要 Team mode 的 profile 安装，普通 DSH Session 保持原有 preset roster。
 
@@ -35,7 +35,7 @@ Task Thread 把 Claim、Agent 交接、Human 验收和后续回复保留在同�
 
 ![DSH Web UI 中的 Task Thread：含 Claim、Agent 交接、Human 验收活动和回复 composer](assets/readme/task-thread.png)
 
-如果觉得有用，欢迎在 [GitHub](https://github.com/wowyuarm/dsh-agent-team) 点个 star，帮更多 DSH 用户发现它。
+如果觉得有用，欢迎在 [GitHub](https://github.com/AEmbers/dsh-sophia-entities) 点个 star，帮更多 DSH 用户发现它。
 
 ## 快速开始
 
@@ -71,7 +71,7 @@ Agent Team 是显式 opt-in 的。安装只会把 bundle 加入 `web` profile，
 dsh --profile web --dump-config
 ```
 
-输出中应包含 Team rows，例如 `wowyuarm-agent-team-scope` 和 `wowyuarm-agent-team-client`。打开浏览器后，从 DSH 导航进入 **Team mode**。第一次可以按下面的路径操作：
+输出中应包含 Team rows，例如 `sophia-entities-scope` 和 `sophia-entities-client`。打开浏览器后，从 DSH 导航进入 **Team mode**。第一次可以按下面的路径操作：
 
 ```text
 Team mode
@@ -91,9 +91,18 @@ Team mode
 | [`NanmiCoder/dsh-agent-teams`](https://github.com/NanmiCoder/dsh-agent-teams) | 把**当前** DSH session 变成 captain，由它组建 sub-agent、把目标拆成带依赖的任务、并通过直接通信协调 | 一个 **session** |
 | [`toolclub/dsh-agent-team-gui`](https://github.com/toolclub/dsh-agent-team-gui) | 可复用的「规划 → 实现 → 评审」团队，每个成员可选不同模型，Run Center 查看 token 用量 | 一次 **workflow run** |
 | [`limuyang2/agent-team`](https://github.com/limuyang2/agent-team)（npm 名 `@limuyang2/dsh-agent-team`） | 在一个 DSH 窗口里组一支独立 root agent 的队：混用模型与 provider、指定一个 Leader，每个成员在自己的会话里工作、共享同一个 Workspace | 一支**组起来执行任务的队** |
-| **`dsh-agent-team`**（本插件） | 每个 agent 是持久 Member 身份，带自己的私有记忆、笔记与技能；Channel 与职责由你分配，Task Thread 是一条进度线 | 一支**常驻团队** |
+| **`dsh-sophia-entities`**（本插件） | 每个 agent 是持久 Member 身份，带自己的私有记忆、笔记与技能；Channel 与职责由你分配，Task Thread 是一条进度线 | 一支**常驻团队** |
 
 实际差别：你上周创建的 Member，今天还是同一个 Member —— 同样的记忆、职责和私有笔记 —— 即使它的 session 已结束、上下文已滚动、或 DSH 重启过。另外三个里，团队是围绕手头这次工作组建的 —— 一次 session、一次 workflow run，或一支有 Leader 的队。
+
+## 带审批门的规划团队
+
+除了上面的常驻团队协作，本插件现在还带一个**审批编排层**（在 `orchestration` 与 `dag-team` 包中）。Human（或 Member）可以通过 `sophia_team_propose` 工具或会话里的审批卡，提交一个规划好的团队 —— 目标、成员名册、以及带依赖的任务计划。提议先走显式的评审状态机（captain 评审、owner 批准、降级为 DAG、拒绝、超时过期），之后才物化：
+
+- **DAG 模式**：把计划物化为一个正在运行的 `agent_teams_*` 团队，按依赖顺序执行任务。
+- **persistent 模式**：把计划物化为一个带持久 Members 的常驻账本团队。
+
+待处理的 owner/captain 审批显示在**侧栏审批徽标**里，并通过三条并行降级通道（agent-mail、Thread、badge）通知，任何决策都不会被静默丢弃。两种模式的团队都会出现在活动树中。设计细节与完整状态机见 [`docs/development-plan.md`](docs/development-plan.md)（§4，P2–P4）。
 
 ## 卸载
 
@@ -117,7 +126,7 @@ dsh plugin --profile web remove dsh-sophia-entities
 开发时，可以把本地 bundle 安装到同一个 profile：
 
 ```sh
-dsh plugin --profile web add /absolute/path/to/dsh-agent-team
+dsh plugin --profile web add /absolute/path/to/dsh-sophia-entities
 dsh web
 ```
 
@@ -145,7 +154,7 @@ npm pack --dry-run
 
 ## 致谢
 
-dsh-agent-team 的协作形态——具名 Agent 成员、Channel、Task Thread、@mention 路由与成员级记忆——来源于 [Raft](https://raft.build/) 并借鉴了它的若干设计。感谢他们的工作。
+dsh-sophia-entities 的协作形态——具名 Agent 成员、Channel、Task Thread、@mention 路由与成员级记忆——来源于 [Raft](https://raft.build/) 并借鉴了它的若干设计。感谢他们的工作。
 
 ## 许可证
 

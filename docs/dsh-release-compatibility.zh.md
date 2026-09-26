@@ -2,7 +2,7 @@
 
 [English](dsh-release-compatibility.md) | 中文
 
-本文定义外部 `dsh-agent-team` bundle 跟进 DeepSeek Harness（DSH）新版本的固定流程。目标是让一个 DSH 版本只有在实际证明可以安装、组装和运行后，才被声明为受支持版本。DSH 发版触发兼容性认证，不自动触发 Team bundle 发版。
+本文定义外部 `dsh-sophia-entities` bundle 跟进 DeepSeek Harness（DSH）新版本的固定流程。目标是让一个 DSH 版本只有在实际证明可以安装、组装和运行后，才被声明为受支持版本。DSH 发版触发兼容性认证，不自动触发 Team bundle 发版。
 
 本文不定义 Team 行为。Team 行为仍以 `packages/` 源码和测试为准；DSH 接口以相邻 Harness checkout 的源码、测试和发布包为准。
 

@@ -34,7 +34,7 @@ export const HUMAN_PROFILE_SETTINGS_NAMESPACE = 'sophia-entities-host'
 export const HUMAN_PROFILE_DEFAULT_NAME = 'human'
 
 /** Repository home for the version footnote link. */
-export const HUMAN_PROFILE_REPO_URL = 'https://github.com/wowyuarm/dsh-agent-team'
+export const HUMAN_PROFILE_REPO_URL = 'https://github.com/AEmbers/dsh-sophia-entities'
 
 /**
  * Bundle version shown in the settings footnote, and the current side of the

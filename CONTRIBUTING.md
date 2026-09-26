@@ -1,4 +1,4 @@
-# Contributing to dsh-agent-team
+# Contributing to dsh-sophia-entities
 
 [English](CONTRIBUTING.md) | [简体中文](CONTRIBUTING.zh.md)
 

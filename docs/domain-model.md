@@ -1,4 +1,4 @@
-# dsh-agent-team Domain Vocabulary
+# dsh-sophia-entities Domain Vocabulary
 
 English | [中文](domain-model.zh.md)
 

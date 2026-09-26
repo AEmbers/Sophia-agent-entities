@@ -1,4 +1,4 @@
-# dsh-agent-team Documentation
+# dsh-sophia-entities Documentation
 
 English | [中文](README.zh.md)
 

@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and Semantic Versioning. Team bundle versions evolve independently of DeepSeek Harness versions; DeepSeek Harness compatibility is expressed through `peerDependencies` and [`docs/dsh-release-compatibility.md`](docs/dsh-release-compatibility.md).
 
+## [Unreleased]
+
+### Added — Approval plane (orchestration + dag-team + client)
+
+- **Plan an agent team and gate it on approval** — the new `orchestration` package adds a full approval state machine on top of the team backends. A goal + roster + dependency-aware task plan can be proposed via the `sophia_team_propose` tool (or the approval card), then reviewed by the captain and approved or rejected by the Human before anything materializes. Proposals are deduplicated by `proposalKey` and expire on their timeout.
+- **Two materialization modes** — an approved plan becomes either a running **DAG** team (`agent_teams_*`, dependency-ordered tasks) or a standing **persistent** ledger team with durable Members. The captain can also downgrade a persistent request to DAG.
+- **Approval card in the conversation** — the chat renders a card for pending proposals showing the goal, roster, member/task/dependency counts, and a mode selector; the owner session shows approve/reject, the captain session shows review verdicts, and a Member's own session renders read-only.
+- **Host HTTP routes** — `GET /plugins/dsh-sophia-entities/approvals` for the snapshot, `POST /plugins/dsh-sophia-entities/approvals/plan` to act on a request (set mode / approve / reject / review), mirroring the existing state/halt route patterns.
+- **Pending-approval sidebar badge** — the sidebar footer shows a live count of `pending_owner`/`pending_captain` proposals, polled from the approvals route and updated in place.
+- **Three notification channels with parallel degradation** — agent-mail, Thread, and badge channels run in parallel on every owner-needed / expired / escalated event; any one success delivers, a total failure is logged loudly, never silent.
+- **Persistent teams in the activity tree** — both DAG and persistent teams now render; the panel shows a summary card (member/task volumes) for persistent ledger teams alongside the DAG delegation tree and dependency map.
+
 ## [0.1.15] - 2026-09-24
 
 - Upgrades carry your profile across: the name and avatar saved under the old settings section land in the Team Host row on the first boot after upgrading, and anything you re-entered yourself wins.
