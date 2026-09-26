@@ -2,17 +2,17 @@
 
 All notable changes to this project are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and Semantic Versioning. Team bundle versions evolve independently of DeepSeek Harness versions; DeepSeek Harness compatibility is expressed through `peerDependencies` and [`docs/dsh-release-compatibility.md`](docs/dsh-release-compatibility.md).
 
-## [Unreleased]
+## [0.2.0] - 2026-09-26
 
-### Added — Approval plane (orchestration + dag-team + client)
-
-- **Plan an agent team and gate it on approval** — the new `orchestration` package adds a full approval state machine on top of the team backends. A goal + roster + dependency-aware task plan can be proposed via the `sophia_team_propose` tool (or the approval card), then reviewed by the captain and approved or rejected by the Human before anything materializes. Proposals are deduplicated by `proposalKey` and expire on their timeout.
-- **Two materialization modes** — an approved plan becomes either a running **DAG** team (`agent_teams_*`, dependency-ordered tasks) or a standing **persistent** ledger team with durable Members. The captain can also downgrade a persistent request to DAG.
-- **Approval card in the conversation** — the chat renders a card for pending proposals showing the goal, roster, member/task/dependency counts, and a mode selector; the owner session shows approve/reject, the captain session shows review verdicts, and a Member's own session renders read-only.
-- **Host HTTP routes** — `GET /plugins/dsh-sophia-entities/approvals` for the snapshot, `POST /plugins/dsh-sophia-entities/approvals/plan` to act on a request (set mode / approve / reject / review), mirroring the existing state/halt route patterns.
-- **Pending-approval sidebar badge** — the sidebar footer shows a live count of `pending_owner`/`pending_captain` proposals, polled from the approvals route and updated in place.
-- **Three notification channels with parallel degradation** — agent-mail, Thread, and badge channels run in parallel on every owner-needed / expired / escalated event; any one success delivers, a total failure is logged loudly, never silent.
-- **Persistent teams in the activity tree** — both DAG and persistent teams now render; the panel shows a summary card (member/task volumes) for persistent ledger teams alongside the DAG delegation tree and dependency map.
+- Plan a team before it runs: give a goal, the members you want and the tasks between them, and the proposal waits for a decision instead of starting work.
+- The conversation carries the proposal as a card — the goal, the roster, how many tasks and dependencies the plan has, and a mode selector — with approve and reject for the Human, review verdicts for the captain, and a read-only rendering in a Member's own session.
+- Approve a plan as a team that works through its dependency-ordered tasks, or as a standing team whose Members keep their own sessions and stay for the long run; the captain can also downgrade a standing request to a one-off run.
+- The captain reviews a plan before it reaches the Human, and can approve it as proposed, approve it as a standing team, downgrade it, or refuse it with a reason.
+- A pending approval is counted in the sidebar and reaches you over agent-mail, the Thread and the badge at the same time — arriving on any one of them is enough, and all three failing is logged loudly instead of swallowed.
+- A proposal nobody decides expires on its own, and an escalated one moves to the owner instead of waiting on the captain.
+- An identical proposal does not stack: a second proposal for the same goal and plan finds the request already waiting.
+- Standing teams render in the activity tree beside running ones, with a summary of the Members and tasks they carry.
+- The plugin publishes as `dsh-sophia-entities`, continuing the line from `@wowyuarm/dsh-agent-team` 0.1.15: install the new name to pick up this release.
 
 ## [0.1.15] - 2026-09-24
 

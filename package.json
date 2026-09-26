@@ -1,6 +1,6 @@
 {
   "name": "dsh-sophia-entities",
-  "version": "0.1.15",
+  "version": "0.2.0",
   "license": "MIT",
   "description": "Sophia Entities for DeepSeek Harness - dual-mode agent teams (persistent ledger teams + DAG task teams) with card-based mode selection and tiered approval. Derived from @wowyuarm/dsh-agent-team v0.1.15 (MIT).",
   "private": false,
