@@ -85,11 +85,11 @@ export function registerAgentTeamsCommand(ctx, getProfiles = () => ({})) {
                     return { kind: 'error', text: String(error) };
                 }
                 if (parsed.profile !== undefined && !Object.keys(getProfiles()).some(key => key.trim() === parsed.profile))
-                    return { kind: 'error', text: `unknown AgentTeams profile "${parsed.profile}"` };
+                    return { kind: 'error', text: `unknown Qintianjian profile "${parsed.profile}"` };
                 if (parsed.profile === undefined && parsed.goal === '')
                     return { kind: 'error', text: `Usage: /${AGENT_TEAMS_COMMAND} [--profile <name>] <goal>` };
                 invocation.agent.followup(createUserMessage({ content: [{ type: 'text', text: `/${AGENT_TEAMS_COMMAND}${invocation.rawInput}` }], source: { kind: 'user' } }));
-                return { kind: 'success', text: `AgentTeams activated${parsed.profile === undefined ? '' : ` with profile ${parsed.profile}`} — the captain will assemble the team.` };
+                return { kind: 'success', text: `Qintianjian activated${parsed.profile === undefined ? '' : ` with profile ${parsed.profile}`} — the captain will assemble the team.` };
             },
         }));
         for (const profileName of Object.keys(getProfiles())) {
@@ -98,14 +98,14 @@ export function registerAgentTeamsCommand(ctx, getProfiles = () => ({})) {
                 continue;
             dispose.push(ctx.commands.register({
                 name: commandName,
-                description: `run a goal with the AgentTeams ${profileName} profile`,
+                description: `run a goal with the Qintianjian ${profileName} profile`,
                 input: { hint: '<goal>' },
                 handler(invocation) {
                     const profile = profileForCommand(commandName, getProfiles());
                     if (profile === undefined)
-                        return { kind: 'error', text: `AgentTeams profile command "/${commandName}" is unavailable` };
+                        return { kind: 'error', text: `Qintianjian profile command "/${commandName}" is unavailable` };
                     invocation.agent.followup(createUserMessage({ content: [{ type: 'text', text: `/${commandName}${invocation.rawInput}` }], source: { kind: 'user' } }));
-                    return { kind: 'success', text: `AgentTeams activated with profile ${profile} — the captain will assemble the team.` };
+                    return { kind: 'success', text: `Qintianjian activated with profile ${profile} — the captain will assemble the team.` };
                 },
             }));
         }

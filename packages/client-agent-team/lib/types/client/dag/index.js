@@ -76,7 +76,7 @@ export function apply(ctx) {
         name: 'shell.overlay',
         id: 'agent-teams-activity',
         order: 80,
-        label: 'AgentTeams activity',
+        label: '钦天监',
         locale: AGENT_TEAMS_LOCALE_NAMESPACE,
     }, Panel));
     // The host command is only the slash-menu/admission surface. Its input is

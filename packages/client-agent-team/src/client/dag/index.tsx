@@ -129,7 +129,7 @@ export function apply(ctx: ClientContext): void {
     name: 'shell.overlay',
     id: 'agent-teams-activity',
     order: 80,
-    label: 'AgentTeams activity',
+    label: '钦天监',
     locale: AGENT_TEAMS_LOCALE_NAMESPACE,
   }, Panel))
 
