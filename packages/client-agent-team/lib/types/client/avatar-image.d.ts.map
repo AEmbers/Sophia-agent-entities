@@ -1,0 +1,1 @@
+{"version":3,"file":"avatar-image.d.ts","sourceRoot":"","sources":["../../../src/client/avatar-image.ts"],"names":[],"mappings":"AAEA;;;;;;;;;;;;GAYG;AAEH,MAAM,WAAW,WAAW;IAC1B,mFAAmF;IACnF,QAAQ,CAAC,GAAG,EAAE,MAAM,GAAG,SAAS,CAAA;IAChC,oEAAoE;IACpE,QAAQ,CAAC,MAAM,EAAE,MAAM,IAAI,CAAA;CAC5B;AAED,wBAAgB,cAAc,CAAC,GAAG,EAAE,MAAM,GAAG,SAAS,GAAG,WAAW,CAMnE"}

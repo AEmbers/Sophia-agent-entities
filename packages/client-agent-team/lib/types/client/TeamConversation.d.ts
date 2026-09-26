@@ -1,0 +1,3 @@
+import type { TeamConversationProps } from './slots.ts';
+export declare function TeamConversation({ t, useWorkspaces, navigation, drafts, humanIdentity, putAttachment, getAttachment, loadChannels, readThread, loadThreadHistory, threadObservations, subscribeChanges, loadMembers, loadInbox, sendMessage, joinChannel, removeChannelMember, reply, changeTask, promoteThread, selectThread, selectChannel, selectWorkspace, backToWorkspace, backToChannels, resolveTaskRefs, resolveThreadRefs, openMemberSession }: TeamConversationProps): import("react").JSX.Element;
+//# sourceMappingURL=TeamConversation.d.ts.map

@@ -1,0 +1,3 @@
+import type { TeamSidebarProps } from './slots.ts';
+export declare function TeamWorkspaceBrowser({ wide, expandSidebar, navigation, selectWorkspace, selectChannel, selectInbox, t, useWorkspaces, loadMembers, loadInbox, subscribeChanges, subscribeReads, addMember, loadChannels, createChannel, updateChannel, archiveChannel, updateMember, recoverMember, archiveMember, joinWorkspace, leaveWorkspace, joinChannel, removeChannelMember, loadModels, openMemberSession }: TeamSidebarProps): import("react").JSX.Element;
+//# sourceMappingURL=TeamWorkspaceBrowser.d.ts.map

@@ -1,0 +1,98 @@
+/**
+ * Team Member turn-level clock context.
+ *
+ * The first model step of every eligible Team Member turn appends one
+ * durable, source-attributed clock snapshot: the current instant in the
+ * fixed Team coordination zone (UTC+8), the elapsed time since the
+ * preceding model-visible event, and the ordering authority note. Later
+ * steps of the same turn stay quiet unless the turn runs longer than the
+ * refresh interval, in which case one snapshot lands per elapsed interval —
+ * a tool-dense turn of quick steps produces exactly one line, while a turn
+ * that outlives the interval still shows its real span. The snapshot is an
+ * observation, never ledger authority: sequence and revision, not
+ * wall-clock time, order Team facts.
+ *
+ * This plugin deliberately does not mount the shipped
+ * `@deepseek-ai/dsh-time-context`: its browser-zone policy asks the model to
+ * confirm dates with the user whenever a request carries no unique browser
+ * zone, which is the normal case for background Member wakes (Inbox, DM,
+ * recovery, continuation). The Team coordination zone is fixed instead. If
+ * the harness grows a public non-browser/canonical-zone policy, retire this
+ * row in favor of configuring that plugin.
+ *
+ * State is folded from the Member Session's own events — the same
+ * manual-fold pattern the Host's context projection uses — so restart,
+ * request reconstruction, and compaction all derive identical baselines
+ * without a second durable store.
+ * @module dsh-sophia-entities/member-time-context
+ */
+import type { Context } from '@deepseek-ai/cordis';
+import { type ContextFormed } from '@deepseek-ai/dsh-llm';
+export declare const name = "wowyuarm-agent-team-member-time-context";
+/** This producer's own attribution. `kind` must be producer-owned (Session format
+ * V4); the second member is the read-time conversion's rename of this
+ * producer's released V3 history (`plugin:` + id, `plugin` key dropped) —
+ * read-side only. */
+declare module '@deepseek-ai/dsh-llm' {
+    interface MessageSourceMap {
+        'wowyuarm-agent-team-member-time-context': {
+            kind: 'wowyuarm-agent-team-member-time-context';
+        } & ContextFormed;
+        'plugin:wowyuarm-agent-team-member-time-context': {
+            kind: 'plugin:wowyuarm-agent-team-member-time-context';
+        } & ContextFormed;
+    }
+}
+/** Default minimum spacing between two snapshots within one turn, in ms. */
+export declare const CLOCK_REFRESH_INTERVAL_MS = 1800000;
+/** Plugin configuration: the snapshot refresh interval, overridable per preset. */
+export interface Config {
+    /** Minimum spacing between two snapshots within one turn, in ms. Default 1_800_000 (30 minutes). */
+    refreshIntervalMs?: number;
+}
+/** Folded clock baselines for one Member Session. */
+interface ClockBaseline {
+    /** Event time of the latest model-visible event (user/assistant message or tool result), or null. */
+    readonly lastMessageTime: number | null;
+    /** Event time of this plugin's latest durable snapshot, or null. */
+    readonly lastInjectionTime: number | null;
+    /** Latest snapshot time within the currently open turn, or null before one lands. */
+    readonly lastTurnInjectionTime: number | null;
+    /** The open turn, or -1 between turns; a new turn clears the turn-local baseline. */
+    readonly openTurn: number;
+}
+/**
+ * Fold one session event into the clock baseline. Uninterested events return
+ * the same state reference.
+ * @internal exported for tests.
+ */
+export declare function applyClockEvent(state: ClockBaseline, event: {
+    readonly type: string;
+    readonly time: number;
+    readonly data?: unknown;
+}): ClockBaseline;
+/** Fold a whole event log into the clock baseline. @internal exported for tests. */
+export declare function foldClockBaseline(events: readonly {
+    readonly type: string;
+    readonly time: number;
+    readonly data?: unknown;
+}[]): ClockBaseline;
+/**
+ * Whether this step should append a clock snapshot: the first step of a turn
+ * always does (every wake starts with a fresh instant), and a later step
+ * does only when the turn has run longer than the refresh interval since
+ * the last landed snapshot. Skipped steps produce nothing and never
+ * backfill — their span folds into the next snapshot's elapsed.
+ * @internal exported for tests.
+ */
+export declare function shouldSampleClock(step: number, now: number, baseline: ClockBaseline, refreshIntervalMs: number): boolean;
+/** Render one durable clock snapshot text. @internal exported for tests. */
+export declare function renderClockSnapshot(input: {
+    readonly now: number;
+    readonly turn: number;
+    readonly step: number;
+    readonly previous: number | undefined;
+}): string;
+export declare function apply(ctx: Context, config?: Config): void;
+export {};
+//# sourceMappingURL=member-time-context.d.ts.map

@@ -1,0 +1,101 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { IconAgentPresetOutlineRegular, IconListPenOutlineRegular, IconQueueOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives';
+import { TeamWorkspaceSelector } from "./TeamWorkspaceSelector.js";
+import { TeamAgentsPanel } from "./TeamAgentsPanel.js";
+import { TeamChannelsPanel } from "./TeamChannelsPanel.js";
+import css from './sidebar.module.css';
+/**
+ * The Inbox entry's icon with its unread mark. The quantity left this surface
+ * and lives in the control's accessible name: the sidebar answers whether
+ * anything is waiting at a glance, and the number — which moves on every fact —
+ * is what a reader asks for on purpose. The mark hangs off the icon rather than
+ * off the control, so the wide card and the 36px rail button put the same dot
+ * on the same corner of the same glyph.
+ */
+function InboxMark({ unread }) {
+    return _jsxs("span", { className: css.inboxMark, children: [_jsx(IconQueueOutlineRegular, { size: 16 }), unread > 0 && _jsx("span", { className: css.inboxDot, "data-team-inbox-dot": true, "aria-hidden": "true" })] });
+}
+export function TeamWorkspaceBrowser({ wide, expandSidebar, navigation, selectWorkspace, selectChannel, selectInbox, t, useWorkspaces, loadMembers, loadInbox, subscribeChanges, subscribeReads, addMember, loadChannels, createChannel, updateChannel, archiveChannel, updateMember, recoverMember, archiveMember, joinWorkspace, leaveWorkspace, joinChannel, removeChannelMember, loadModels, openMemberSession }) {
+    const navigationState = useSyncExternalStore(navigation.subscribe, navigation.getSnapshot, navigation.getSnapshot);
+    const workspaces = useWorkspaces(state => state.items);
+    const selected = navigationState.workspaceId;
+    const selectedExists = selected !== undefined && workspaces.some(workspace => workspace.workspaceId === selected);
+    const selectedId = selectedExists ? selected : workspaces[0]?.workspaceId;
+    // Exactly one sidebar row carries aria-current='page': the open Channel while
+    // one is set, the selected Agent card while a Member Session view is open,
+    // otherwise the browsed Workspace's overview. The selected row keeps its
+    // quiet folder tint (data-selected) in every case. The mention-Inbox card
+    // takes the marker while the Inbox page stands, and stands down while the
+    // embedded Member Session covers that page: the Inbox stays the remembered
+    // face underneath — closing the overlay returns to it, marker included —
+    // but the card is not a second current page while an Agent holds the seat.
+    const overviewIsCurrent = navigationState.channelRef === undefined && navigationState.memberSessionId === undefined && navigationState.inbox !== true;
+    const inboxIsCurrent = navigationState.inbox === true && navigationState.memberSessionId === undefined;
+    const [creatingAgents, setCreatingAgents] = useState([]);
+    // Rail icons request expansion and name the section to reveal once wide.
+    const [pendingSection, setPendingSection] = useState();
+    const channelsRef = useRef(null);
+    const agentsRef = useRef(null);
+    // The cross-Workspace Inbox badge: one scope-less subscription while the
+    // Team sidebar stands; every wake re-pulls each Workspace's unread total
+    // (limit 1 — totals cover every row, never the list). Same-burst wakes
+    // coalesce behind a short debounce; the number is whatever the Host's whole
+    // unread slice returns, mentions included rather than alone.
+    const [inboxTotal, setInboxTotal] = useState(0);
+    // One name for both entries: what the control is, and how much waits behind
+    // it. The rail repeats it as its hover hint, which is the only place a reader
+    // still meets the quantity without opening the page.
+    const inboxLabel = inboxTotal > 0 ? t('inboxTitleWithCount', { count: inboxTotal }) : t('inboxTitle');
+    useEffect(() => {
+        let disposed = false;
+        let scheduled;
+        const refresh = async () => {
+            const results = await Promise.all(workspaces.map(workspace => loadInbox({ workspaceId: workspace.workspaceId, limit: 1 })));
+            if (disposed)
+                return;
+            setInboxTotal(results.reduce((sum, result) => result.ok ? sum + result.value.totalUnreadCount : sum, 0));
+        };
+        const schedule = () => {
+            if (scheduled !== undefined)
+                return;
+            scheduled = setTimeout(() => { scheduled = undefined; void refresh(); }, 200);
+        };
+        void refresh();
+        const unsubscribe = subscribeChanges(undefined, update => {
+            if (update.type === 'changed')
+                schedule();
+        });
+        // A durable Thread read consumes this reader's mention markers without a
+        // changes wake (reads change no shared projection), so the badge also
+        // refreshes from every completed read.
+        const unsubscribeReads = subscribeReads(schedule);
+        return () => {
+            disposed = true;
+            if (scheduled !== undefined)
+                clearTimeout(scheduled);
+            unsubscribe();
+            unsubscribeReads();
+        };
+    }, [loadInbox, subscribeChanges, subscribeReads, workspaces]);
+    useEffect(() => {
+        // The Inbox page is global and needs no selected Workspace, so the
+        // auto-select must not yank the seat back to a Workspace overview.
+        if (navigationState.inbox === true)
+            return;
+        if (navigationState.mode === 'team' && selectedId !== undefined && selectedId !== selected) {
+            selectWorkspace(selectedId);
+        }
+    }, [navigationState.inbox, navigationState.mode, selected, selectedId, selectWorkspace]);
+    useEffect(() => {
+        if (!wide || pendingSection === undefined)
+            return;
+        const node = pendingSection === 'agents' ? agentsRef.current : channelsRef.current;
+        setPendingSection(undefined);
+        queueMicrotask(() => { node?.querySelector('button')?.focus(); });
+    }, [wide, pendingSection]);
+    if (!wide) {
+        return _jsxs("nav", { className: css.railWorkspace, "aria-label": t('workspaceSections'), children: [_jsx(Tooltip, { label: inboxLabel, side: "right", children: _jsx("button", { type: "button", className: css.railButton, "aria-label": inboxLabel, "aria-current": inboxIsCurrent ? 'page' : undefined, onClick: () => { selectInbox(); expandSidebar(); }, children: _jsx(InboxMark, { unread: inboxTotal }) }) }), _jsx(Tooltip, { label: t('channels'), side: "right", children: _jsx("button", { type: "button", className: css.railButton, "aria-label": t('channels'), onClick: () => { setPendingSection('channels'); expandSidebar(); }, children: _jsx(IconListPenOutlineRegular, { size: 16 }) }) }), _jsx(Tooltip, { label: t('agents'), side: "right", children: _jsx("button", { type: "button", className: css.railButton, "aria-label": t('agents'), onClick: () => { setPendingSection('agents'); expandSidebar(); }, children: _jsx(IconAgentPresetOutlineRegular, { size: 16 }) }) })] });
+    }
+    return _jsxs("section", { className: css.workspaceBrowser, "aria-label": t('workspaces'), children: [_jsxs("button", { type: "button", className: css.inboxCard, "aria-label": inboxLabel, "aria-current": inboxIsCurrent ? 'page' : undefined, onClick: selectInbox, children: [_jsx(InboxMark, { unread: inboxTotal }), _jsx("span", { className: css.inboxCardLabel, children: t('inboxTitle') })] }), _jsx(TeamWorkspaceSelector, { workspaces: workspaces, selectedId: selectedId, current: overviewIsCurrent, onSelect: selectWorkspace, t: t }), selectedId !== undefined && _jsxs("div", { className: css.workspaceSection, children: [_jsx("div", { ref: channelsRef, children: _jsx(TeamChannelsPanel, { workspaceId: selectedId, loadMembers: loadMembers, loadChannels: loadChannels, subscribeChanges: subscribeChanges, createChannel: createChannel, updateChannel: updateChannel, archiveChannel: archiveChannel, joinChannel: joinChannel, removeChannelMember: removeChannelMember, creatingAgents: creatingAgents.filter(request => request.workspaceId === selectedId), ...(navigationState.memberSessionId !== undefined || navigationState.channelRef === undefined ? {} : { selectedChannelRef: navigationState.channelRef }), selectChannel: selectChannel, t: t }, selectedId) }), _jsx("div", { ref: agentsRef, children: _jsx(TeamAgentsPanel, { workspaceId: selectedId, loadMembers: loadMembers, subscribeChanges: subscribeChanges, addMember: addMember, updateMember: updateMember, recoverMember: recoverMember, archiveMember: archiveMember, joinWorkspace: joinWorkspace, leaveWorkspace: leaveWorkspace, loadModels: loadModels, ...(navigationState.memberSessionId === undefined ? {} : { memberSessionId: navigationState.memberSessionId }), openMemberSession: openMemberSession, onCreatingChange: (request, creating) => { setCreatingAgents(current => creating ? [...current.filter(item => item.requestId !== request.requestId), request] : current.filter(item => item.requestId !== request.requestId)); }, t: t }, selectedId) })] })] });
+}

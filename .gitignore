@@ -1,5 +1,4 @@
 node_modules/
-lib/
 *.tsbuildinfo
 *.log
 .DS_Store
@@ -8,3 +7,8 @@ artifacts/
 # Local generation-time state: sync-paths.mjs rewrites it per run (a cert
 # generation records the tag-suffixed checkout name). Never commit it.
 .generated-harness
+# `packages/*/lib` is deliberately tracked. A DSH install from a GitHub address
+# clones this branch and packs the `files` allowlist without running any build,
+# so the bundles have to live in the tree; a `prepare` script cannot replace
+# them, because this build needs the adjacent Harness checkout. Keep them in
+# step with `src/` — `npm run check:bundle` fails when a build moves one.

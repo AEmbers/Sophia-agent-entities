@@ -1,6 +1,6 @@
 import { existsSync, realpathSync } from 'node:fs'
 import { cp, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
-import { join, resolve } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { continuityDir } from './continuity-dir.mjs'
 import { harnessDir } from './harness-dir.mjs'
@@ -147,8 +147,16 @@ try {
   const artifact = new FaceModelEmitter(face).emit('dsh-sophia-entities')
   if (artifact.remote === undefined) throw new Error('Typert did not emit the Agent Team Remote contribution')
 
-  const generatedRoot = `packages/${tempPackage.slice(tempPackage.lastIndexOf('/') + 1)}`
-  const stable = value => value.replaceAll(generatedRoot, 'packages/agent-team')
+  // The analysis package lives in a randomly named directory, and the emitter
+  // records that directory in every `sourceLocation`. Rewrite the temp root back
+  // to packages/agent-team so the emitted artifacts are byte-stable: a rebuild
+  // that moves no source must leave lib/ untouched (the tree ships the bundles,
+  // see .gitignore). Both separator spellings are listed because the emitter's
+  // paths come from a path.join on whichever platform runs the build, while
+  // basename() keeps the name itself separator-correct.
+  const tempName = basename(tempPackage)
+  const generatedRoots = [tempPackage, `packages/${tempName}`, `packages\\${tempName}`]
+  const stable = value => generatedRoots.reduce((text, root) => text.replaceAll(root, 'packages/agent-team'), value)
   const output = join(packageRoot, 'lib')
   await mkdir(output, { recursive: true })
   await writeFile(join(output, 'typert.host.js'), stable(artifact.js))
