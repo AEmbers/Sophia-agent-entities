@@ -29,12 +29,27 @@ import { fileURLToPath } from 'node:url'
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
-// AGENTS.md files are single-language by rule (docs/AGENTS.md), so they are not
-// part of the pairing check; everything else under docs/ is a maintained doc.
-const SINGLE_LANGUAGE = new Set(['AGENTS.md'])
+// Single-language documents under docs/. AGENTS.md is single-language by rule
+// (docs/AGENTS.md); the rest are internal engineering working records of this
+// migration effort — a development plan, a reconnaissance report, upgrade and
+// cleanup plans, and build/defect notes — which ship in English only by design.
+// They are still link-checked (they stay in linkFiles) but are not paired,
+// indexed, or budgeted, so they do not need a Chinese mirror.
+const SINGLE_LANGUAGE = new Set([
+  'AGENTS.md',
+  'build-official-desktop.md',
+  'desktop-0.1.7rc2-connection-defect.md',
+  'development-plan.md',
+  'environment-purge-20260925.md',
+  'host-upgrade-compat.md',
+  'material-integration.md',
+  'recon.md',
+  'sophia-core-cleanup-plan.md',
+])
 // The entry-point index describes where a reader should start: it lists neither
-// itself nor the routing rules it points at.
-const NOT_INDEXED = new Set(['AGENTS.md', 'README.md'])
+// itself nor the routing rules it points at, nor the single-language internal
+// engineering records above (they are not maintained documentation).
+const NOT_INDEXED = new Set(['AGENTS.md', 'README.md', 'build-official-desktop.md', 'desktop-0.1.7rc2-connection-defect.md', 'development-plan.md', 'environment-purge-20260925.md', 'host-upgrade-compat.md', 'material-integration.md', 'recon.md', 'sophia-core-cleanup-plan.md'])
 // Each language's index links to its own side of the pair.
 const INDEXES = [
   { name: 'README.md', heading: '## Documentation entry points' },

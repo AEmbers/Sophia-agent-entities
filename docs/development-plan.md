@@ -827,6 +827,47 @@ HTTP 路由     GET /plugins/dsh-agent-teams/state → 401（存在且受鉴权�
 
 ---
 
+> **P2–P5 全量完成记录（2026-09 起实施，git 主线上逐项落地）**。实证以仓库 `git log` 与全量验证为准（`npm run typecheck`、`npm run build`、`npm run test`、`node scripts/check-package-boundaries.mjs` 全绿）。
+
+**✅ P2 · 编排层完成记录**
+
+| # | 任务 | 状态 | 实证 |
+|---|---|---|---|
+| 2.1 | 审批领域模型 + 持久化 | ✅ | `packages/orchestration/src/{types,store}.ts`；`types.ts` 内置 `proposalKey(goal,plan)` 去重；`store.ts` `withLock`+原子写，单测覆盖写入/读取/幂等 |
+| 2.2 | 状态机 + 超时 | ✅ | 8 态 `ApprovalState`（draft/pending_captain/pending_owner/approved/downgraded/rejected/materialized/expired），四条路径 + 三种超时，单测齐全 |
+| 2.3 | 3 个新工具 + 队长/Human 权限判定 | ✅ | `sophia_team_propose/review/approve` 经 `tools.ts` 注册；调用者权限判定在 `facade.ts` + dag-team 的 `resolveCaller`（member/captain/human 三态） |
+| 2.4 | Facade + materialize 双后端分派 | ✅ | `dag-team/sophia-dag-backend.ts`（DAG 物化）+ `agent-team/sophia-persistent-backend.ts`（PersistentHostAPI 经宿主账本物化） |
+| 2.5 | 递归建队 + 深度限制 + 去重 | ✅ | `orchestrationHost.maxTeamDepth` + `depthOfCaller` 上溯 parentSession；`proposalKey` 去重 |
+
+**✅ P3 · 卡片与模式选择完成记录**
+
+| # | 任务 | 状态 | 实证 |
+|---|---|---|---|
+| 3.1 | 审批卡定义 + 组件 | ✅ | `client-agent-team/src/client/dag/sophia-approval-card-definition.ts` + `SophiaApprovalCard.tsx`，`conversation.chat.node` keyed `sophia-approval` |
+| 3.2 | 模式选择器 + `set_mode` 路由 | ✅ | `TeamModeMenu`（dsh-client-ui-primitives `Menu`），`set_mode` 经 POST `/approvals/plan` |
+| 3.3 | 批准 → 按所选模式物化 | ✅ | `approve` 决策携带 `mode`，host 按 `persistent`/`dag` 分派物化 |
+| 3.4 | 成员只读卡 / 队长审核卡 | ✅ | `MemberWaitingCard`（只读）/ `CaptainReviewCard`（四个 verdict 按钮） |
+
+**✅ P4 · 通知与活动树双模式完成记录**
+
+| # | 任务 | 状态 | 实证 |
+|---|---|---|---|
+| 4.1 | 三条通知通道 + 并行降级 | ✅ | `orchestration/notifier.ts`：`AgentMailNotifier`/`ThreadNotifier`/`BadgeNotifier` + 并行 `dispatchApprovalNotifications`，单测 11 例 |
+| 4.2 | 待审批徽标 | ✅ | `SophiaApprovalBadge.tsx` + `startApprovalBadgePolling`，`sidebar.footer.action` order 150，轮询 `/plugins/dsh-sophia-entities/approvals` |
+| 4.3 | 活动树支持 `persistent` 模式渲染 | ✅ | `snapshot.ts` 增 `persistentTeamSnapshot` + 宿主 `/state` 混入 persistentTeams；`ActivityPanel` `TeamSection` 按 `mode` 分支渲染摘要卡 |
+| 4.4 | 基座侧栏第三段（可选） | ⏳ 未做 | 可选增强项，`shell.overlay` 活动树已两模式均可达，暂缓 |
+
+**✅ P5 · 工程收尾完成记录**
+
+| # | 任务 | 状态 | 实证 |
+|---|---|---|---|
+| 5.1 | 上游 skill 库并入或引用 | ⏳ 引用 | 上游 `dsh-agent-teams` checkout 已清理（技能源不可再本地 copy）；仓库自身已带纪律化 `packages/agent-team/core-skills/`（`check:core-skills` 门禁），11 个上游插件开发 skill 记录于 `docs/recon.md:137` 作参考，不并入仓库避免与自带 core-skills 重复 |
+| 5.2 | 边界检查脚本适配新包 | ✅ | `check-package-boundaries.mjs` 已含 5 包 125 source files，`npm run test` 中的边界门全绿 |
+| 5.3 | 文档回填 | ✅ | README/README.zh/CHANGELOG/CONTRIBUTING/LICENSE + 全文档品牌统一为 `dsh-sophia-entities`；本开发文档 P2–P5 完成态本表 |
+| 5.4 | 分发方式落地 | ✅ | `git remote origin=https://github.com/AEmbers/dsh-sophia-entities.git`（git 源分发，`.gitignore` 含 `lib/` 不追构建产物）；§10 D6 本地目录/git 源/npm 三态均已覆盖 |
+
+---
+
 ## 8. 验证方案
 
 ### 8.1 每阶段通用
