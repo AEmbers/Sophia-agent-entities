@@ -8,7 +8,7 @@ For Workspace, Session, storage, persistence, or Thread Inbox changes, read the 
 
 The published bundle routes only `agent_team` to SQLite at `$DSH_HOME/storages/agent_team.sqlite`; every other domain keeps JSON. The medium is created fresh and an older `agent_team.json` is never read or migrated. The backend is a vendored fork under our own package name (`dsh-sophia-entities/sqlite-backend`, see `packages/agent-team/src/vendor/storage-sqlite/`); [`development/storage-and-delivery.md`](../development/storage-and-delivery.md) owns why the fork exists and the boot constraint a loader row must not reintroduce.
 
-Message sources are producer-attributed on the dsh `0.1.7-rc.1` line: Session format V4 requires every durable source to carry its producer's own kind (never the retired `{ kind: 'plugin', plugin: … }` wrapper, which write admission refuses), and released V3 history is converted at read time — `plugin:<producer>`, `plugin` key dropped, `form`/`sections`/`summary` preserved — never rewritten on disk.
+Message sources are producer-attributed on the dsh `0.1.7-rc.2` line: Session format V4 requires every durable source to carry its producer's own kind (never the retired `{ kind: 'plugin', plugin: … }` wrapper, which write admission refuses), and released V3 history is converted at read time — `plugin:<producer>`, `plugin` key dropped, `form`/`sections`/`summary` preserved — never rewritten on disk.
 
 The read side recognizes both shapes for all three of this bundle's producer ids by exact identity, in one place (`packages/agent-team/src/context-source.ts` and the two per-Member producers that own their ids).
 

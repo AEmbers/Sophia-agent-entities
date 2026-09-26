@@ -18,7 +18,7 @@ Team ledger 仍是唯一的 Team durable authority。Recovery 和 teardown 改�
 
 Shipped bundle composition 只通过 public per-domain route table 把 `agent_team` domain 路由到 SQLite backend；其他 domains 保持 JSON default。SQLite medium（`$DSH_HOME/storages/agent_team.sqlite`）在首次 routed open 时全新创建；旧的 `agent_team.json` medium 永远不会被读取或迁移——是否移动或删除由 operator 决定。该 backend 是收归自有包名下的 vendored fork（`dsh-sophia-entities/sqlite-backend`，见 `packages/agent-team/src/vendor/storage-sqlite/`）；fork 为何存在、以及 loader 行不得重新引入的启动约束，归 [`development/storage-and-delivery.zh.md`](../development/storage-and-delivery.zh.md)。
 
-dsh `0.1.7-rc.1` 线上 message source 由生产者署名：Session format V4 要求每条持久 source 携带其生产者自身的 kind（退役的 `{ kind: 'plugin', plugin: … }` wrapper 会在写入准入被拒），而 released V3 历史由上游在读时转换——改名为 `plugin:<producer>`、删掉 `plugin` 键、保留 `form`/`sections`/`summary`——磁盘上永不改写。
+dsh `0.1.7-rc.2` 线上 message source 由生产者署名：Session format V4 要求每条持久 source 携带其生产者自身的 kind（退役的 `{ kind: 'plugin', plugin: … }` wrapper 会在写入准入被拒），而 released V3 历史由上游在读时转换——改名为 `plugin:<producer>`、删掉 `plugin` 键、保留 `form`/`sections`/`summary`——磁盘上永不改写。
 
 读侧对本 bundle 全部三个生产者 id 的两种形状按精确身份识别，收敛在一处（`packages/agent-team/src/context-source.ts` 与各自持有 id 的两个 per-Member 生产者）。
 

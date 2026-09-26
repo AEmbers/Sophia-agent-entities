@@ -222,9 +222,9 @@ Harness 随附一套 experimental Agent Teams，以独立 profile bundle 形式�
 
 ## 6. 当前基线
 
-当前 Team bundle 的已认证基线是 DSH `0.1.7-rc.1`；以下几段保留产生前几条基线的 `0.1.5` 历史。
+当前 Team bundle 的已认证基线是 DSH `0.1.7-rc.2`；以下几段保留产生前几条基线的 `0.1.5` 历史。
 
-DSH peers 正好声明这条已认证线：`>=0.1.7-rc.1 <0.1.8`，因此本仓库尚未验证的线会落在声明区间之外，而不是在未经核实的兼容声明下被装上。
+DSH peers 正好声明这条已认证线：`>=0.1.7-rc.2 <0.1.8`，因此本仓库尚未验证的线会落在声明区间之外，而不是在未经核实的兼容声明下被装上。
 
 经路由的 sqlite 后端是 vendored fork，根本不是 dependency（GitHub issue #28）：上游包只以 devDependency 钉在 fork 来源版本 0.1.5-rc.2，用作字节兼容 fixture 参照；每次兼容认证先把 fork 与该版本文件对一遍 diff，再做其他事。
 
@@ -252,9 +252,13 @@ preset 组合没有编译期或单测守卫：成员类 spec 用的是合成 pre
 
 存量历史的升级可行性是**实测**的，不是假定的：0.1.5 候选版的封闭 source-kind 审计会拒绝已发布线写出的每一份 Member artifact，此后 bundle 携带的启动期修复在本机全量 store 上修复了 44 份被拒 artifact，6 份因 Session 结构缺陷未动，没有向任何既有 artifact 写入一个字节，第二次遍历零发布。
 
-### DSH 0.1.7-rc.1
+### DSH 0.1.7-rc.2
 
-DSH `0.1.7-rc.1` 已认证，并推动基线前移。全部 `@deepseek-ai/dsh-*` peers 从 `>=0.1.5-rc.1 <0.1.6` 整体移动到 `>=0.1.7-rc.1 <0.1.8`：比较符只在自身 base tuple 上开放预发布，旧区间够不到任何 `0.1.6` 或 `0.1.7` 切点。被移除的 `@deepseek-ai/dsh-agent-presets` peer 随其指名的包一并删除。
+DSH `0.1.7-rc.2` 已认证，并推动基线前移。全部 `@deepseek-ai/dsh-*` peers 从 `>=0.1.5-rc.1 <0.1.6` 整体移动到 `>=0.1.7-rc.2 <0.1.8`：比较符只在自身 base tuple 上开放预发布，旧区间够不到任何 `0.1.6` 或 `0.1.7` 切点。被移除的 `@deepseek-ai/dsh-agent-presets` peer 随其指名的包一并删除。
+
+下界取 `rc.2` 而不是本轮源码适配最初面向的 `rc.1`：已认证线就是随附产物实际构建所在的线。
+
+host typert 面由 Harness API 生成，而 `ToolHistory`——我们 `agent-team` 面会点名的 Session 成员——首次出现在 `rc.2` 的 `packages/core/session/src/tool-history.ts`。因此在 `rc.1` 上重建的树会丢掉该声明，`npm run check:bundle` 也会正确地拒绝它；只要随附的还是这些 bundle，`rc.1` 就不能被声明为兼容线。
 
 本轮由两处上游契约变化驱动，且都需要源码适配：
 

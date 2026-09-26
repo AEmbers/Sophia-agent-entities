@@ -163,9 +163,9 @@ Record candidate tag, symptom, affected interface, reproduction command, and nex
 
 ## 6. Current baseline
 
-The current certified baseline is DSH `0.1.7-rc.1`; the paragraphs below preserve the `0.1.5` history that produced the preceding baselines.
+The current certified baseline is DSH `0.1.7-rc.2`; the paragraphs below preserve the `0.1.5` history that produced the preceding baselines.
 
-The DSH peers state exactly that certified line, `>=0.1.7-rc.1 <0.1.8`, so a line this repository has not verified falls outside the declared range instead of installing under an unverified compatibility claim.
+The DSH peers state exactly that certified line, `>=0.1.7-rc.2 <0.1.8`, so a line this repository has not verified falls outside the declared range instead of installing under an unverified compatibility claim.
 
 The routed sqlite backend is a vendored fork, not a dependency at all (GitHub issue #28): the upstream package stays a devDependency pinned at the fork source, 0.1.5-rc.2, as the byte-compatibility fixture reference, and every compat round diffs the fork against that version's file before anything else.
 
@@ -191,9 +191,13 @@ Both classes are release-blocking while npm `latest` points at the candidate.
 
 Existing-history upgrade viability was measured, not assumed: the `0.1.5` candidate's closed source-kind audit refused every Member artifact the released line wrote, and the startup repair pass the bundle then carried repaired 44 refused artifacts across this machine's full store, left 6 untouched for structural Session defects, wrote no byte into any pre-existing artifact, and published nothing on a second walk.
 
-### DSH 0.1.7-rc.1
+### DSH 0.1.7-rc.2
 
-DSH `0.1.7-rc.1` is certified and moves the baseline. Every `@deepseek-ai/dsh-*` peer moved together from `>=0.1.5-rc.1 <0.1.6` to `>=0.1.7-rc.1 <0.1.8`, because a comparator enables prereleases only on its own base tuple and the old range reached no `0.1.6` or `0.1.7` cut. The removed `@deepseek-ai/dsh-agent-presets` peer left with the package it named.
+DSH `0.1.7-rc.2` is certified and moves the baseline. Every `@deepseek-ai/dsh-*` peer moved together from `>=0.1.5-rc.1 <0.1.6` to `>=0.1.7-rc.2 <0.1.8`, because a comparator enables prereleases only on its own base tuple and the old range reached no `0.1.6` or `0.1.7` cut. The removed `@deepseek-ai/dsh-agent-presets` peer left with the package it named.
+
+The lower bound is `rc.2`, not the `rc.1` that this round's source adaptation was first written against, because the certified line is the line the shipped artifacts were built on.
+
+The host typert surface is generated from the Harness API, and `ToolHistory` — a Session member our `agent-team` surface names — first appears in `packages/core/session/src/tool-history.ts` at `rc.2`. A tree rebuilt on `rc.1` therefore drops the declaration and `npm run check:bundle` correctly refuses it, so `rc.1` cannot be claimed as a compatible line while these bundles are the ones we ship.
 
 Two upstream contract changes drove the round, and both required source adaptation:
 

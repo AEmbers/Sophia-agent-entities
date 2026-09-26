@@ -41,7 +41,7 @@ If this looks useful, a star on [GitHub](https://github.com/AEmbers/dsh-sophia-e
 
 ### 1. Check DSH
 
-This release is certified against DSH `0.1.7-rc.1`. If `dsh` is not installed yet, start DSH with the official package:
+This release is certified against DSH `0.1.7-rc.2`. If `dsh` is not installed yet, start DSH with the official package:
 
 ```sh
 npx @deepseek-ai/dsh web

@@ -24,7 +24,7 @@ All notable changes to this project are documented in this file. The format foll
 - Fixed the settings footnote naming the wrong version: 0.1.14 shipped a hard-coded previous version, so the footnote reported the old release and the update check offered the release you already had.
 - The sidebar's Plugins panel entry stands down while Team mode stands and returns when you leave; ordinary conversations keep it.
 - Fixed a fresh install of 0.1.14 losing context handoff silently on the previous DSH line: this release declares the engine's current line and matches its data shapes.
-- Certified against DSH `0.1.7-rc.1`: every `@deepseek-ai/dsh-*` peer moves together to `>=0.1.7-rc.1 <0.1.8`, so upgrade DSH together with this release. The `@deepseek-ai/dsh-agent-presets` peer left with the package it named.
+- Certified against DSH `0.1.7-rc.2`: every `@deepseek-ai/dsh-*` peer moves together to `>=0.1.7-rc.2 <0.1.8`, so upgrade DSH together with this release. The `@deepseek-ai/dsh-agent-presets` peer left with the package it named.
 - Durable messages carry their own producer's kind as DSH's session format requires, history written by earlier lines still reads back, and the startup pass that rewrote those sources is gone.
 
 ## [0.1.14] - 2026-09-22

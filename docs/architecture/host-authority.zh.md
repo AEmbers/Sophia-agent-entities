@@ -22,7 +22,7 @@ Team 是每个 DSH home 内唯一的协作域。append-only operation ledger 是
   读取完整被检视日志或外来日志的冷路径——activation、transition、timeline、carried-input 重放——仍全量折叠。 三者各自按 Member 保存一个 cursor，并在该 Member 的 Session 变化时替换，因此保留的折叠状态以 roster 为界，而不随 Member 经历过的代数增长。
 
 ## Session 持久化与重放
-- Bundle 目标为 DSH `0.1.7-rc.1`。 其 Session persistence 使用当前 DSH schema：随附的 JSONL backend 会自行迁移已发布的旧格式（v0/v1/v2 → V3 → V4），旧格式 Session 数据无需手动处置。 这个 DSH Session-schema 策略不会抹掉 Team operation history：Team 有意保留针对旧版、Message-level `occurredAt` 之前 records 的窄 replay normalization。 普通存储的 Message operations 在加载时使用包裹 operation 的 instant；旧 `team/thread-read` snapshot anchors 与 Message facts 从来源 Message operation 解析 instant，只有必要时才回退到 read operation——而 snapshot 正是唯一仍会走到这条 normalization 的记录形态：它把 Message anchors 与 Thread facts 连同消费掉的 Inbox delta 一起冻结在记录里。
+- Bundle 目标为 DSH `0.1.7-rc.2`。 其 Session persistence 使用当前 DSH schema：随附的 JSONL backend 会自行迁移已发布的旧格式（v0/v1/v2 → V3 → V4），旧格式 Session 数据无需手动处置。 这个 DSH Session-schema 策略不会抹掉 Team operation history：Team 有意保留针对旧版、Message-level `occurredAt` 之前 records 的窄 replay normalization。 普通存储的 Message operations 在加载时使用包裹 operation 的 instant；旧 `team/thread-read` snapshot anchors 与 Message facts 从来源 Message operation 解析 instant，只有必要时才回退到 read operation——而 snapshot 正是唯一仍会走到这条 normalization 的记录形态：它把 Message anchors 与 Thread facts 连同消费掉的 Inbox delta 一起冻结在记录里。
 
   当前每次读写入的 receipt 只存进度与 Inbox delta，是唯一不存任何 instant 的 Thread-read 形态；旧记录就地 normalize 并校验，绝不改写。 不要增加 Team 自有的 Session migration、宽泛 compatibility reads 或 fallback storage paths；可选的 `member.model` inheritance 与可选 Message attachments 都是当前语义，不是 legacy fields。
 
