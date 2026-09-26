@@ -65,6 +65,9 @@
       "dsh-sophia-entities/orchestration/types": [
         "./packages/orchestration/src/types.ts"
       ],
+      "dsh-sophia-entities/orchestration/routes": [
+        "./packages/orchestration/src/routes.ts"
+      ],
       "dsh-sophia-entities/persistent-backend": [
         "./packages/agent-team/src/sophia-persistent-backend.ts"
       ],

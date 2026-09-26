@@ -25,6 +25,8 @@ import { createWorkspaceState } from './workspace-state.ts'
 import { AgentTeamsCard, type AgentTeamsCardInjected } from './AgentTeamsCard.tsx'
 import type { ActivityPanelProps } from './ActivityPanel.tsx'
 import { agentTeamsCardDefinition } from './agent-teams-card-definition.ts'
+import { sophiaApprovalCardDefinition } from './sophia-approval-card-definition.ts'
+import SophiaApprovalCard, { type SophiaApprovalCardInjected } from './SophiaApprovalCard.tsx'
 import {
   AGENT_TEAMS_LOCALE_NAMESPACE, en, zh, type AgentTeamsLocaleKey,
 } from './locales.ts'
@@ -147,4 +149,16 @@ export function apply(ctx: ClientContext): void {
       openMember, workspaceBridge: bridge,
     }),
   }, AgentTeamsCard))
+
+  // Pending team-proposal approval card. It renders in the session where the
+  // proposal was folded (member's own session → read-only waiting card; the
+  // node-side owner/captain session injection surfaces the review/approve
+  // controls by registering the same component with `reviewer: true`).
+  ctx.uiConversation.events.register(sophiaApprovalCardDefinition)
+  ctx.slots.inject('conversation.chat.node', () => ctx.slots.register({
+    name: 'conversation.chat.node',
+    key: 'sophia-approval',
+    locale: AGENT_TEAMS_LOCALE_NAMESPACE,
+    inject: (): SophiaApprovalCardInjected => ({ reviewer: false }),
+  }, SophiaApprovalCard))
 }

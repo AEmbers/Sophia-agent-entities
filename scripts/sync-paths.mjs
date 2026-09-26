@@ -40,6 +40,7 @@ const own = {
   'dsh-sophia-entities/orchestration/facade': ['./packages/orchestration/src/facade.ts'],
   'dsh-sophia-entities/orchestration/tools': ['./packages/orchestration/src/tools.ts'],
   'dsh-sophia-entities/orchestration/types': ['./packages/orchestration/src/types.ts'],
+  'dsh-sophia-entities/orchestration/routes': ['./packages/orchestration/src/routes.ts'],
   // agent-team's persistent TeamBackend for the approval plane; the host
   // surface (dsh-sophia-entities/host) does not export it, so the glue reaches
   // it through its own declared subpath.
@@ -94,6 +95,7 @@ const buildOwn = {
   'dsh-sophia-entities/orchestration/facade': ['./packages/orchestration/lib/types/facade.d.ts'],
   'dsh-sophia-entities/orchestration/tools': ['./packages/orchestration/lib/types/tools.d.ts'],
   'dsh-sophia-entities/orchestration/types': ['./packages/orchestration/lib/types/types.d.ts'],
+  'dsh-sophia-entities/orchestration/routes': ['./packages/orchestration/lib/types/routes.d.ts'],
   'dsh-sophia-entities/persistent-backend': ['./packages/agent-team/lib/types/sophia-persistent-backend.d.ts'],
 }
 

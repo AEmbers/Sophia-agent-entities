@@ -42,7 +42,7 @@ import { findTeamByCaptain } from './state.ts'
 import { formatProfilesForPrompt, type TeamProfileConfig } from './profiles.ts'
 import { installTeamCapabilities } from './capabilities.ts'
 import { TEAM_TOOL_NAMES } from './tool-names.ts'
-import { installSophiaApprovalPlane } from './sophia-approval.ts'
+import { installSophiaApprovalPlane, registerApprovalRoutes, type ApprovalPlaneHandle } from './sophia-approval.ts'
 
 import { authenticatedWebRoutes, readJsonRequest, RequestBodyError, type BrowserRequestGate, type WebRouteHost } from './web-routes.ts'
 
@@ -175,8 +175,9 @@ export function apply(ctx: Context, config: Config): void {
   // approve) into this plugin. Best-effort — a failed wiring (e.g. a minimal
   // composition without the agent-team host) must never break dag-team
   // registration; the lazy persistent backend fails at first use instead.
+  let approvalHandle: ApprovalPlaneHandle | undefined
   try {
-    installSophiaApprovalPlane(ctx, { runtime: agentTeamsRuntime, resolved })
+    approvalHandle = installSophiaApprovalPlane(ctx, { runtime: agentTeamsRuntime, resolved })
   } catch (error: unknown) {
     ctx.logger.warn(`agent-teams: approval plane not wired: ${error instanceof Error ? error.message : String(error)}`)
   }
@@ -438,6 +439,15 @@ export function apply(ctx: Context, config: Config): void {
       },
     }), 'agent-teams: plan route')
 
+    // Sophia approvals surface: the browser approval card polls the pending
+    // queue (GET /approvals) and posts plan decisions (POST /approvals/plan).
+    // The connection gate has already authenticated the browser, so these
+    // routes are bound inside the same web-registered gate, guarded on the
+    // approval plane actually having been installed.
+    if (approvalHandle !== undefined) {
+      registerApprovalRoutes(ctx, webServer, approvalHandle.facade)
+    }
+
   // Whale mascot artwork: serve the packaged V2 role/action images to the
   // activity panel. An explicit allowlist guards the route (no path
   // traversal); the images ship with the bundle (files: assets/).
@@ -554,5 +564,8 @@ export { sophiaDagBackendFor } from './sophia-dag-backend.ts'
 // orchestration approval tools exposed through this plugin, and hands hosts /
 // the P3 route layer the handle for request listing and activity. See
 // packages/dag-team/src/sophia-approval.ts.
-export { installSophiaApprovalPlane } from './sophia-approval.ts'
+export { installSophiaApprovalPlane, registerApprovalRoutes, parseApprovalPlanAction } from './sophia-approval.ts'
 export type { SophiaApprovalPlaneOptions, ApprovalPlaneHandle } from './sophia-approval.ts'
+// Approval HTTP surface types (design §4.9) re-exported for hosts mounting the
+// endpoints and for clients of the /approvals + /approvals/plan routes.
+export type { ApprovalsSnapshot, ApprovalPlanAction } from 'dsh-sophia-entities/orchestration/routes'

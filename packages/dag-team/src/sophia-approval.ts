@@ -34,6 +34,8 @@ import type { AgentTeamsRuntime, ToolsConfig } from './tools.ts'
 import { sophiaDagBackendFor } from './sophia-dag-backend.ts'
 import { CAPTAIN_KEY, findTeamByParticipant, readTeam } from './state.ts'
 import { sessionOwnEvents } from './harness-compat.ts'
+import { readJsonRequest, RequestBodyError, type WebRouteHost } from './web-routes.ts'
+import { snapshotApprovals, runApprovalPlanAction, type ApprovalPlanAction } from 'dsh-sophia-entities/orchestration/routes'
 
 /** Workspace registry service key candidates, mirroring index.ts. */
 const WORKSPACE_KEYS = ['workspaceRegistry', 'workspace'] as const
@@ -143,6 +145,141 @@ function buildApprovalPlane(
     persistentBackend,
     workingDirectory,
     maxTeamDepth: resolved.memberMaxDepth ?? 0,
+  }
+}
+
+/**
+ * P3 approval HTTP surface (design §4.9). Registers the two endpoints the
+ * browser approval card and badge poll into the authenticated web server
+ * (index.ts `registerWebSurface`):
+ *
+ *   GET  /plugins/dsh-sophia-entities/approvals       → pending queue snapshot
+ *   POST /plugins/dsh-sophia-entities/approvals/plan  → set_mode / approve / reject / review
+ *
+ * The handlers mirror the neighbouring /state /halt /plan routes in index.ts
+ * (method gate, `readJsonRequest`, JSON + cache-control:no-store, session
+ * resolution through the live `agents` registry). The connection gate has
+ * already authenticated the browser as the human operator, so every plan
+ * caller is the Human owner; the human session id rides in the request body
+ * exactly like the halt route's `sessionId` and is rejected with 409 when it
+ * is not attached. Registering is idempotent per web server via `ctx.effect`.
+ */
+export function registerApprovalRoutes(
+  ctx: Context,
+  webServer: WebRouteHost,
+  facade: SophiaTeamFacade,
+): void {
+  ctx.effect(() => webServer.register({
+    kind: 'exact',
+    path: '/plugins/dsh-sophia-entities/approvals',
+    handler: async (req, res) => {
+      if (req.method !== 'GET') {
+        res.writeHead(405, { allow: 'GET', 'cache-control': 'no-store' })
+        res.end()
+        return
+      }
+      try {
+        const snapshot = await snapshotApprovals(facade)
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+        res.end(JSON.stringify(snapshot))
+      } catch (error: unknown) {
+        ctx.logger.warn(`agent-teams: approvals snapshot failed: ${String(error)}`)
+        res.writeHead(500, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+        res.end(JSON.stringify({ error: 'failed to load pending approvals' }))
+      }
+    },
+  }), 'agent-teams: approvals route')
+
+  ctx.effect(() => webServer.register({
+    kind: 'exact',
+    path: '/plugins/dsh-sophia-entities/approvals/plan',
+    handler: async (req, res) => {
+      if (req.method !== 'POST') {
+        res.writeHead(405, { allow: 'POST', 'cache-control': 'no-store' })
+        res.end()
+        return
+      }
+      let payload: Record<string, unknown>
+      try {
+        payload = await readJsonRequest(req)
+      } catch (error: unknown) {
+        res.writeHead(error instanceof RequestBodyError ? error.status : 400, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+        res.end(JSON.stringify({ error: error instanceof Error ? error.message : 'invalid request body' }))
+        return
+      }
+      const sessionId = typeof payload['sessionId'] === 'string' ? payload['sessionId'].trim() : ''
+      if (sessionId === '') {
+        res.writeHead(400, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+        res.end(JSON.stringify({ error: 'sessionId is required' }))
+        return
+      }
+      if (ctx.agents.get(sessionId as SessionId) === undefined) {
+        res.writeHead(409, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+        res.end(JSON.stringify({ error: 'human session is not attached' }))
+        return
+      }
+      let action: ApprovalPlanAction
+      try {
+        action = parseApprovalPlanAction(payload)
+      } catch (error: unknown) {
+        res.writeHead(400, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+        res.end(JSON.stringify({ error: error instanceof Error ? error.message : 'invalid approval plan action' }))
+        return
+      }
+      try {
+        const result = await runApprovalPlanAction(facade, { isHuman: true, sessionId }, action)
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+        res.end(JSON.stringify(result))
+      } catch (error: unknown) {
+        ctx.logger.warn(`agent-teams: approval plan action failed: ${String(error)}`)
+        res.writeHead(500, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+        res.end(JSON.stringify({ error: error instanceof Error ? error.message : 'approval plan action failed' }))
+      }
+    },
+  }), 'agent-teams: approvals plan route')
+}
+
+/** Valid strings for `ApprovalPlanAction.action`. */
+const APPROVAL_ACTIONS = new Set(['set_mode', 'approve', 'reject', 'review'])
+
+/** Valid strings for `ApprovalPlanAction.mode`. */
+const APPROVAL_MODES = new Set(['persistent', 'dag'])
+
+/** Valid strings for `ApprovalPlanAction.decision`. */
+const APPROVAL_DECISIONS = new Set(['approve_dag', 'approve_persistent', 'downgrade_to_dag', 'reject', 'approve'])
+
+/**
+ * Reads the plan request body into an `ApprovalPlanAction`, rejecting unknown
+ * actions and missing request ids with a descriptive message that the route
+ * maps to 400 (mirrors the `/plan` route's per-field validation).
+ */
+export function parseApprovalPlanAction(payload: Record<string, unknown>): ApprovalPlanAction {
+  const action = payload['action']
+  const requestId = payload['requestId']
+  if (typeof action !== 'string' || !APPROVAL_ACTIONS.has(action)) {
+    throw new Error('action must be one of set_mode, approve, reject, review')
+  }
+  if (typeof requestId !== 'string' || requestId.trim() === '') {
+    throw new Error('requestId is required')
+  }
+  const mode = payload['mode']
+  if (mode !== undefined && (typeof mode !== 'string' || !APPROVAL_MODES.has(mode))) {
+    throw new Error('mode must be persistent or dag')
+  }
+  const decision = payload['decision']
+  if (decision !== undefined && (typeof decision !== 'string' || !APPROVAL_DECISIONS.has(decision))) {
+    throw new Error('decision must be one of approve_dag, approve_persistent, downgrade_to_dag, reject, approve')
+  }
+  const reason = payload['reason']
+  if (reason !== undefined && typeof reason !== 'string') {
+    throw new Error('reason must be a string')
+  }
+  return {
+    action: action as ApprovalPlanAction['action'],
+    requestId: requestId.trim(),
+    ...(mode !== undefined ? { mode: mode as ApprovalPlanAction['mode'] } : {}),
+    ...(decision !== undefined ? { decision: decision as ApprovalPlanAction['decision'] } : {}),
+    ...(reason !== undefined ? { reason } : {}),
   }
 }
 
