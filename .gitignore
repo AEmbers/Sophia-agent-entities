@@ -3,7 +3,11 @@ node_modules/
 *.log
 .DS_Store
 artifacts/
-.scratch/local/
+# Scratch space: local-only by construction, so ignore the whole tree rather
+# than a single leaf. The 2048px portrait masters live in
+# .scratch/avatar-sources-2048/ — they are 87 MB and exist only to regenerate
+# the shipped avatars, so they must never be committed.
+.scratch/
 # Local generation-time state: sync-paths.mjs rewrites it per run (a cert
 # generation records the tag-suffixed checkout name). Never commit it.
 .generated-harness
