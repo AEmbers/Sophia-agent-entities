@@ -157,13 +157,19 @@ try {
   const tempName = basename(tempPackage)
   const generatedRoots = [tempPackage, `packages/${tempName}`, `packages\\${tempName}`]
   const stable = value => generatedRoots.reduce((text, root) => text.replaceAll(root, 'packages/agent-team'), value)
+  // The emitter copies JSDoc and signature text out of the analyzed sources, and
+  // a Windows checkout with `core.autocrlf` has CRLF in those files, so the same
+  // commit would emit different bytes per platform (the committed artifact is
+  // LF). Git normalizes on commit, so the CR survives only inside a string
+  // literal, which is why it has to be folded here rather than left to the diff.
+  const foldLineEndings = value => value.replaceAll('\r\n', '\n')
   const output = join(packageRoot, 'lib')
   await mkdir(output, { recursive: true })
-  await writeFile(join(output, 'typert.host.js'), stable(artifact.js))
-  await writeFile(join(output, 'typert.host.d.ts'), artifact.dts)
-  await writeFile(join(output, 'typert.remote-client.js'), stable(artifact.remote.js))
-  await writeFile(join(output, 'typert.remote-client.d.ts'), artifact.remote.dts)
-  await writeFile(join(output, 'typert.remote-client.d.ts.map'), artifact.remote.dtsMap)
+  await writeFile(join(output, 'typert.host.js'), foldLineEndings(stable(artifact.js)))
+  await writeFile(join(output, 'typert.host.d.ts'), foldLineEndings(artifact.dts))
+  await writeFile(join(output, 'typert.remote-client.js'), foldLineEndings(stable(artifact.remote.js)))
+  await writeFile(join(output, 'typert.remote-client.d.ts'), foldLineEndings(artifact.remote.dts))
+  await writeFile(join(output, 'typert.remote-client.d.ts.map'), foldLineEndings(artifact.remote.dtsMap))
 } finally {
   await rm(tempPackage, { recursive: true, force: true })
   await rm(contractDir, { recursive: true, force: true })

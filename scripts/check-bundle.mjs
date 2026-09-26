@@ -52,8 +52,31 @@ const paths = (listing) => listing.split('\n').map(line => line.trim()).filter(B
 // emitted file at any depth, which is the contract this check states.
 const ARTIFACTS = ['packages/*/lib/*']
 
+/**
+ * Artifacts that cannot be byte-stable across machines, and are therefore
+ * outside the contract this check can enforce.
+ *
+ * `client.js` and its map carry CSS Module class names. The Harness preset
+ * hashes a class as `[hash]_[local]` through LightningCSS, keyed on the
+ * stylesheet's absolute path, so the same source yields `itrw-q_section` on one
+ * checkout and `x08wIa_section` on another. That is upstream of this repository
+ * — the preset builds the virtual module and picks the filename — and no change
+ * here can make it reproducible, so a stricter comparison would only fail on
+ * every machine except the one that last committed.
+ *
+ * This is scoped to exactly the two files that carry derived class names. Every
+ * other emitted artifact, including the typert channels, stays compared: those
+ * are the ones a stale commit can genuinely desynchronize from src/.
+ */
+const NOT_REPRODUCIBLE = new Set([
+  'packages/client-agent-team/lib/client.js',
+  'packages/client-agent-team/lib/client.js.map',
+])
+
 const moved = [
-  ...paths(git('diff', '--name-only', 'HEAD', '--', ...ARTIFACTS)).map(path => `moved     ${path}`),
+  ...paths(git('diff', '--name-only', 'HEAD', '--', ...ARTIFACTS))
+    .filter(path => !NOT_REPRODUCIBLE.has(path))
+    .map(path => `moved     ${path}`),
   ...paths(git('ls-files', '--others', '--exclude-standard', '--', ...ARTIFACTS)).map(path => `untracked ${path}`),
 ]
 
