@@ -176,6 +176,7 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/schemastery": "^3.0.0",
     "@deepseek-ai/dsh-agent": ">=0.1.7-rc.1 <0.1.8",
     "@deepseek-ai/dsh-agent-default-model": ">=0.1.7-rc.1 <0.1.8",
     "@deepseek-ai/dsh-agent-preset": ">=0.1.7-rc.1 <0.1.8",
