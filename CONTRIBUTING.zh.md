@@ -28,11 +28,11 @@
 
 ## CI 会跑什么
 
-一个 PR 跑两条 lane：`ubuntu-latest` 与 `windows-latest`。两条 lane 执行同一套六步环境契约——corepack shim、钉住的 Harness checkout、Harness 安装与构建、本仓库安装、bundle 构建、path facade——然后跑 `npm run typecheck` 与 `npm test`。**只改文档**的 `master` push 会跳过门禁，PR 永远不跳。`npm run test:browser` 故意不进 CI，浏览器验收是本地步骤：改动可见时，这份证据要你自己附上。环境契约本身、以及必须与钉住 tag 一起改动的三个文件，见 [`docs/development/environments-and-install.zh.md`](docs/development/environments-and-install.zh.md) §「沙箱与 CI 环境」。
+一个 PR 跑两条 lane：`ubuntu-latest` 与 `windows-latest`。两条 lane 执行同一套六步环境契约——corepack shim、钉住的 Harness checkout、Harness 安装与构建、本仓库安装、bundle 构建、path facade——然后跑 `npm run typecheck` 与 `npm test`。**只改文档**的 `main` push 会跳过门禁，PR 永远不跳。`npm run test:browser` 故意不进 CI，浏览器验收是本地步骤：改动可见时，这份证据要你自己附上。环境契约本身、以及必须与钉住 tag 一起改动的三个文件，见 [`docs/development/environments-and-install.zh.md`](docs/development/environments-and-install.zh.md) §「沙箱与 CI 环境」。
 
 ## PR 里应该有什么
 
-- **目标分支是 `master`**；`master` 前进后 rebase 你自己的分支即可，`master` 的历史不会被重写。
+- **目标分支是 `main`**；`main` 前进后 rebase 你自己的分支即可，`main` 的历史不会被重写。
 - **每个 commit 一行 Conventional Commits**——`type: lowercase imperative summary`（`feat`、`fix`、`chore`、`refactor`、`test`、`perf`、`docs`）——不带正文。PR 以单个 squash commit 落地，历史留下的就是这行标题。
 - **每处改动都要说**，不只是最显眼的那处：正文只覆盖一半 diff，reviewer 就得反推另一半。
 - **用户可见的改动要更新 [`CHANGELOG.md`](CHANGELOG.md)**，写在 `Unreleased` 下。
@@ -45,6 +45,6 @@
 
 ## 这里怎么做 review
 
-日常工作发生在 Agent Team 的 Thread 里：改动和它背后的证据一起被审。部分 commit 与 review 由团队的 agent 成员撰写，也可能收到来自 `hoplite` bot 的自动 PR。Review 要的是证据，不是风格。合并一律是 `master` 上的 squash commit；发布是**批量**的，不是持续发布——见 [`docs/development/environments-and-install.zh.md`](docs/development/environments-and-install.zh.md) §「Profile 模式与发布节奏」。
+日常工作发生在 Agent Team 的 Thread 里：改动和它背后的证据一起被审。部分 commit 与 review 由团队的 agent 成员撰写，也可能收到来自 `hoplite` bot 的自动 PR。Review 要的是证据，不是风格。合并一律是 `main` 上的 squash commit；发布是**批量**的，不是持续发布——见 [`docs/development/environments-and-install.zh.md`](docs/development/environments-and-install.zh.md) §「Profile 模式与发布节奏」。
 
 拿不准这个改动是否被需要？先开 issue，比被拒的 PR 便宜。

@@ -28,11 +28,11 @@ Run the smallest sufficient set for the change, then escalate with its surface:
 
 ## What CI runs
 
-A pull request runs two lanes, `ubuntu-latest` and `windows-latest`. Each lane executes the same six-step environment contract — corepack shims, pinned Harness checkout, Harness install and build, this repository's install, bundle build, path facades — and then `npm run typecheck` and `npm test`. A documentation-only push to `master` skips the gate; a pull request never does. `npm run test:browser` is deliberately not in CI, so browser acceptance stays a local step: include that evidence yourself when your change is visible. The contract and the three files that must move together with the pinned tag: [`docs/development/environments-and-install.md`](docs/development/environments-and-install.md) § "Sandbox and CI environments".
+A pull request runs two lanes, `ubuntu-latest` and `windows-latest`. Each lane executes the same six-step environment contract — corepack shims, pinned Harness checkout, Harness install and build, this repository's install, bundle build, path facades — and then `npm run typecheck` and `npm test`. A documentation-only push to `main` skips the gate; a pull request never does. `npm run test:browser` is deliberately not in CI, so browser acceptance stays a local step: include that evidence yourself when your change is visible. The contract and the three files that must move together with the pinned tag: [`docs/development/environments-and-install.md`](docs/development/environments-and-install.md) § "Sandbox and CI environments".
 
 ## What a pull request should contain
 
-- **Target `master`**, and rebase your own branch when it moves. `master` history is never rewritten.
+- **Target `main`**, and rebase your own branch when it moves. `main` history is never rewritten.
 - **One Conventional Commits subject line** per commit — `type: lowercase imperative summary` (`feat`, `fix`, `chore`, `refactor`, `test`, `perf`, `docs`) — with no body. Pull requests land as one squashed commit, so the title is what history keeps.
 - **Every change, not the headline one.** A body that covers half the diff makes the reviewer reverse-engineer the rest.
 - **A user-visible change updates [`CHANGELOG.md`](CHANGELOG.md)** under `Unreleased`.
@@ -45,6 +45,6 @@ A pull request runs two lanes, `ubuntu-latest` and `windows-latest`. Each lane e
 
 ## How review works here
 
-Day-to-day work happens in Agent Team Threads, where a change is reviewed alongside the evidence behind it; some commits and reviews are authored by the team's agent members, and automated pull requests may arrive from the `hoplite` bot. Reviews ask for evidence rather than style. Merges are squash commits on `master`, and releases are batched rather than continuous — [`docs/development/environments-and-install.md`](docs/development/environments-and-install.md) § "Profiles and release cadence".
+Day-to-day work happens in Agent Team Threads, where a change is reviewed alongside the evidence behind it; some commits and reviews are authored by the team's agent members, and automated pull requests may arrive from the `hoplite` bot. Reviews ask for evidence rather than style. Merges are squash commits on `main`, and releases are batched rather than continuous — [`docs/development/environments-and-install.md`](docs/development/environments-and-install.md) § "Profiles and release cadence".
 
 Unsure whether a change is wanted? Open an issue first; it is cheaper than a rejected pull request.

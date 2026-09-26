@@ -51,7 +51,7 @@ A resolution with no package layout aborts immediately with the candidates it tr
 
 Advancing the engine means updating that one entry and committing `pnpm-lock.yaml`; a local run that resolves the sibling checkout must have that checkout built (`npm run build` there).
 
-**CI lanes. ** [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) runs typecheck plus the full test suite on clean `ubuntu-latest` and `windows-latest` runners — on pull requests, pushes to `master`, and manual `workflow_dispatch`. Both lanes execute the same six-step environment contract above; the Windows lane runs every step through git bash (`shell: bash`) because the default pwsh breaks backslash line continuations, and links the harness packages through directory junctions so no symlink privilege is needed.
+**CI lanes. ** [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) runs typecheck plus the full test suite on clean `ubuntu-latest` and `windows-latest` runners — on pull requests, pushes to `main`, and manual `workflow_dispatch`. Both lanes execute the same six-step environment contract above; the Windows lane runs every step through git bash (`shell: bash`) because the default pwsh breaks backslash line continuations, and links the harness packages through directory junctions so no symlink privilege is needed.
 
 Scope guard: no coverage matrix, no release automation, and no `test:browser` — browser acceptance stays a local step. The Windows lane is the regression fence for filesystem-identifier bugs (issues #7/#8). The only adjustable variable is `DSH_HARNESS_TAG`; when certification advances the tag, update the workflow env, this document, and [`.hoplite/settings.json`](../../.hoplite/settings.json) together — the three stay in sync by hand.
 
@@ -93,14 +93,14 @@ The minimum compatible DSH version is `0.1.7-rc.1`. DSH's JSONL Session persiste
 
 ### Rewriting and pushing history
 
-Local refs can be the only copy of what `master` does not contain: the `backup-pre-*` branches and the local-only tags that pin abandoned pre-rewrite commits are one such family, and deleting them is irreversible. Pushing them is irreversible in the other direction — this repository is public, and a published commit cannot be withdrawn.
+Local refs can be the only copy of what `main` does not contain: the `backup-pre-*` branches and the local-only tags that pin abandoned pre-rewrite commits are one such family, and deleting them is irreversible. Pushing them is irreversible in the other direction — this repository is public, and a published commit cannot be withdrawn.
 
 Before rewriting history — `reset --hard` over committed work, `rebase`, or an amend that abandons commits with unique content — park the current tip in a `backup-pre-<what>-<YYYYMMDD>` branch, or in a `git bundle` file when the refs themselves are about to be deleted. Without one, `git reflog` is the only anchor for the abandoned commits and `git gc` prunes unreachable objects; the 2026-09-12 rewrite of the 0.1.11 round created no backup ref, so only the reflog held the replaced commits.
 
 Before pushing, dry-run the exact refspec and require the output to name only the refs you intend to publish:
 
 ```sh
-git push --dry-run origin master    # add the version tag when the push is a release
+git push --dry-run origin main    # add the version tag when the push is a release
 ```
 
 A third ref means a local-only ref would go public — stop and resolve it first. `git push --all` and `git push --tags` bypass this gate and are never the release command. A release push is this same fence with the version tag added; the sequence around it is in [`release-runbook.md`](../release-runbook.md) §5.

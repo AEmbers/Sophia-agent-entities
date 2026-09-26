@@ -64,8 +64,8 @@
 git add package.json CHANGELOG.md
 git commit -m "chore: release X.Y.Z"
 git tag vX.Y.Z
-git push --dry-run origin master vX.Y.Z   # 栅栏：这里必须恰好只列这两个 ref
-git push origin master vX.Y.Z
+git push --dry-run origin main vX.Y.Z   # 栅栏：这里必须恰好只列这两个 ref
+git push origin main vX.Y.Z
 npm publish --access public
 ```
 

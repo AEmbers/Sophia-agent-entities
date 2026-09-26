@@ -64,8 +64,8 @@ Assert all four release-semantics facts **before** pushing or publishing:
 git add package.json CHANGELOG.md
 git commit -m "chore: release X.Y.Z"
 git tag vX.Y.Z
-git push --dry-run origin master vX.Y.Z   # fence: this must list exactly these two refs
-git push origin master vX.Y.Z
+git push --dry-run origin main vX.Y.Z   # fence: this must list exactly these two refs
+git push origin main vX.Y.Z
 npm publish --access public
 ```
 
