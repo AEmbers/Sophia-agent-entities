@@ -157,12 +157,14 @@ try {
   const tempName = basename(tempPackage)
   const generatedRoots = [tempPackage, `packages/${tempName}`, `packages\\${tempName}`]
   const stable = value => generatedRoots.reduce((text, root) => text.replaceAll(root, 'packages/agent-team'), value)
-  // The emitter copies JSDoc and signature text out of the analyzed sources, and
-  // a Windows checkout with `core.autocrlf` has CRLF in those files, so the same
-  // commit would emit different bytes per platform (the committed artifact is
-  // LF). Git normalizes on commit, so the CR survives only inside a string
-  // literal, which is why it has to be folded here rather than left to the diff.
-  const foldLineEndings = value => value.replaceAll('\r\n', '\n')
+  // The emitter copies JSDoc and signature text out of the analyzed sources and
+  // re-encodes it as JSON string escapes, so a Windows checkout with
+  // `core.autocrlf` yields `\r\n` escape pairs where a Linux one yields `\n` —
+  // the committed artifact is the LF form. The CRLF here is two escape
+  // sequences, not two bytes: folding real line endings does nothing to it, and
+  // git never normalizes it, because as far as git is concerned the file's own
+  // lines already end in LF. Fold the escapes so one commit emits one artifact.
+  const foldLineEndings = value => value.replaceAll('\\r\\n', '\\n')
   const output = join(packageRoot, 'lib')
   await mkdir(output, { recursive: true })
   await writeFile(join(output, 'typert.host.js'), foldLineEndings(stable(artifact.js)))
