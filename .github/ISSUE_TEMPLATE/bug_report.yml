@@ -16,7 +16,7 @@ body:
     attributes:
       label: Version
       description: "`dsh --version`, plus the version of `dsh-sophia-entities` (`dsh plugin --profile web ls dsh-sophia-entities`). If you upgraded DSH after installing the plugin, say so."
-      placeholder: "DSH 0.1.7-rc.1 · plugin 0.2.0"
+      placeholder: "DSH 0.1.7-rc.2 · plugin 0.2.0"
     validations:
       required: true
 
