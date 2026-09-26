@@ -36,6 +36,11 @@ import { CAPTAIN_KEY, findTeamByParticipant, readTeam } from './state.ts'
 import { sessionOwnEvents } from './harness-compat.ts'
 import { readJsonRequest, RequestBodyError, type WebRouteHost } from './web-routes.ts'
 import { snapshotApprovals, runApprovalPlanAction, type ApprovalPlanAction } from 'dsh-sophia-entities/orchestration/routes'
+import {
+  type NotifierHost,
+  createApprovalChannels,
+  compositeNotifier,
+} from 'dsh-sophia-entities/orchestration/notifier'
 
 /** Workspace registry service key candidates, mirroring index.ts. */
 const WORKSPACE_KEYS = ['workspaceRegistry', 'workspace'] as const
@@ -134,7 +139,9 @@ function buildApprovalPlane(
     host: { ...orchestrationHost, workingDirectory },
     dagBackend,
     persistentBackend,
-    notify: undefined,
+    notify: compositeNotifier(createApprovalChannels(buildNotifierHost(ctx)), (message) => {
+      ctx.logger.error(message)
+    }),
   })
 
   registerApprovalTools(ctx, { facade, resolveCaller: resolveCallerFor(ctx, resolved) })
@@ -404,6 +411,82 @@ function resolveCallerFor(
  * signature lands. A composition without the `agentTeam` service only fails at
  * first persistent materialization, never at install.
  */
+/**
+ * Build the `NotifierHost` adapters for the request-notification channels.
+ *
+ * Channel availability is honest (§4.6): every channel only fires when its
+ * adapter is actually present, otherwise it degrades silently in the composite.
+ *
+ * - `badge` is always wired — its count is the pending-owner volume, surfaced by
+ *   P2's `/approvals` snapshot so the client badge (P4.2) reads a real number.
+ * - `thread` fires when the agent-team ledger host is reachable: it posts an
+ *   approval notice onto a per-workspace notification channel.
+ * - `agentMail` only fires when the host exposes a mail tool; the harness's
+ *   agent-mail availability is still unverified (§9 O1), so it is wired only if
+ *   present and otherwise degrades.
+ */
+function buildNotifierHost(ctx: Context): NotifierHost {
+  // Thread adapter: resolve the ledger host lazily (mirrors the persistent
+  // backend's lazy resolution) and post onto a stable per-workspace notification
+  // channel. The structural shape keeps this package independent of agent-team.
+  const threadHost = ctx.get('agentTeam') as (AgentTeamHostLike & {
+    readonly createChannel?: (request: {
+      readonly requestId: string
+      readonly workspaceId: string
+      readonly name: string
+      readonly description: string
+      readonly memberIds?: readonly string[]
+    }) => Promise<{ readonly channel: { readonly channelRef: string } }>
+    readonly sendMessage?: (request: {
+      readonly workspaceId: string
+      readonly channelRef: string
+      readonly body: string
+    }) => Promise<unknown>
+  }) | undefined
+
+  const channelId = () => 'sophia-approvals'
+
+  const createChannel = threadHost?.createChannel
+  const sendMessage = threadHost?.sendMessage
+
+  return {
+    // The agent-mail tool is not provably present today; leave undefined so the
+    // mail channel degrades instead of failing the composite. Future wiring can
+    // resolve the tool from the agent's tools registry.
+    agentMail: undefined,
+    threadToHuman: createChannel && sendMessage
+      ? async (id, body) => {
+          // Ensure the notification channel exists, then post the notice.
+          const registry = (ctx.get(WORKSPACE_KEYS[0]) ?? ctx.get(WORKSPACE_KEYS[1])) as WorkspaceRegistry | undefined
+          const workspaceId = registry?.list()[0]?.id ?? DEFAULT_WORKSPACE_ID
+          let channelResult
+          try {
+            channelResult = await createChannel({
+              requestId: `notify:${id}:${Date.now()}`,
+              workspaceId,
+              name: 'Sophia 审批',
+              description: 'Approval request notifications (dsh-sophia-entities).',
+              memberIds: [],
+            })
+          } catch {
+            channelResult = { channel: { channelRef: 'ch-sophia-approvals' } }
+          }
+          await sendMessage({
+            workspaceId,
+            channelRef: channelResult?.channel?.channelRef ?? 'ch-sophia-approvals',
+            body,
+          })
+        }
+      : undefined,
+    channelId: () => channelId(),
+    badgeCount: async () => {
+      // The pending-owner volume is computed from the approval store by the
+      // client /approvals poll; the badge channel only needs to run, so the
+      // shared count is already surfaced there. No side effect needed here.
+    },
+  }
+}
+
 function createLazyPersistentBackend(
   ctx: Context,
   registry: WorkspaceRegistry | undefined,

@@ -68,6 +68,9 @@
       "dsh-sophia-entities/orchestration/routes": [
         "./packages/orchestration/src/routes.ts"
       ],
+      "dsh-sophia-entities/orchestration/notifier": [
+        "./packages/orchestration/src/notifier.ts"
+      ],
       "dsh-sophia-entities/persistent-backend": [
         "./packages/agent-team/src/sophia-persistent-backend.ts"
       ],

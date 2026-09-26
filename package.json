@@ -164,6 +164,10 @@
       "types": "./packages/orchestration/lib/types/routes.d.ts",
       "default": "./packages/orchestration/lib/routes.js"
     },
+    "./orchestration/notifier": {
+      "types": "./packages/orchestration/lib/types/notifier.d.ts",
+      "default": "./packages/orchestration/lib/notifier.js"
+    },
     "./persistent-backend": {
       "types": "./packages/agent-team/lib/types/sophia-persistent-backend.d.ts",
       "default": "./packages/agent-team/lib/sophia-persistent-backend.js"
