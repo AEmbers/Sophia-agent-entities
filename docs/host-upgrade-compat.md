@@ -158,6 +158,16 @@ DSH 启动时只装载 bundles 列表里的行，所以它从头到尾没有被�
 4. **C 级不是"保证没事"**。DSH 的宿主 API 面很广（0.1.7 新增 85 个包），
    我们只覆盖了**已确认的**四类差异面；C 级意思是"没踩到已知的雷"，不等于"绝对安全"。
 5. **E 级（7 个）没有可比对的上游**（私有/本地包），必须单独实测。
+6. **对外交付目标里的"把 deepseek-harness / cordis / schemastery 放进 devDependencies"是一处有意的偏差**：
+   本仓库按技术正确口径处理（见 `package.json` `peerDependencies`）。
+   - `deepseek-harness` 在 npm 上只是 0.0.1 占位包，真正的 harness 依赖相邻检出
+     `../deepseek-harness`（由 `scripts/harness-dir.mjs` + `scripts/link-harness-packages.mjs`
+     解析并 junction/链接进 `node_modules`），**从不**作为 npm 依赖安装，故不写进任何依赖字段。
+   - `@deepseek-ai/cordis`（`^4.0.1`）与 `@deepseek-ai/schemastery`（`^3.0.0`）是宿主运行时
+     提供的**运行时依赖**（dag-team / agent-team 源码在运行时 `import` 它们），按上条第 3
+     点的口径应放 `peerDependencies`（宿主声明、由依赖它们的包自己提供），而非仅构建期
+     `devDependencies`。若硬塞进 devDependencies 会违背 boot-closure 运行时依赖分类
+     （`packages/agent-team/tests/shipping.spec.ts`）与本条第 3 点规则。
 
 ---
 
