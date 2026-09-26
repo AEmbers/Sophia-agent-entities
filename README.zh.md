@@ -95,7 +95,7 @@ Team mode
 
 实际差别：你上周创建的 Member，今天还是同一个 Member —— 同样的记忆、职责和私有笔记 —— 即使它的 session 已结束、上下文已滚动、或 DSH 重启过。另外三个里，团队是围绕手头这次工作组建的 —— 一次 session、一次 workflow run，或一支有 Leader 的队。
 
-## 带审批门的规划团队
+## 带审批门的团队规划
 
 除了上面的常驻团队协作，本插件现在还带一个**审批编排层**（在 `orchestration` 与 `dag-team` 包中）。Human（或 Member）可以通过 `sophia_team_propose` 工具或会话里的审批卡，提交一个规划好的团队 —— 目标、成员名册、以及带依赖的任务计划。提议先走显式的评审状态机（captain 评审、owner 批准、降级为 DAG、拒绝、超时过期），之后才物化：
 

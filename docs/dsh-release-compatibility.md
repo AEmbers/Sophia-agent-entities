@@ -50,11 +50,11 @@ Use an independent checkout at the candidate tag, not the everyday `../deepseek-
 ```text
 Daily development
 ├── deepseek-harness/
-└── dsh-agent-team/
+└── dsh-sophia-entities/
 
 Temporary certification
 ├── deepseek-harness-<tag>/
-└── dsh-agent-team-compat-<tag>/
+└── dsh-sophia-entities-compat-<tag>/
 ```
 
 Build the certified Harness checkout first so Team TypeScript facades point at its declarations. Do not reuse old `lib/` or `node_modules`; that can conceal declaration or runtime incompatibility.

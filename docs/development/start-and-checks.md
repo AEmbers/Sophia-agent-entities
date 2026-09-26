@@ -11,7 +11,7 @@ This repository is an independent external DSH bundle. End users install the pub
 ```text
 ../
 ├── deepseek-harness/
-└── dsh-agent-team/
+└── dsh-sophia-entities/
 ```
 
 Install dependencies with the command specified by the root README:

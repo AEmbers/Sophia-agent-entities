@@ -75,11 +75,11 @@ npm 的 prerelease 版本范围不是普通的连续区间。比如：
 ```text
 日常开发目录
 ├── deepseek-harness/                 # 保持当前开发状态
-└── dsh-agent-team/
+└── dsh-sophia-entities/
 
 认证临时目录
 ├── deepseek-harness-<tag>/           # 固定在候选 release tag
-└── dsh-agent-team-compat-<tag>/      # Team 源码的隔离副本
+└── dsh-sophia-entities-compat-<tag>/      # Team 源码的隔离副本
 ```
 
 在认证 Harness checkout 中先完成其自身的构建，使 Team 的 TypeScript facade 指向候选 tag 的实际声明文件。不要把旧 checkout 的 `lib/` 或 `node_modules` 当作候选版本的构建结果复用；这会掩盖声明或运行时不兼容。

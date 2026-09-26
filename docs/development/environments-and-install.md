@@ -68,7 +68,7 @@ dsh web
 A local directory can be installed with:
 
 ```sh
-dsh plugin --profile web add /absolute/path/to/dsh-agent-team
+dsh plugin --profile web add /absolute/path/to/dsh-sophia-entities
 dsh web
 ```
 

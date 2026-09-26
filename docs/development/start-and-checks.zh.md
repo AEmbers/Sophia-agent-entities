@@ -11,7 +11,7 @@
 ```text
 ../
 ├── deepseek-harness/
-└── dsh-agent-team/
+└── dsh-sophia-entities/
 ```
 
 安装依赖使用仓库 README 规定的命令：

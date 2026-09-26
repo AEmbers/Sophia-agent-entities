@@ -2,7 +2,7 @@
 
 ## Scope and authority
 
-`dsh-agent-team` is an opt-in, externally installable Cordis bundle for DeepSeek Harness. It adds a single-host Agent Team without modifying the Harness repository, the agent loop, or shipped defaults.
+`dsh-sophia-entities` is an opt-in, externally installable Cordis bundle for DeepSeek Harness. It adds a single-host Agent Team without modifying the Harness repository, the agent loop, or shipped defaults.
 
 Read [`docs/README.md`](docs/README.md) first — it is the maintained documentation index.
 

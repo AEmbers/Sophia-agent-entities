@@ -95,7 +95,7 @@ Three other DSH plugins carry similar names and solve a different problem — on
 
 The practical difference: a Member you created last week is still the same Member today — same memory, same responsibilities, same private notes — after its session ended, its context rolled over, or DSH restarted. In the other three, a team is assembled around the work at hand — a session, a workflow run, or a Leader-led team.
 
-## Planned agent teams with an approval gate
+## Approval-gated team planning
 
 Beyond the standing-team collaboration above, this plugin now ships an **approval plane** (in the `orchestration` + `dag-team` packages). A Human (or a Member) can propose a planned team — a goal, a roster, and a dependency-aware task plan — through the `sophia_team_propose` tool or the approval card in the conversation. Proposals move through an explicit review state machine (captain review, owner approval, downgrade to DAG, rejection, expiry) before they materialize:
 

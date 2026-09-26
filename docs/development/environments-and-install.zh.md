@@ -54,7 +54,7 @@ dsh web
 本地目录安装：
 
 ```sh
-dsh plugin --profile web add /absolute/path/to/dsh-agent-team
+dsh plugin --profile web add /absolute/path/to/dsh-sophia-entities
 dsh web
 ```
 
