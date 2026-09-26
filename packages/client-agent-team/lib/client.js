@@ -15303,8 +15303,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		//#region src/client/dag/artwork.ts
 		/**
 		* Shared artwork lookup for the activity panel and the conversation card:
-		* OC (original character) portraits per member role resolve first; legacy
-		* whale role images act as a fallback bucket; the captain uses the OC lead.
+		* OC (original character) portraits per member role resolve first — by post
+		* title, then by a plainer role word — the legacy whale role images act as a
+		* fallback bucket, and the captain uses the OC lead.
 		* @module dsh-agent-teams/client/artwork
 		*/
 		/** Legacy whale artwork route prefix served by the plugin host half. */
@@ -15351,6 +15352,33 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			[/\bcode\s*review\w*\b|代码评审|审校|星文审校/, "code-reviewer.webp"],
 			[/\bdocs\s*writer\b|文档撰写|录典主事/, "docs-writer.webp"]
 		];
+		/**
+		* Ordinary role words that name one of the same twenty posts in plainer English
+		* than the post titles do. Checked AFTER the posts, so a post title always wins,
+		* and BEFORE the whale buckets, so a member whose role is simply "reviewer" or
+		* "verifier" wears that post's OC portrait instead of a generic whale. Only
+		* unambiguous words are listed: "analyst" is a requirement analyst, but
+		* "engineer" alone is not a post, so it stays in the whale tier.
+		*/
+		const OC_ALIAS_ART = [
+			[/\bchief\b|\bcaptain\b|\blead\b|\bhead\b|队长|总负责/, "lead-ceo.webp"],
+			[/\bpm\b|\bowner\b|\bmanager\b|产品经理|经理/, "product-manager.webp"],
+			[/\btpm\b|\bcoordinator\b|项目经理|协调/, "program-director.webp"],
+			[/\badmin\w*|行政|资源/, "resource-admin.webp"],
+			[/\bsecurity\b|\baudit\w*|\bthreat\b|合规|风控|安全|审计/, "risk-compliance.webp"],
+			[/\bresearch\w*|\binvestigat\w*|\banalyst\b|\banalys\w*|研究|调研|调查|分析/, "requirement-analyst.webp"],
+			[/\bdesign\w*|设计|视觉|交互/, "ui-designer.webp"],
+			[/\bsuccess\b|\bsupport\b|\bsales\b|客户|支持|对接/, "client-success.webp"],
+			[/\barchitect\w*|架构/, "architect.webp"],
+			[/\bdeveloper\b|\bprogrammer\b|\bcoder\b|\bserver\b|\bbackend\b|开发|后端/, "backend-engineer.webp"],
+			[/\bfrontend\b|\bfront-end\b|\bweb\b|前端/, "frontend-engineer.webp"],
+			[/\bdata\b|数据/, "data-engineer.webp"],
+			[/\balgorithm\w*|算法/, "algorithm-engineer.webp"],
+			[/\bqa\b|\bverif\w*|\btest\w*|\bquality\b|测试|验证|校验/, "test-engineer.webp"],
+			[/\breview\w*|评审|审校/, "code-reviewer.webp"],
+			[/\bdevops\b|\bsre\b|\bops\b|\brelease\b|\bdeploy\w*|运维|部署|发布/, "ops-engineer.webp"],
+			[/\bwriter\b|\bdocs?\b|\bdocument\w*|文档|撰写/, "docs-writer.webp"]
+		];
 		/** Captain artwork: the OC lead portrait (钦天监监正 · lead-ceo). */
 		const LEAD_ART = `${OC_ART_BASE}lead-ceo.webp`;
 		/** Status action artwork per member activity (kept on whale images). */
@@ -15361,14 +15389,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		};
 		/**
 		* Member artwork URL, or null when no role matches (initial-letter fallback).
-		* OC portraits win first (deterministic per post), then legacy whale buckets.
+		* The OC portraits win first — the exact post title, then a plainer role word —
+		* and the legacy whale buckets only catch what is left.
 		* @param name - the member's display name.
 		* @param role - the member's role text.
 		* @returns the artwork URL, or null when unmatched.
 		*/
 		function memberArtUrl(name, role) {
 			const identity = `${name} ${role}`.toLowerCase();
-			for (const [pattern, art] of OC_ROLE_ART) if (pattern.test(identity)) return `${OC_ART_BASE}${art}`;
+			for (const table of [OC_ROLE_ART, OC_ALIAS_ART]) for (const [pattern, art] of table) if (pattern.test(identity)) return `${OC_ART_BASE}${art}`;
 			for (const [pattern, art] of ROLE_ART) if (pattern.test(identity)) return `${ART_BASE}${art}`;
 			return null;
 		}

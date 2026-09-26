@@ -19,6 +19,7 @@ All notable changes to this project are documented in this file. The format foll
 - Deciding a proposal works again: the card never told the Host which session was deciding, so approve, reject and the mode selector were all refused as requests the Host would not accept — which read as buttons that did nothing.
 - The proposal card wears the team card's surface: the lead avatar, one chip per proposed member wearing its own art, count chips, and the task graph with each task's dependencies named.
 - The art loads again: no image was ever in the shipped artifact, so an installed plugin answered every one of its own asset requests with 404 — the proposal card, the team card and the activity panel all drew broken-image icons while a source checkout looked perfect. `npm run check:artifact` now fails when a runtime asset directory is missing from the pack list, and both CI lanes run it.
+- Members wear the Sophia portraits for their post: a role written as a plain word — "reviewer", "verifier", "researcher", "team lead" — used to fall straight past the twenty post titles into the generic whale art, so an ordinary roster showed no Sophia faces at all. Those words now resolve to the post they belong to.
 
 ## [0.1.15] - 2026-09-24
 

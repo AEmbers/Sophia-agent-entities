@@ -1,7 +1,8 @@
 /**
  * Shared artwork lookup for the activity panel and the conversation card:
- * OC (original character) portraits per member role resolve first; legacy
- * whale role images act as a fallback bucket; the captain uses the OC lead.
+ * OC (original character) portraits per member role resolve first — by post
+ * title, then by a plainer role word — the legacy whale role images act as a
+ * fallback bucket, and the captain uses the OC lead.
  * @module dsh-agent-teams/client/artwork
  */
 /** Legacy whale artwork route prefix served by the plugin host half. */
@@ -14,7 +15,8 @@ export declare const LEAD_ART = "/plugins/dsh-sophia-entities/sophia-assets/lead
 export declare const ACTION_ART: Record<'working' | 'idle' | 'unknown', string>;
 /**
  * Member artwork URL, or null when no role matches (initial-letter fallback).
- * OC portraits win first (deterministic per post), then legacy whale buckets.
+ * The OC portraits win first — the exact post title, then a plainer role word —
+ * and the legacy whale buckets only catch what is left.
  * @param name - the member's display name.
  * @param role - the member's role text.
  * @returns the artwork URL, or null when unmatched.

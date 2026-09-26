@@ -179,7 +179,8 @@ export function memberArtUrl(name: string, role: string): string | null {
 
 | 文件 | 改动 | 说明 |
 | --- | --- | --- |
-| ✅ `packages/client-agent-team/src/client/dag/artwork.ts` | **已实施**：新增 OC_ART_BASE、OC_ROLE_ART（20 项，中文职位名+现代岗位名双匹配）、OC_LEAD_ART；`LEAD_ART` 替换为 OC lead-ceo；`memberArtUrl` 改为 OC 表优先 → ROLE_ART 桶兜底 → null | 三处消费组件零改动（只消费 artwork.ts 导出）；smoke 测试 20 岗位全命中 + 未知岗回退 + 鲸鱼兜底 ✓ |
+| ✅ `packages/client-agent-team/src/client/dag/artwork.ts` | **已实施**：新增 OC_ART_BASE、OC_ROLE_ART（20 项，中文职位名+现代岗位名双匹配）、OC_LEAD_ART；`LEAD_ART` 替换为 OC lead-ceo；`memberArtUrl` 改为 OC 表优先 → ROLE_ART 桶兜底 → null | 三处消费组件零改动（只消费 artwork.ts 导出）；`packages/client-agent-team/tests/artwork.spec.ts` 覆盖 20 岗位（英文名 + 中文名各一遍）+ 别名 + 鲸鱼兜底 + null ✓ |
+| ✅ 岗位别名层（2026-09-26 追加） | **已实施**：`OC_ALIAS_ART`（17 项）插在 `OC_ROLE_ART` 之后、`ROLE_ART` 之前 | **起因**：`memberArtUrl` 只按「岗位全称」匹配，成员角色写成 `verifier` / `reviewer` 这类普通词时 20 项全不命中，直接落到鲸鱼桶（`member-qa-v2.png` / `member-security-v2.png`）——用户看到的就是「我们的头像一个都没用上」。别名层把这些普通词归到最近的岗位（`verifier`/`tester`/`qa` → test-engineer，`reviewer` → code-reviewer，`researcher`/`analyst` → requirement-analyst 等）；顺序保证岗位全称永远优先，鲸鱼桶只剩真正无岗位可归的角色（如 `engineer`） |
 | ✅ `packages/dag-team/src/index.ts`（~429-465 后） | **已实施**：新增 `ocArtDir = ../assets/sophia-avatars-webp/` + `OC_ALLOWLIST`（20 个 `.webp`）并注册独立前缀 `/plugins/dsh-sophia-entities/sophia-assets`；handler 与原 artwork 路由同构（末段文件名、白名单、`image/webp`） | 交叉校验：artwork.ts 20 slug ↔ allowlist 20 ↔ 磁盘 20 文件全部一致 ✓ |
 | ✅ 发布物 | root `package.json` `files` 白名单**纳入** `packages/dag-team/assets/agent-teams/**/*` 与 `packages/dag-team/assets/sophia-avatars-webp/**/*`，另加 `assets/readme/**/*`（README 截图） | **2026-09-26 更正**：运行时资源必须入白名单，否则安装副本里整个 `assets/` 缺失、头像全裂图；母版 `sophia-avatars/` 与 `ui.png` 仍排除。白名单实测 `npm pack` 433 项、约 3 MB |
 | ✅ 体积治理 | **已实施**：`scripts/optimize-avatars.py`（Pillow）母版 → 512×512 WebP q82；87.53 MB → 863.9 KB | 幂等脚本；运行时集为扁平 `<slug>.webp` |
