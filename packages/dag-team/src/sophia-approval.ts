@@ -91,6 +91,13 @@ export interface ApprovalPlaneHandle {
   readonly persistentBackend: TeamBackend
   readonly workingDirectory: string
   readonly maxTeamDepth: number
+  /**
+   * Point the DAG backend at the session that is about to decide: it becomes
+   * the materialized team's captain, and its workspace holds the team's state
+   * root. Called before every owner/captain action (the facade cannot supply
+   * either — it is passed to the backend as `ctx` and carries no team state).
+   */
+  readonly bindDagCaptain: (agent: Agent) => void
 }
 
 const installed = new WeakMap<object, ApprovalPlaneHandle>()
@@ -120,7 +127,13 @@ function buildApprovalPlane(
   // the registry's primary workspace), otherwise the process cwd.
   const workingDirectory = resolveWorkingDirectory(workspaceRegistry)
 
-  const dagBackend = sophiaDagBackendFor(runtime)
+  // Team state the DAG backend cannot read off the facade it is handed: the
+  // state root (which workspace the team lives in) and, at materialization
+  // time, the captain agent (the session that decided). Read fresh per call.
+  const dagHost: { stateRoot: string; captain?: Agent } = {
+    stateRoot: join(workingDirectory, resolved.stateDir),
+  }
+  const dagBackend = sophiaDagBackendFor(runtime, () => dagHost)
   const persistentBackend = createLazyPersistentBackend(ctx, workspaceRegistry, workingDirectory)
 
   const orchestrationHost: OrchestrationHost = {
@@ -152,6 +165,11 @@ function buildApprovalPlane(
     persistentBackend,
     workingDirectory,
     maxTeamDepth: resolved.memberMaxDepth ?? 0,
+    bindDagCaptain: (agent: Agent) => {
+      dagHost.captain = agent
+      // A team lives in its captain's workspace; fall back to the plane's.
+      dagHost.stateRoot = join(agent.session.header.cwd ?? workingDirectory, resolved.stateDir)
+    },
   }
 }
 
@@ -175,6 +193,14 @@ export function registerApprovalRoutes(
   ctx: Context,
   webServer: WebRouteHost,
   facade: SophiaTeamFacade,
+  /**
+   * Hands the deciding session to the DAG backend before an action runs. Only
+   * the session that decides knows which agent and workspace the materialized
+   * team belongs to, and the facade carries no team state of its own. Omitted
+   * by a host with no DAG backend wired (every action then simply fails at
+   * materialization, loudly).
+   */
+  bindDagCaptain?: (agent: Agent) => void,
 ): void {
   ctx.effect(() => webServer.register({
     kind: 'exact',
@@ -220,7 +246,8 @@ export function registerApprovalRoutes(
         res.end(JSON.stringify({ error: 'sessionId is required' }))
         return
       }
-      if (ctx.agents.get(sessionId as SessionId) === undefined) {
+      const agent = ctx.agents.get(sessionId as SessionId)
+      if (agent === undefined) {
         res.writeHead(409, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
         res.end(JSON.stringify({ error: 'human session is not attached' }))
         return
@@ -234,6 +261,9 @@ export function registerApprovalRoutes(
         return
       }
       try {
+        // Materialization happens *as* the deciding session: bind it first, so
+        // an approval materializes a team with a captain instead of failing.
+        bindDagCaptain?.(agent)
         const result = await runApprovalPlanAction(facade, { isHuman: true, sessionId }, action)
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
         res.end(JSON.stringify(result))

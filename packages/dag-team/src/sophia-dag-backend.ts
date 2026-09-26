@@ -15,12 +15,15 @@
  * dag-team conventions (name budget capped like the persistent backend,
  * `teamId = sanitizeKey(teamName)`).
  *
- * `ctx` is host-provided and duck-typed. The orchestration facade passes
- * *itself* as `ctx` (`backend.create(this, request)`), so the host must extend
- * the facade with `{ captain, stateRoot, config }` before materialization;
- * `describe`/`list` only need `{ stateRoot }`. `create` throws loudly when
- * `captain`/`stateRoot` are absent (host wiring bug, not a silent no-op);
- * `describe`/`list` degrade to `undefined`/`[]` without a state root.
+ * `ctx` is host-provided and duck-typed: the orchestration facade passes
+ * *itself* (`backend.create(this, request)`), and the facade carries no team
+ * state of its own. The host therefore hands `{ captain, stateRoot, config }`
+ * over through the `hostContext` provider below, read fresh on every call —
+ * the state root follows the captain's workspace and the captain is only known
+ * once a session actually decides. Fields present on the passed `ctx` win over
+ * the provider's. `create` throws loudly when `captain`/`stateRoot` are absent
+ * (host wiring bug, not a silent no-op); `describe`/`list` degrade to
+ * `undefined`/`[]` without a state root.
  */
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { readdirSync } from 'node:fs'
@@ -50,8 +53,7 @@ interface SophiaDagHostContext {
 }
 
 /** Extract the host-provided state root; absent/invalid → undefined. */
-function hostStateRoot(ctx: unknown): string | undefined {
-  const host = (ctx ?? {}) as SophiaDagHostContext
+function hostStateRoot(host: SophiaDagHostContext): string | undefined {
   const stateRoot = host.stateRoot
   return typeof stateRoot === 'string' && stateRoot !== '' ? stateRoot : undefined
 }
@@ -61,20 +63,32 @@ function hostStateRoot(ctx: unknown): string | undefined {
  *
  * The backend itself is stateless: every call reads the team from disk via
  * `readTeamSync` and writes through `deps.materializePlan`.
+ *
+ * `hostContext` is the host's team state (`captain` / `stateRoot` / `config`),
+ * read on every call rather than captured once: the state root follows the
+ * deciding session's workspace and the captain only exists after a decision.
+ * Without it the backend has nothing to work with and `create` throws.
  */
 export function createSophiaDagBackend(deps: {
   materializePlan: AgentTeamsRuntime['materializePlan']
+  hostContext?: () => SophiaDagHostContext | undefined
 }): TeamBackend {
+  /** The host's state, with whatever the caller passed on `ctx` winning. */
+  const hostOf = (ctx: unknown): SophiaDagHostContext => ({
+    ...(deps.hostContext?.() ?? {}),
+    ...((ctx ?? {}) as SophiaDagHostContext),
+  })
+
   return Object.freeze({
     mode: 'dag' as const,
 
     async create(ctx: unknown, request: ApprovalRequest): Promise<MaterializeResult> {
-      const host = (ctx ?? {}) as SophiaDagHostContext
+      const host = hostOf(ctx)
       const captain = host.captain
       if (captain === undefined) {
         throw new Error('dag backend create: ctx.captain is required — the host must pass the captain agent')
       }
-      const stateRoot = hostStateRoot(ctx)
+      const stateRoot = hostStateRoot(host)
       if (stateRoot === undefined) {
         throw new Error('dag backend create: ctx.stateRoot is required — the host must pass the team state root')
       }
@@ -97,7 +111,7 @@ export function createSophiaDagBackend(deps: {
     },
 
     async describe(ctx: unknown, teamRef: string): Promise<TeamSummary | undefined> {
-      const stateRoot = hostStateRoot(ctx)
+      const stateRoot = hostStateRoot(hostOf(ctx))
       if (stateRoot === undefined) return undefined
       const team = readTeamSync(stateRoot, teamRef)
       if (team === undefined) return undefined
@@ -113,7 +127,7 @@ export function createSophiaDagBackend(deps: {
     },
 
     async list(ctx: unknown): Promise<TeamSummary[]> {
-      const stateRoot = hostStateRoot(ctx)
+      const stateRoot = hostStateRoot(hostOf(ctx))
       if (stateRoot === undefined) return []
       let dirNames: string[] = []
       try {
@@ -156,7 +170,13 @@ export function createSophiaDagBackend(deps: {
  * runtime: pre-wires `createSophiaDagBackend` with the runtime's
  * `materializePlan`, so wiring never touches the tools registry. Re-exported
  * from the dag-team package index.
+ *
+ * `hostContext` is the host's own team state (state root, and the captain once
+ * a session decides) — the facade the backends receive cannot supply it.
  */
-export function sophiaDagBackendFor(runtime: AgentTeamsRuntime): TeamBackend {
-  return createSophiaDagBackend({ materializePlan: runtime.materializePlan })
+export function sophiaDagBackendFor(
+  runtime: AgentTeamsRuntime,
+  hostContext?: () => SophiaDagHostContext | undefined,
+): TeamBackend {
+  return createSophiaDagBackend({ materializePlan: runtime.materializePlan, hostContext })
 }

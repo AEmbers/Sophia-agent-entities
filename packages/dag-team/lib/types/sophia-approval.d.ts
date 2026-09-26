@@ -19,6 +19,7 @@
  * the plane, later calls return the same handle without re-registering.
  */
 import type { Context } from '@deepseek-ai/cordis';
+import type { Agent } from '@deepseek-ai/dsh-agent';
 import { SophiaTeamFacade } from 'dsh-sophia-entities/orchestration/facade';
 import type { TeamBackend } from 'dsh-sophia-entities/orchestration/types';
 import type { AgentTeamsRuntime, ToolsConfig } from './tools.ts';
@@ -42,6 +43,13 @@ export interface ApprovalPlaneHandle {
     readonly persistentBackend: TeamBackend;
     readonly workingDirectory: string;
     readonly maxTeamDepth: number;
+    /**
+     * Point the DAG backend at the session that is about to decide: it becomes
+     * the materialized team's captain, and its workspace holds the team's state
+     * root. Called before every owner/captain action (the facade cannot supply
+     * either — it is passed to the backend as `ctx` and carries no team state).
+     */
+    readonly bindDagCaptain: (agent: Agent) => void;
 }
 /**
  * Idempotently bridge the orchestration approval plane into `ctx`. The first
@@ -65,7 +73,15 @@ export declare function installSophiaApprovalPlane(ctx: Context, options: Sophia
  * exactly like the halt route's `sessionId` and is rejected with 409 when it
  * is not attached. Registering is idempotent per web server via `ctx.effect`.
  */
-export declare function registerApprovalRoutes(ctx: Context, webServer: WebRouteHost, facade: SophiaTeamFacade): void;
+export declare function registerApprovalRoutes(ctx: Context, webServer: WebRouteHost, facade: SophiaTeamFacade, 
+/**
+ * Hands the deciding session to the DAG backend before an action runs. Only
+ * the session that decides knows which agent and workspace the materialized
+ * team belongs to, and the facade carries no team state of its own. Omitted
+ * by a host with no DAG backend wired (every action then simply fails at
+ * materialization, loudly).
+ */
+bindDagCaptain?: (agent: Agent) => void): void;
 /**
  * Reads the plan request body into an `ApprovalPlanAction`, rejecting unknown
  * actions and missing request ids with a descriptive message that the route

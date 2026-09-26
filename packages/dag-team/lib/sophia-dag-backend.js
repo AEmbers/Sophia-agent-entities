@@ -8,8 +8,7 @@ function truncateText(text, max) {
     return points.length <= max ? text : points.slice(0, max).join('');
 }
 /** Extract the host-provided state root; absent/invalid → undefined. */
-function hostStateRoot(ctx) {
-    const host = (ctx ?? {});
+function hostStateRoot(host) {
     const stateRoot = host.stateRoot;
     return typeof stateRoot === 'string' && stateRoot !== '' ? stateRoot : undefined;
 }
@@ -18,17 +17,27 @@ function hostStateRoot(ctx) {
  *
  * The backend itself is stateless: every call reads the team from disk via
  * `readTeamSync` and writes through `deps.materializePlan`.
+ *
+ * `hostContext` is the host's team state (`captain` / `stateRoot` / `config`),
+ * read on every call rather than captured once: the state root follows the
+ * deciding session's workspace and the captain only exists after a decision.
+ * Without it the backend has nothing to work with and `create` throws.
  */
 export function createSophiaDagBackend(deps) {
+    /** The host's state, with whatever the caller passed on `ctx` winning. */
+    const hostOf = (ctx) => ({
+        ...(deps.hostContext?.() ?? {}),
+        ...(ctx ?? {}),
+    });
     return Object.freeze({
         mode: 'dag',
         async create(ctx, request) {
-            const host = (ctx ?? {});
+            const host = hostOf(ctx);
             const captain = host.captain;
             if (captain === undefined) {
                 throw new Error('dag backend create: ctx.captain is required — the host must pass the captain agent');
             }
-            const stateRoot = hostStateRoot(ctx);
+            const stateRoot = hostStateRoot(host);
             if (stateRoot === undefined) {
                 throw new Error('dag backend create: ctx.stateRoot is required — the host must pass the team state root');
             }
@@ -50,7 +59,7 @@ export function createSophiaDagBackend(deps) {
             });
         },
         async describe(ctx, teamRef) {
-            const stateRoot = hostStateRoot(ctx);
+            const stateRoot = hostStateRoot(hostOf(ctx));
             if (stateRoot === undefined)
                 return undefined;
             const team = readTeamSync(stateRoot, teamRef);
@@ -67,7 +76,7 @@ export function createSophiaDagBackend(deps) {
             });
         },
         async list(ctx) {
-            const stateRoot = hostStateRoot(ctx);
+            const stateRoot = hostStateRoot(hostOf(ctx));
             if (stateRoot === undefined)
                 return [];
             let dirNames = [];
@@ -112,7 +121,10 @@ export function createSophiaDagBackend(deps) {
  * runtime: pre-wires `createSophiaDagBackend` with the runtime's
  * `materializePlan`, so wiring never touches the tools registry. Re-exported
  * from the dag-team package index.
+ *
+ * `hostContext` is the host's own team state (state root, and the captain once
+ * a session decides) — the facade the backends receive cannot supply it.
  */
-export function sophiaDagBackendFor(runtime) {
-    return createSophiaDagBackend({ materializePlan: runtime.materializePlan });
+export function sophiaDagBackendFor(runtime, hostContext) {
+    return createSophiaDagBackend({ materializePlan: runtime.materializePlan, hostContext });
 }

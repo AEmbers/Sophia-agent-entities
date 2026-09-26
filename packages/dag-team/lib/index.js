@@ -421,7 +421,7 @@ export function apply(ctx, config) {
         // routes are bound inside the same web-registered gate, guarded on the
         // approval plane actually having been installed.
         if (approvalHandle !== undefined) {
-            registerApprovalRoutes(ctx, webServer, approvalHandle.facade);
+            registerApprovalRoutes(ctx, webServer, approvalHandle.facade, approvalHandle.bindDagCaptain);
         }
         // Whale mascot artwork: the images the client still asks for. The OC
         // portraits carry the roster now, so this set is down to what is genuinely
