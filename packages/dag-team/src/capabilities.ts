@@ -91,9 +91,26 @@ export function installTeamCapabilities(ctx: Context, config: CapabilityConfig):
       if (member) revoke = agent.ctx.tools.restrict({
         deny: TEAM_TOOL_NAMES.filter(name => !MEMBER_TOOL_NAMES.includes(name)),
       })
+    } catch (error) {
+      // A live scope must accept the member restriction; anything else is a
+      // real wiring fault and must stay loud.
+      state.dispose()
+      throw error
+    }
+    try {
       releaseLifetime = agent.ctx.effect(() => state.dispose, 'agent-teams: capability lifetime')
-      return state
-    } catch (error) { state.dispose(); throw error }
+    } catch (error) {
+      // Ownership is notional here. `attach` also runs over `ctx.agents.list()`,
+      // which can report an agent whose scope carrier is already torn down
+      // (cordis clears the fiber's uid on dispose, so `effect` throws
+      // INACTIVE_EFFECT). Letting that escape fails this whole plugin's apply
+      // and disables team tools for every agent, so a lifetime we cannot own
+      // is skipped: the exposure stays attached and the outer
+      // `agent-teams: capability scopes` effect in `installTeamCapabilities`
+      // still disposes it.
+      ctx.logger.warn(`agent-teams: capability lifetime not owned by the agent scope: ${String(error)}`)
+    }
+    return state
   }
 
   ctx.systemPrompt.section({
@@ -107,5 +124,14 @@ export function installTeamCapabilities(ctx: Context, config: CapabilityConfig):
     mounted = false
     for (const state of [...active]) state.dispose()
   }, 'agent-teams: capability scopes')
-  for (const agent of ctx.agents.list()) attach(agent)
+  // Hydrate the agents already live when this plugin mounts. One unusable
+  // scope must not abandon the rest: `attach` is the only writer of
+  // `states`, and the prompt section above reads it for every request.
+  for (const agent of ctx.agents.list()) {
+    try {
+      attach(agent)
+    } catch (error) {
+      ctx.logger.warn(`agent-teams: capability hydration skipped for one agent: ${String(error)}`)
+    }
+  }
 }
