@@ -423,19 +423,21 @@ export function apply(ctx, config) {
         if (approvalHandle !== undefined) {
             registerApprovalRoutes(ctx, webServer, approvalHandle.facade);
         }
-        // Whale mascot artwork: serve the packaged V2 role/action images to the
-        // activity panel. An explicit allowlist guards the route (no path
-        // traversal); the images ship with the bundle (files: assets/).
+        // Whale mascot artwork: the images the client still asks for. The OC
+        // portraits carry the roster now, so this set is down to what is genuinely
+        // reachable — the eight fallback buckets `memberArtUrl` uses for a role that
+        // maps to no post, plus the three activity states the panel draws. Every name
+        // here must be referenced by packages/client-agent-team/src/client/dag/artwork.ts;
+        // packages/dag-team/tests/runtime-assets.spec.ts fails if the two drift apart.
+        // An explicit allowlist also guards the route (no path traversal).
         const artDir = fileURLToPath(new URL('../assets/agent-teams/', import.meta.url));
         const ART_ALLOWLIST = new Set([
-            'team-lead-v2.png',
             'member-researcher-v2.png', 'member-engineer-v2.png',
             'member-qa-v2.png', 'member-designer-v2.png',
             'member-security-v2.png', 'member-docs-v2.png',
             'member-data-v2.png', 'member-operator-v2.png',
             'action-working-v2.png', 'action-thinking-v2.png',
-            'action-reporting-v2.png', 'action-celebrating-v2.png',
-            'action-sleeping-v2.png', 'action-sending-v2.png',
+            'action-sleeping-v2.png',
         ]);
         ctx.effect(() => webServer.register({
             kind: 'prefix',

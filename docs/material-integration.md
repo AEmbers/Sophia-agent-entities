@@ -30,7 +30,7 @@
 | **合计** | | **20** | **87.53 MB**（单张 3.76–4.87 MB） |
 | **重制后** | 同上 | **20** | **3.38 MB**（单张 156–195 KB，`*.webp`） |
 
-对照：现有鲸鱼素材 `assets/agent-teams/` = 15 文件 / **0.94 MB**。落位当时 `assets/` 总量约 88.5 MB（约 94×）；重制后 `assets/` 总量约 **4.5 MB**。
+对照：现有鲸鱼素材 `assets/agent-teams/` = 15 文件 / **0.94 MB**。落位当时 `assets/` 总量约 88.5 MB（约 94×）；重制后 `assets/` 总量约 **4.5 MB**。**（2026-09-26 清理后：鲸鱼 11 文件 / 0.73 MB，见 §7「死素材清理」）**
 
 校验：复制后 `Get-ChildItem` 确认 4 目录 × 5 = 20 文件，逐文件与源比对名称+字节数一致（ALL 20 OK，见 §7 命令）。
 
@@ -159,13 +159,13 @@ export function memberArtUrl(name: string, role: string): string | null {
 
 ## 6. LEAD_ART 与 ACTION_ART 处理
 
-- **LEAD_ART**：监正语义即队长（CEO/总负责人），是「钦天监」这个组织里的最高职位。✅ **已实施**：`LEAD_ART = ${OC_ART_BASE}lead-ceo.webp`（直接替换鲸鱼 lead 图），符合「推荐直接替换」路线；三处消费点只读常量、零改动。若后续想回归鲸鱼队长观感，改回 `LEAD_ART = ${ART_BASE}team-lead-v2.png` 一行即可。
+- **LEAD_ART**：监正语义即队长（CEO/总负责人），是「钦天监」这个组织里的最高职位。✅ **已实施**：`LEAD_ART = ${OC_ART_BASE}lead-ceo.webp`（直接替换鲸鱼 lead 图），符合「推荐直接替换」路线；三处消费点只读常量、零改动。鲸鱼 lead 图（`team-lead-v2.png`）已于 2026-09-26 删除，没有回头路可走——若要换队长形象，换的是 `LEAD_ART` 指向的 OC 图。
 - **ACTION_ART**：OC 素材包**只有静态头像、无 working/idle/unknown 状态帧**。✅ **维持鲸鱼三态图不变**（活动枚举 `working|idle|unknown` 与三键精确一一对应，不存在 undefined 风险）——与本文建议一致。
 - 若 Lead 后续拿到 OC 状态帧，扩 `ACTION_ART` 键即可，接口形状不变。
 
 ## 7. 体积风险与建议（强标注）
 
-- **现状（重制后）**：`assets/` 鲸鱼 0.94 MB（15 文件）+ `sophia-avatars/` **3.38 MB**（20 文件，1024×1024 WebP 母版）+ `sophia-avatars-webp/` 0.84 MB（20 文件，512 运行时集）。`assets/` 合计约 **4.5 MB**，与鲸鱼素材同量级。
+- **现状（重制 + 清理后）**：`assets/agent-teams/` 鲸鱼 0.73 MB（11 文件）+ `sophia-avatars/` **3.38 MB**（20 文件，1024×1024 WebP 母版）+ `sophia-avatars-webp/` 0.84 MB（20 文件，512 运行时集）。`packages/dag-team/assets/` 合计约 **4.95 MB**，其中随包发布的只有 1.63 MB（运行时集 0.84 MB + 在用鲸鱼 0.73 MB）。
 - **历史（已解决）**：落位时 `sophia-avatars/` 为 2048 PNG、87.53 MB，`assets/` 总量约 88.5 MB（约 94×）。该形态被 Git 地址安装实测证伪——`pnpm add https://github.com/AEmbers/dsh-sophia-entities` 会把整仓打包下载，87.5 MB 图片使 codeload tarball 达 99 MB，在默认 60s fetch 超时下必然 `TimeoutError: The operation was aborted due to timeout`。修法是重制母版（下述），而非放宽超时。
 - **UI 真实渲染尺寸小**（面板头像/成员卡），2048 全尺寸进 UI 无意义且首屏每张多拉 4–5 MB。
 - **建议方案（按优先级）**：
@@ -175,7 +175,8 @@ export function memberArtUrl(name: string, role: string): string | null {
 - **✅ 已实施（建议 1 落地）**：`scripts/optimize-avatars.py`（Pillow，依赖无——用 DSH bundled Python，Pillow 12.3.0）将 `assets/sophia-avatars/<tier>/<中文职位名>.webp`（1024×1024 母版）转成扁平 `assets/sophia-avatars-webp/<slug>.webp`（512×512、WebP quality 82、LANCZOS）。实测：**87.53 MB → 863.9 KB（0.96%）**，20 张单张 39.1–48.5 KB，均 < 2 MB 预期上限；20/20 尺寸/格式校验通过，抽样 `architect.webp` vs 源图平均通道差 2.87（同主体，无损观感）。脚本幂等、含 `--dry-run`/`--size`/`--quality` 参数与 20 条「中文职位名 ⇄ slug」映射（§4 表为唯一事实源）。
 - **✅ 已实施（母版重制，2026-09-26）**：`scripts/shrink-avatar-masters.py`（Pillow）就地把 `assets/sophia-avatars/<tier>/<中文职位名>.png`（2048×2048，87.53 MB）重制为同名 `.webp`（**1024×1024 q90，method=6**），实测 **83.38 MB → 3.38 MB（4.1%）**，单张 156–195 KB。1024 而非 512 是因为运行时集就是 512，母版留一档余量便于日后放大重导。2048 原图归档在仓外 `.scratch/avatar-sources-2048/`（20 文件 / 87.5 MB，已 gitignore）；脚本会在归档不存在时告警，避免误丢母版。
 - 仓库体积账（决定性）：`.git` 约 95.5 MB 中 88.4 MB 是头像 PNG 的历史累计（`git rev-list --objects --all` 按路径聚合），当前 HEAD 树里即 87.5 MB。母版重制把**树**降到 3.38 MB，但**历史**仍需 `git filter-repo` 才能回收——本版本决策「重写历史暂缓」，因为那会改写已推送的 commit 且需全员重新克隆。
-- ROOT `package.json` `files` 白名单：**纳入运行时资源、排除母版**（2026-09-26 更正，此前决策是错的）。纳入 `packages/dag-team/assets/agent-teams/**/*`（鲸鱼 15 PNG，0.94 MB）+ `packages/dag-team/assets/sophia-avatars-webp/**/*`（运行时 20 WebP，0.84 MB）；仍排除 `sophia-avatars/`（1024 母版 3.38 MB）与 `ui.png`。
+- ROOT `package.json` `files` 白名单：**纳入运行时资源、排除母版**（2026-09-26 更正，此前决策是错的）。纳入 `packages/dag-team/assets/agent-teams/**/*`（在用鲸鱼 11 PNG，0.73 MB）+ `packages/dag-team/assets/sophia-avatars-webp/**/*`（运行时 20 WebP，0.84 MB）；仍排除 `sophia-avatars/`（1024 母版 3.38 MB）。
+- **死素材清理（2026-09-26）**：用户提问「那些图我们都不用了，为什么还放在里面」时逐文件核对引用，删掉 7 个**零引用**文件：`agent-teams/team-lead-v2.png`（`LEAD_ART` 已改 OC）、`action-reporting-v2.png`、`action-celebrating-v2.png`、`action-sending-v2.png`（活动枚举只有 `working|idle|unknown` 三态）、`assets/ui.png`（749 KB 设计稿，从未被引用也未入白名单）、`assets/readme/hero.svg` + `assets/readme/workspace.png`（120 KB，全仓零引用）。仓库瘦身 1.06 MB，随包瘦身 0.24 MB。**留下的 11 张仍然在用**：8 张 `member-*-v2.png` 是 `memberArtUrl` 的兜底桶（岗位名落不到 20 个岗位时用，如 `engineer`），3 张 `action-*-v2.png` 是活动面板的状态图。门禁：`packages/dag-team/tests/runtime-assets.spec.ts` 把 `agent-teams/` 的**磁盘清单钉死成 11 个名字**，并要求每个名字都能在 `artwork.ts` 里找到引用——磁盘与消费点任何一侧漂移都会红。
 - **错在哪**：原决策的论据是「Git 地址安装走整仓打包，所以不纳入也不影响安装」，但实测 pnpm 对 git 依赖是**克隆后按 `files` 白名单打包**（`scripts/check-bundle.mjs` 头部注释同此结论）。白名单不含 dag-team 任何路径 ⇒ 安装副本里 `packages/dag-team/assets/` **整个不存在** ⇒ 宿主两条资源路由（`../assets/agent-teams/`、`../assets/sophia-avatars-webp/`，见 `packages/dag-team/src/index.ts:474/521`）全部 404 ⇒ 审批卡、团队卡、活动面板里**每一张头像都渲染成裂图**。源码 checkout 里文件都在，所以本地完全看不出来。
 - **门禁补齐**：`scripts/check-artifact.mjs` 新增第 4 项断言——扫描已发布 `.js` 里的 `new URL('<相对路径>', import.meta.url)`，要求该路径在 `npm pack` 清单里有对应条目（文件本身，或该目录下的文件）。原脚本只查相对 `import`，看不见「用 URL 拼出来的资源目录」，这正是本次漏网的原因。已做负控：把两条 assets 从 `files` 拿掉 → 门禁转红并指名两条路径；CI 两条 lane 都在 `check:bundle` 之后加了 `npm run check:artifact`。
 
@@ -186,7 +187,8 @@ export function memberArtUrl(name: string, role: string): string | null {
 | ✅ `packages/client-agent-team/src/client/dag/artwork.ts` | **已实施**：新增 OC_ART_BASE、OC_ROLE_ART（20 项，中文职位名+现代岗位名双匹配）、OC_LEAD_ART；`LEAD_ART` 替换为 OC lead-ceo；`memberArtUrl` 改为 OC 表优先 → ROLE_ART 桶兜底 → null | 三处消费组件零改动（只消费 artwork.ts 导出）；`packages/client-agent-team/tests/artwork.spec.ts` 覆盖 20 岗位（英文名 + 中文名各一遍）+ 别名 + 鲸鱼兜底 + null ✓ |
 | ✅ 岗位别名层（2026-09-26 追加） | **已实施**：`OC_ALIAS_ART`（17 项）插在 `OC_ROLE_ART` 之后、`ROLE_ART` 之前 | **起因**：`memberArtUrl` 只按「岗位全称」匹配，成员角色写成 `verifier` / `reviewer` 这类普通词时 20 项全不命中，直接落到鲸鱼桶（`member-qa-v2.png` / `member-security-v2.png`）——用户看到的就是「我们的头像一个都没用上」。别名层把这些普通词归到最近的岗位（`verifier`/`tester`/`qa` → test-engineer，`reviewer` → code-reviewer，`researcher`/`analyst` → requirement-analyst 等）；顺序保证岗位全称永远优先，鲸鱼桶只剩真正无岗位可归的角色（如 `engineer`） |
 | ✅ `packages/dag-team/src/index.ts`（~429-465 后） | **已实施**：新增 `ocArtDir = ../assets/sophia-avatars-webp/` + `OC_ALLOWLIST`（20 个 `.webp`）并注册独立前缀 `/plugins/dsh-sophia-entities/sophia-assets`；handler 与原 artwork 路由同构（末段文件名、白名单、`image/webp`） | 交叉校验：artwork.ts 20 slug ↔ allowlist 20 ↔ 磁盘 20 文件全部一致 ✓ |
-| ✅ 发布物 | root `package.json` `files` 白名单**纳入** `packages/dag-team/assets/agent-teams/**/*` 与 `packages/dag-team/assets/sophia-avatars-webp/**/*`，另加 `assets/readme/**/*`（README 截图） | **2026-09-26 更正**：运行时资源必须入白名单，否则安装副本里整个 `assets/` 缺失、头像全裂图；母版 `sophia-avatars/` 与 `ui.png` 仍排除。白名单实测 `npm pack` 433 项、约 3 MB |
+| ✅ 死素材清理（2026-09-26） | **已实施**：`git rm` 7 个零引用文件（4 张死鲸鱼图、`assets/ui.png`、`assets/readme/hero.svg` + `workspace.png`）；`ART_ALLOWLIST` 15 → 11 | 新增 `packages/dag-team/tests/runtime-assets.spec.ts`（4 用例）钉死磁盘清单 + 逐名核对 `artwork.ts` 引用 |
+| ✅ 发布物 | root `package.json` `files` 白名单**纳入** `packages/dag-team/assets/agent-teams/**/*` 与 `packages/dag-team/assets/sophia-avatars-webp/**/*`，另加 `assets/readme/**/*`（README 截图） | **2026-09-26 更正**：运行时资源必须入白名单，否则安装副本里整个 `assets/` 缺失、头像全裂图；母版 `sophia-avatars/` 仍排除。白名单实测 `npm pack` 432 项、约 3 MB |
 | ✅ 体积治理 | **已实施**：`scripts/optimize-avatars.py`（Pillow）母版 → 512×512 WebP q82；87.53 MB → 863.9 KB | 幂等脚本；运行时集为扁平 `<slug>.webp` |
 | ✅ 母版重制 | **已实施（2026-09-26）**：`scripts/shrink-avatar-masters.py` 2048 PNG → 1024 WebP q90；83.38 MB → 3.38 MB | 母版改为 `.webp`（中文名保留、tier 目录保留）；2048 原图归档于仓外 `.scratch/avatar-sources-2048/` |
 | 映射表维护 | 中文职位名 ⇄ slug 以本文 §4 为唯一事实源 | 素材包升级时同步更新 |
