@@ -27,11 +27,17 @@
  * - Every create call uses deterministic requestIds derived from the approval
  *   request id, so un-awaited retries resolve idempotently inside the ledger.
  */
-import { randomUUID } from 'node:crypto'
-
-import { AgentTeamLedger, agentTeamHumanActor } from './ledger.ts'
-import { memberMemoryDirectoryName } from './member-runtime.ts'
 import type { AgentTeamAgentMember, AgentTeamChannel, AgentTeamChannelRef, AgentTeamMemberId, AgentTeamRequestId } from './types/entities.ts'
+import type {
+  AgentTeamAddMemberRequest,
+  AgentTeamAddMemberResult,
+  AgentTeamCreateChannelRequest,
+  AgentTeamCreateChannelResult,
+  AgentTeamSendMessageRequest,
+  AgentTeamSendMessageResult,
+  AgentTeamView,
+  AgentTeamViewRequest,
+} from './types/requests-results.ts'
 import type {
   ApprovalRequest,
   MaterializeResult,
@@ -41,11 +47,29 @@ import type {
 
 /** Brand derivation keeps this file to relative imports + the orchestration type import. */
 type WorkspaceId = AgentTeamAgentMember['workspaceId']
-type SessionId = AgentTeamAgentMember['sessionId']
 type ReasoningEffortId = NonNullable<NonNullable<AgentTeamAgentMember['model']>['reasoningEffort']>
 
+/**
+ * Structural narrow pick of the `AgentTeam` host's public surface, so the
+ * orchestration plane drives the backend with the live host instance (from
+ * `exec.agent.ctx.get('agentTeam')`) instead of the private `AgentTeamLedger`.
+ * Every mutating method forces the Human actor internally
+ * (`agentTeamHumanActor()`), preserving the「主人批准后代为提交」semantics without
+ * the backend supplying an actor. `addMember` returns the host-generated
+ * member (memberId/sessionId/privateMemoryPath come from the host), which the
+ * backend uses to map planned handles to memberIds.
+ */
+export interface PersistentHostAPI {
+  readonly createChannel: (request: AgentTeamCreateChannelRequest) => Promise<AgentTeamCreateChannelResult>
+  readonly addMember: (request: AgentTeamAddMemberRequest) => Promise<AgentTeamAddMemberResult>
+  readonly sendMessage: (request: AgentTeamSendMessageRequest) => Promise<AgentTeamSendMessageResult>
+  /** Synchronous Human-facing projection; used for reads only, never mutation. */
+  readonly view: (request: AgentTeamViewRequest) => AgentTeamView
+}
+
 export interface SophiaPersistentBackendDeps {
-  readonly ledger: AgentTeamLedger
+  /** The live `AgentTeam` host instance, narrowed to the backend's structural needs. */
+  readonly host: PersistentHostAPI
   /** The workspace the materialized team lives in (matches the channel workspace so member participation seeds correctly). */
   readonly workspaceId: string
 }
@@ -59,22 +83,16 @@ function truncateText(text: string, max: number): string {
   return points.length <= max ? text : points.slice(0, max).join('')
 }
 
-/** Member private-memory path convention: mirrors the host `dshHomePath('agent-team','members', …)` final segment. */
-function privateMemoryPathFor(memberId: AgentTeamMemberId): string {
-  return `agent-team/members/${memberMemoryDirectoryName(memberId)}`
-}
-
 /**
- * Create the persistent backend bound to one ledger + workspace.
+ * Create the persistent backend bound to one host + workspace.
  *
- * `describe`/`list` resolve teams through `ledger.view({ workspaceId })` reading
+ * `describe`/`list` resolve teams through `host.view({ workspaceId })` reading
  * as the Human (no memberId filter, so the whole workspace is visible) and map
  * each Channel to a `TeamSummary`. `teamRef` is `${workspaceId}/${channelRef}`;
  * `describe` also tolerates a bare `channelRef` (falls back to this workspace).
  */
 export function createSophiaPersistentBackend(deps: SophiaPersistentBackendDeps): TeamBackend {
   const workspaceId = deps.workspaceId as WorkspaceId
-  const human = agentTeamHumanActor()
   /** Epoch of each materialized team, recorded at create time (channels expose only a sequence). */
   const createdAtByChannel = new Map<AgentTeamChannelRef, number>()
   const requestId = (stamp: string): AgentTeamRequestId => stamp as AgentTeamRequestId
@@ -96,41 +114,30 @@ export function createSophiaPersistentBackend(deps: SophiaPersistentBackendDeps)
       // 1) Channel first: the durable team identity; no initial members (each
       //    planned member is added explicitly so participation seeds to this
       //    workspace).
-      const channelResult = await deps.ledger.createChannel({
+      const channelResult = await deps.host.createChannel({
         requestId: requestId(`persistent:channel:${request.id}`),
         workspaceId,
         name: truncateText(request.goal, CHANNEL_NAME_MAX),
         description: request.goal,
         memberIds: [],
-        actor: human,
       })
-      const channel = channelResult.value.channel
+      const channel = channelResult.channel
       createdAtByChannel.set(channel.channelRef, Date.now())
 
-      // 2) Members: one ledger Agent Member per planned member, branded with a
-      //    fresh `member:<uuid>` identity, model selection taken from the plan.
+      // 2) Members: the host provisions one ledger Agent Member per planned
+      //    member — it generates the member identity (memberId/sessionId/
+      //    privateMemoryPath) and seeds the creation Workspace participation.
+      //    Model selection is taken from the plan; the returned stored member
+      //    (handle → memberId) keys the assignee map below.
       const memberIdByHandle = new Map<string, AgentTeamMemberId>()
       for (const [index, planned] of request.plan.members.entries()) {
-        const memberId = `member:${randomUUID()}` as AgentTeamMemberId
-        memberIdByHandle.set(planned.name, memberId)
         const model = planned.provider === undefined || planned.model === undefined ? undefined
           : Object.freeze({
               provider: planned.provider,
               model: planned.model,
               ...(planned.reasoningEffort === undefined ? {} : { reasoningEffort: planned.reasoningEffort as ReasoningEffortId }),
             })
-        const member: AgentTeamAgentMember = Object.freeze({
-          memberId,
-          sessionId: `agent-team-${randomUUID()}` as SessionId,
-          workspaceId,
-          handle: planned.name,
-          description: planned.role ?? '',
-          presetId: 'team-member',
-          ...(model === undefined ? {} : { model }),
-          privateMemoryPath: privateMemoryPathFor(memberId),
-          state: 'enabled',
-        })
-        await deps.ledger.addMember({
+        const memberResult = await deps.host.addMember({
           requestId: requestId(`persistent:member:${request.id}:${index}`),
           workspaceId,
           handle: planned.name,
@@ -138,9 +145,9 @@ export function createSophiaPersistentBackend(deps: SophiaPersistentBackendDeps)
           presetId: 'team-member',
           ...(model === undefined ? {} : { model }),
           channelRefs: Object.freeze([channel.channelRef]),
-          actor: human,
-          member,
         })
+        const stored = memberResult.status.member
+        memberIdByHandle.set(stored.handle, stored.memberId)
       }
 
       // 3) Tasks: one atomic Message+Thread+Task('todo') per planned task, so
@@ -150,14 +157,13 @@ export function createSophiaPersistentBackend(deps: SophiaPersistentBackendDeps)
       for (const planned of request.plan.tasks) {
         const subject = planned.subject.trim()
         const assigneeMemberId = planned.assignee === undefined ? undefined : memberIdByHandle.get(planned.assignee)
-        await deps.ledger.sendMessage({
+        await deps.host.sendMessage({
           requestId: requestId(`persistent:task:${request.id}:${planned.id}`),
           workspaceId,
           channelRef: channel.channelRef,
           body: subject === '' ? planned.id : subject,
           ...(assigneeMemberId === undefined ? {} : { recipients: Object.freeze([assigneeMemberId]) }),
           asTask: true,
-          actor: human,
         })
       }
 
@@ -173,7 +179,7 @@ export function createSophiaPersistentBackend(deps: SophiaPersistentBackendDeps)
       const slash = teamRef.lastIndexOf('/')
       const resolvedWorkspace = slash === -1 ? workspaceId : teamRef.slice(0, slash) as WorkspaceId
       const channelRef = (slash === -1 ? teamRef : teamRef.slice(slash + 1)) as AgentTeamChannelRef
-      const view = deps.ledger.view({ workspaceId: resolvedWorkspace })
+      const view = deps.host.view({ workspaceId: resolvedWorkspace })
       const channel = view.channels.find(candidate => candidate.channelRef === channelRef)
       if (channel === undefined) return undefined
       return summary(
@@ -184,7 +190,7 @@ export function createSophiaPersistentBackend(deps: SophiaPersistentBackendDeps)
     },
 
     async list(_ctx: unknown): Promise<TeamSummary[]> {
-      const view = deps.ledger.view({ workspaceId })
+      const view = deps.host.view({ workspaceId })
       return view.channels.map(channel => summary(
         channel,
         view.members.filter(membership => membership.channelRef === channel.channelRef).length,

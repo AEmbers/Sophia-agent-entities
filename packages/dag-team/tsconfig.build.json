@@ -2,7 +2,7 @@
 // file for why `exactOptionalPropertyTypes` is relaxed for this package only:
 // the tree is upstream @nanmicoder/dsh-agent-teams 0.1.21, kept verbatim.
 {
-  "extends": "../../tsconfig.types.json",
+  "extends": "../../tsconfig.build-deps.json",
   "include": ["src"],
   "compilerOptions": {
     "exactOptionalPropertyTypes": false,

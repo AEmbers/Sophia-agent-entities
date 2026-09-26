@@ -56,6 +56,18 @@
       "dsh-sophia-entities/orchestration": [
         "./packages/orchestration/src/types.ts"
       ],
+      "dsh-sophia-entities/orchestration/facade": [
+        "./packages/orchestration/src/facade.ts"
+      ],
+      "dsh-sophia-entities/orchestration/tools": [
+        "./packages/orchestration/src/tools.ts"
+      ],
+      "dsh-sophia-entities/orchestration/types": [
+        "./packages/orchestration/src/types.ts"
+      ],
+      "dsh-sophia-entities/persistent-backend": [
+        "./packages/agent-team/src/sophia-persistent-backend.ts"
+      ],
       "@deepseek-ai/dsh-storage-sqlite": [
         "../deepseek-harness/packages/storage/storage-sqlite/src"
       ],

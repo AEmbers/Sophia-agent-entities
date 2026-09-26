@@ -42,6 +42,7 @@ import { findTeamByCaptain } from './state.ts'
 import { formatProfilesForPrompt, type TeamProfileConfig } from './profiles.ts'
 import { installTeamCapabilities } from './capabilities.ts'
 import { TEAM_TOOL_NAMES } from './tool-names.ts'
+import { installSophiaApprovalPlane } from './sophia-approval.ts'
 
 import { authenticatedWebRoutes, readJsonRequest, RequestBodyError, type BrowserRequestGate, type WebRouteHost } from './web-routes.ts'
 
@@ -169,6 +170,17 @@ export function apply(ctx: Context, config: Config): void {
   // settled, rather than here.
 
   const agentTeamsRuntime = registerAgentTeamsTools(ctx, resolved)
+
+  // Approval plane: bridge the orchestration approval tools (propose/review/
+  // approve) into this plugin. Best-effort — a failed wiring (e.g. a minimal
+  // composition without the agent-team host) must never break dag-team
+  // registration; the lazy persistent backend fails at first use instead.
+  try {
+    installSophiaApprovalPlane(ctx, { runtime: agentTeamsRuntime, resolved })
+  } catch (error: unknown) {
+    ctx.logger.warn(`agent-teams: approval plane not wired: ${error instanceof Error ? error.message : String(error)}`)
+  }
+
   installTeamCapabilities(ctx, {
     stateDir: resolved.stateDir,
     isPendingMember: agentTeamsRuntime.isPendingMember,
@@ -537,3 +549,10 @@ export function apply(ctx: Context, config: Config): void {
 // already hold the `AgentTeamsRuntime` from `registerAgentTeamsTools`. See
 // packages/dag-team/src/sophia-dag-backend.ts.
 export { sophiaDagBackendFor } from './sophia-dag-backend.ts'
+
+// Approval-plane glue: installs (idempotently, once per context) the facade +
+// orchestration approval tools exposed through this plugin, and hands hosts /
+// the P3 route layer the handle for request listing and activity. See
+// packages/dag-team/src/sophia-approval.ts.
+export { installSophiaApprovalPlane } from './sophia-approval.ts'
+export type { SophiaApprovalPlaneOptions, ApprovalPlaneHandle } from './sophia-approval.ts'

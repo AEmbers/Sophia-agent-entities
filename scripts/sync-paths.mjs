@@ -33,6 +33,17 @@ const own = {
   // exactOptionalPropertyTypes), so consumers resolve to its dependency-free
   // types.ts — the full ApprovalRequest/TeamBackend contract surface.
   'dsh-sophia-entities/orchestration': ['./packages/orchestration/src/types.ts'],
+  // Value subpaths for the approval glue (packages/dag-team/src/sophia-approval.ts):
+  // the facade/tools wiring imports orchestration RUNTIME values, which the
+  // types-only contract seam above cannot provide; /types mirrors the seam so
+  // consumers may address the contract surface by module name.
+  'dsh-sophia-entities/orchestration/facade': ['./packages/orchestration/src/facade.ts'],
+  'dsh-sophia-entities/orchestration/tools': ['./packages/orchestration/src/tools.ts'],
+  'dsh-sophia-entities/orchestration/types': ['./packages/orchestration/src/types.ts'],
+  // agent-team's persistent TeamBackend for the approval plane; the host
+  // surface (dsh-sophia-entities/host) does not export it, so the glue reaches
+  // it through its own declared subpath.
+  'dsh-sophia-entities/persistent-backend': ['./packages/agent-team/src/sophia-persistent-backend.ts'],
 }
 
 const ownTypes = {
@@ -80,6 +91,10 @@ const buildOwn = {
   'dsh-sophia-entities/tools': ['./packages/tool-agent-team/lib/types/index.d.ts'],
   'dsh-sophia-entities/client': ['./packages/client-agent-team/lib/types/client/index.d.ts'],
   'dsh-sophia-entities/orchestration': ['./packages/orchestration/lib/types/index.d.ts'],
+  'dsh-sophia-entities/orchestration/facade': ['./packages/orchestration/lib/types/facade.d.ts'],
+  'dsh-sophia-entities/orchestration/tools': ['./packages/orchestration/lib/types/tools.d.ts'],
+  'dsh-sophia-entities/orchestration/types': ['./packages/orchestration/lib/types/types.d.ts'],
+  'dsh-sophia-entities/persistent-backend': ['./packages/agent-team/lib/types/sophia-persistent-backend.d.ts'],
 }
 
 const shared = {
