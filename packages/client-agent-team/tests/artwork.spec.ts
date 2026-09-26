@@ -9,7 +9,7 @@ import {
 
 /** The twenty posts, by the slug that ships, the post title, and the Chinese name. */
 const POSTS: ReadonlyArray<readonly [string, string, string]> = [
-  ['lead-ceo', 'ceo', '钦天监监正'],
+  ['lead-ceo', 'ceo', '监正'],
   ['product-director', 'product director', '产品总监'],
   ['program-director', 'program director', '项目总监'],
   ['resource-admin', 'resource admin', '典籍掌事'],
@@ -61,6 +61,14 @@ describe('memberArtUrl', () => {
     for (const [slug, , chinese] of POSTS) {
       expect(memberArtUrl('', chinese), chinese).toBe(`${OC_ART_BASE}${slug}.webp`)
     }
+  })
+
+  it('takes the captain post as 监正, and keeps 钦天监监正 as its alias', () => {
+    // 钦天监 names the organisation, so the captain's post is just 监正.
+    expect(memberArtUrl('', '监正')).toBe(`${OC_ART_BASE}lead-ceo.webp`)
+    // Rosters written before the rename still resolve.
+    expect(memberArtUrl('', '钦天监监正')).toBe(`${OC_ART_BASE}lead-ceo.webp`)
+    expect(LEAD_ART).toBe(`${OC_ART_BASE}lead-ceo.webp`)
   })
 
   it('matches a post through the member name as well as the role', () => {

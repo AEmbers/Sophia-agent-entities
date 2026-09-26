@@ -20,6 +20,7 @@ All notable changes to this project are documented in this file. The format foll
 - The proposal card wears the team card's surface: the lead avatar, one chip per proposed member wearing its own art, count chips, and the task graph with each task's dependencies named.
 - The art loads again: no image was ever in the shipped artifact, so an installed plugin answered every one of its own asset requests with 404 — the proposal card, the team card and the activity panel all drew broken-image icons while a source checkout looked perfect. `npm run check:artifact` now fails when a runtime asset directory is missing from the pack list, and both CI lanes run it.
 - Members wear the Sophia portraits for their post: a role written as a plain word — "reviewer", "verifier", "researcher", "team lead" — used to fall straight past the twenty post titles into the generic whale art, so an ordinary roster showed no Sophia faces at all. Those words now resolve to the post they belong to.
+- The captain's post is `监正`: `钦天监` names the organisation rather than the seat, so the roster table, the master portrait file and the lead pattern all say `监正`, while the older spelling still resolves to the same portrait.
 
 ## [0.1.15] - 2026-09-24
 

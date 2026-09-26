@@ -75,31 +75,33 @@
 
 下表 `命中(中文)`/`命中(英文)` 为按 §3.1 正则对**现代岗位文本**的模拟结果（运行时 role 文本由 roster 提供，语言不定，故两列并列为`可变`；`NONE` 表示当前会落到首字母回退）。
 
+**命名规则（2026-09-26 定）**：**钦天监是组织名**，指 Agent Teams 这个团队本体——做的事像在无穷星空中观星、找到那颗要找的星，分发任务就是让这个组织去找星。**下表 20 项全部是职位名**。所以队长职位就叫 **`监正`**，不再写作「钦天监监正」；正则里保留 `钦天监监正` 作为历史别名，两种写法都命中 `lead-ceo`。
+
 | 梯队 | 职位（落位文件名） | 现代岗位 | 建议 OC slug（运行时） | 命中(中文) | 命中(英文) | 缺口 / 备注 |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1-command | 钦天监监正.png | CEO / 总负责人 | lead-ceo | NONE | NONE | 语义=队长，应走 LEAD_ART 而非 member 桶 |
-| 1-command | 灵台主事.png | 产品总监 | product-director | NONE | docs | en 因 `product` 命中 docs 桶 |
-| 1-command | 时宪主事.png | 项目总监 | program-director | NONE | NONE | 无匹配 |
-| 1-command | 典籍掌事.png | 资源 & 行政主管 | resource-admin | NONE | NONE | 无匹配 |
-| 1-command | 星禁掌察.png | 风控 & 合规 | risk-compliance | NONE | security | en 命中 security（risk） |
-| 2-analysis | 观象访事.png | 需求分析师 | requirement-analyst | **data**（误伤） | data | zh "分析" 命中 data 桶（正则误伤） |
-| 2-analysis | 星图主事.png | 产品经理 | product-manager | NONE | docs | en 因 `product` 命中 docs 桶 |
-| 2-analysis | 象绘主事.png | UX 设计师 | ux-designer | designer | designer | 一致 |
-| 2-analysis | 星绘主事.png | UI 视觉设计师 | ui-designer | designer | designer | 一致 |
-| 2-analysis | 传报主事.png | 客户/用户对接 | client-success | NONE | NONE | 无匹配 |
-| 3-tech | 灵台郎.png | 系统架构师 | architect | NONE | NONE | 无匹配（engineer 桶不含架构词） |
-| 3-tech | 历算主事.png | 后端工程师 | backend-engineer | engineer | engineer | 一致 |
-| 3-tech | 星仪主事.png | 前端工程师 | frontend-engineer | designer | engineer | zh 前端→designer；en frontend→engineer（不一致） |
-| 3-tech | 数象主事.png | 数据工程师 | data-engineer | data | data | 一致 |
-| 3-tech | 推步主事.png | 算法工程师 | algorithm-engineer | NONE | engineer | en 含 engineer 兜底；zh 算法无匹配 |
-| 4-qa | 星验主事.png | 业务 QA | business-qa | NONE | qa | en `qa` 命中 |
-| 4-qa | 星机校验.png | 技术测试工程师 | test-engineer | qa | qa | 一致 |
-| 4-qa | 天象值守.png | 运维工程师 | ops-engineer | operator | operator | 一致 |
-| 4-qa | 星文审校.png | 技术审核/代码评审 | code-reviewer | NONE | security | en review→security；zh 审校无匹配 |
-| 4-qa | 录典主事.png | 文档撰写 | docs-writer | docs | docs | 一致 |
+| 1-command | 监正.webp | CEO / 总负责人 | lead-ceo | NONE | NONE | 语义=队长，应走 LEAD_ART 而非 member 桶 |
+| 1-command | 灵台主事.webp | 产品总监 | product-director | NONE | docs | en 因 `product` 命中 docs 桶 |
+| 1-command | 时宪主事.webp | 项目总监 | program-director | NONE | NONE | 无匹配 |
+| 1-command | 典籍掌事.webp | 资源 & 行政主管 | resource-admin | NONE | NONE | 无匹配 |
+| 1-command | 星禁掌察.webp | 风控 & 合规 | risk-compliance | NONE | security | en 命中 security（risk） |
+| 2-analysis | 观象访事.webp | 需求分析师 | requirement-analyst | **data**（误伤） | data | zh "分析" 命中 data 桶（正则误伤） |
+| 2-analysis | 星图主事.webp | 产品经理 | product-manager | NONE | docs | en 因 `product` 命中 docs 桶 |
+| 2-analysis | 象绘主事.webp | UX 设计师 | ux-designer | designer | designer | 一致 |
+| 2-analysis | 星绘主事.webp | UI 视觉设计师 | ui-designer | designer | designer | 一致 |
+| 2-analysis | 传报主事.webp | 客户/用户对接 | client-success | NONE | NONE | 无匹配 |
+| 3-tech | 灵台郎.webp | 系统架构师 | architect | NONE | NONE | 无匹配（engineer 桶不含架构词） |
+| 3-tech | 历算主事.webp | 后端工程师 | backend-engineer | engineer | engineer | 一致 |
+| 3-tech | 星仪主事.webp | 前端工程师 | frontend-engineer | designer | engineer | zh 前端→designer；en frontend→engineer（不一致） |
+| 3-tech | 数象主事.webp | 数据工程师 | data-engineer | data | data | 一致 |
+| 3-tech | 推步主事.webp | 算法工程师 | algorithm-engineer | NONE | engineer | en 含 engineer 兜底；zh 算法无匹配 |
+| 4-qa | 星验主事.webp | 业务 QA | business-qa | NONE | qa | en `qa` 命中 |
+| 4-qa | 星机校验.webp | 技术测试工程师 | test-engineer | qa | qa | 一致 |
+| 4-qa | 天象值守.webp | 运维工程师 | ops-engineer | operator | operator | 一致 |
+| 4-qa | 星文审校.webp | 技术审核/代码评审 | code-reviewer | NONE | security | en review→security；zh 审校无匹配 |
+| 4-qa | 录典主事.webp | 文档撰写 | docs-writer | docs | docs | 一致 |
 
 **缺口结论**：
-- 纯中文 role 文本下 8/20 岗位当前 NONE（钦天监监正、时宪主事、典籍掌事、传报主事、灵台郎、推步主事、星验主事、星文审校），会显示首字母色块——接入后 20 岗应全量有图。
+- 纯中文 role 文本下 8/20 岗位当前 NONE（监正、时宪主事、典籍掌事、传报主事、灵台郎、推步主事、星验主事、星文审校），会显示首字母色块——接入后 20 岗应全量有图。
 - 现有正则存在**误伤与语言不一致**：需求分析→data；前端→designer(zh)/engineer(en)；product 类岗位→docs。接入 OC 后这些岗位应优先命中 OC 确定性映射，而非依赖正则猜测。
 - 20 岗 ⊃ 8 类：一个 OC slug 对应一个岗位；8 个鲸鱼桶是岗位的「上卷（fallback）桶」而非一一对应。
 
@@ -119,6 +121,8 @@
 - **结论**：仓库内可保留中文名（素材包规范要求），**运行时 URL 一律用 ASCII slug + 映射表**。
 
 ### 5.3 diff 草案
+
+> 本节是落位时的原始草案，保留原样不改写；其中的 `钦天监监正` 命名已于 2026-09-26 更正为 `监正`（见 §4 命名规则），实际实现以 §8 为准。
 
 **A. `packages/client-agent-team/src/client/dag/artwork.ts`**
 
@@ -155,7 +159,7 @@ export function memberArtUrl(name: string, role: string): string | null {
 
 ## 6. LEAD_ART 与 ACTION_ART 处理
 
-- **LEAD_ART**：钦天监监正语义即队长（CEO/总负责人）。✅ **已实施**：`LEAD_ART = ${OC_ART_BASE}lead-ceo.webp`（直接替换鲸鱼 lead 图），符合「推荐直接替换」路线；三处消费点只读常量、零改动。若后续想回归鲸鱼队长观感，改回 `LEAD_ART = ${ART_BASE}team-lead-v2.png` 一行即可。
+- **LEAD_ART**：监正语义即队长（CEO/总负责人），是「钦天监」这个组织里的最高职位。✅ **已实施**：`LEAD_ART = ${OC_ART_BASE}lead-ceo.webp`（直接替换鲸鱼 lead 图），符合「推荐直接替换」路线；三处消费点只读常量、零改动。若后续想回归鲸鱼队长观感，改回 `LEAD_ART = ${ART_BASE}team-lead-v2.png` 一行即可。
 - **ACTION_ART**：OC 素材包**只有静态头像、无 working/idle/unknown 状态帧**。✅ **维持鲸鱼三态图不变**（活动枚举 `working|idle|unknown` 与三键精确一一对应，不存在 undefined 风险）——与本文建议一致。
 - 若 Lead 后续拿到 OC 状态帧，扩 `ACTION_ART` 键即可，接口形状不变。
 

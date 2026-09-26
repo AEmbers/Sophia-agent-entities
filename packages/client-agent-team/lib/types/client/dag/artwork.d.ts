@@ -9,7 +9,7 @@
 export declare const ART_BASE = "/plugins/dsh-sophia-entities/assets/";
 /** OC portrait route prefix (512x512 WebP, flat slug directory). */
 export declare const OC_ART_BASE = "/plugins/dsh-sophia-entities/sophia-assets/";
-/** Captain artwork: the OC lead portrait (钦天监监正 · lead-ceo). */
+/** Captain artwork: the OC lead portrait (监正 · lead-ceo). */
 export declare const LEAD_ART = "/plugins/dsh-sophia-entities/sophia-assets/lead-ceo.webp";
 /** Status action artwork per member activity (kept on whale images). */
 export declare const ACTION_ART: Record<'working' | 'idle' | 'unknown', string>;

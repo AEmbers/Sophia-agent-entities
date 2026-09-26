@@ -43,7 +43,7 @@ OUT_DIR = REPO_ROOT / "packages" / "dag-team" / "assets" / "sophia-avatars-webp"
 # still has to serve an archived .png set.
 SLUG_MAP: dict[str, str] = {
     # 1-command (管理与总控组)
-    "钦天监监正": "lead-ceo",
+    "监正": "lead-ceo",
     "灵台主事": "product-director",
     "时宪主事": "program-director",
     "典籍掌事": "resource-admin",

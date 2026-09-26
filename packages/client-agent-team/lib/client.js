@@ -15329,9 +15329,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		* roster text resolves deterministically instead of falling through regex
 		* buckets. Source of truth for the post -> slug mapping:
 		* docs/material-integration.md §4.
+		*
+		* 钦天监 is the organisation (Agent Teams itself); every name here is a post
+		* inside it, the captain's post being 监正. The historical spelling
+		* 钦天监监正 stays in the lead pattern as an alias.
 		*/
 		const OC_ROLE_ART = [
-			[/\bceo\b|总负责|队长|钦天监监正/, "lead-ceo.webp"],
+			[/\bceo\b|总负责|队长|监正|钦天监监正/, "lead-ceo.webp"],
 			[/\bproduct\s*director\b|产品总监|灵台主事/, "product-director.webp"],
 			[/\bprogram\s*director\b|项目总监|时宪主事/, "program-director.webp"],
 			[/\bresource\s*admin\b|资源|行政|典籍掌事/, "resource-admin.webp"],
@@ -15379,7 +15383,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			[/\bdevops\b|\bsre\b|\bops\b|\brelease\b|\bdeploy\w*|运维|部署|发布/, "ops-engineer.webp"],
 			[/\bwriter\b|\bdocs?\b|\bdocument\w*|文档|撰写/, "docs-writer.webp"]
 		];
-		/** Captain artwork: the OC lead portrait (钦天监监正 · lead-ceo). */
+		/** Captain artwork: the OC lead portrait (监正 · lead-ceo). */
 		const LEAD_ART = `${OC_ART_BASE}lead-ceo.webp`;
 		/** Status action artwork per member activity (kept on whale images). */
 		const ACTION_ART = {
