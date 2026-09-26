@@ -29,8 +29,12 @@ import type { TeamMode } from 'dsh-sophia-entities/orchestration/types'
 /** It is pending_owner / pending_captain / draft while awaiting approval. */
 export type SophiaApprovalPendingState = 'pending_owner' | 'pending_captain' | 'draft'
 
-/** Approval states the card renders during (before materialization). */
-const PENDING_STATES: ReadonlySet<string> = new Set<SophiaApprovalPendingState>([
+/**
+ * Approval states the card renders during (before materialization). Exported
+ * because the card must also recognize the moment a request LEAVES this set —
+ * a settled request stops offering buttons.
+ */
+export const PENDING_STATES: ReadonlySet<string> = new Set<SophiaApprovalPendingState>([
   'pending_owner',
   'pending_captain',
   'draft',

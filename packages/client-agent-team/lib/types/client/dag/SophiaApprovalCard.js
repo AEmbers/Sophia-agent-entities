@@ -1,12 +1,19 @@
-import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 /**
  * Sophia approval conversation card: the in-conversation approver surface for
  * a pending team proposal (design §4.4.2–4.4.3). It renders BEFORE the team is
  * materialized while the proposal is awaiting owner or captain approval.
  *
  * The card is a leaf: every interaction posts the full action record to the
- * host (`POST /plugins/dsh-sophia-entities/approvals/plan`); durable truth
- * stays on the Node side and returns through the session events.
+ * host (`POST /plugins/dsh-sophia-entities/approvals/plan`) and reads back the
+ * host's own verdict, so durable truth stays on the Node side.
+ *
+ * A card is folded from immutable conversation records, which means the state
+ * baked into the transcript stays `pending_*` forever. The card therefore keeps
+ * its own settlement: the `state` the host returns for an action, plus one
+ * reconciliation against the live pending queue on mount. Without it a decided
+ * proposal kept offering [批准][退回] and answered every further click with
+ * "is not awaiting owner decision" — which reads as buttons that do nothing.
  *
  * View selection — the same folded proposal appears in different sessions with
  * different controls, per §4.4.3:
@@ -19,15 +26,44 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
  *    session injection, which registers this component with `reviewer: true`.
  * @module dsh-sophia-entities/client/sophia-approval-card
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Menu } from '@deepseek-ai/dsh-client-ui-primitives';
-import { approvalErrorMessage, postApprovalPlanAction } from "./sophia-approval-requests.js";
+import { approvalErrorMessage, fetchApprovalRequestState, postApprovalPlanAction } from "./sophia-approval-requests.js";
+import { settlementLabelOf, settlementOf } from "./sophia-approval-settlement.js";
 import { LEAD_ART, memberArtUrl } from "./artwork.js";
 import css from './SophiaApprovalCard.module.css';
 /** Team-mode selector entries: id, label and designer description. */
 const MODE_IDS = ['persistent', 'dag'];
 function DisclosureChevron({ open }) {
     return (_jsx("svg", { className: css.modeChevron, "data-open": open, width: "12", height: "12", viewBox: "0 0 12 12", fill: "none", stroke: "currentColor", strokeWidth: "1.5", strokeLinecap: "round", "aria-hidden": true, children: _jsx("path", { d: "M4 2.5 7.5 6 4 9.5" }) }));
+}
+/**
+ * Reconcile one folded request against the live pending queue, once per mount.
+ * A failed read reports `undefined` and settles nothing, so a host restart can
+ * never masquerade as a decision.
+ */
+function useApprovalLiveState(requestId) {
+    const [live, setLive] = useState(undefined);
+    useEffect(() => {
+        let cancelled = false;
+        void fetchApprovalRequestState(requestId)
+            .then((next) => { if (!cancelled)
+            setLive(next); })
+            .catch(() => { });
+        return () => { cancelled = true; };
+    }, [requestId]);
+    return live;
+}
+/** Localized wording for a settlement, with the raw state as the last resort. */
+function settledText(settlement, t) {
+    const label = settlementLabelOf(settlement);
+    switch (label.key) {
+        case 'approval.settled.gone': return t('approval.settled.gone');
+        case 'approval.settled.approved': return t('approval.settled.approved');
+        case 'approval.settled.rejected': return t('approval.settled.rejected');
+        case 'approval.settled.materialized': return t('approval.settled.materialized');
+        default: return t('approval.settled.other', { state: label.state });
+    }
 }
 function TeamModeMenu({ mode, busy, onSelect, t, }) {
     const [open, setOpen] = useState(false);
@@ -41,12 +77,16 @@ function TeamModeMenu({ mode, busy, onSelect, t, }) {
         }, onClose: () => setOpen(false), anchor: (_jsxs("button", { type: "button", className: css.modeTrigger, "aria-haspopup": "menu", "aria-expanded": open, disabled: busy, onClick: () => setOpen((value) => !value), children: [t(mode === 'dag' ? 'approval.mode.dag' : 'approval.mode.persistent'), _jsx(DisclosureChevron, { open: open })] })) }));
 }
 /**
- * Shared card header: the lead avatar, the card title and the pending-state
- * badge. Every view wears the same head so a folded proposal looks identical
- * whichever session it is read in.
+ * Shared card header: the lead avatar, the card title and the state badge —
+ * the pending-state while a decision is owed, the settlement once it is not.
+ * Every view wears the same head so a folded proposal looks identical whichever
+ * session it is read in.
  */
-function ApprovalHead({ variant, t }) {
-    return (_jsxs("header", { className: css.head, children: [_jsx("img", { className: css.leadAvatar, src: LEAD_ART, alt: "", "aria-hidden": true }), _jsx("span", { className: css.title, children: t('approval.title') }), _jsx("span", { className: css.stateBadge, children: t(variant === 'owner' ? 'approval.state.pending_owner' : 'approval.state.pending_captain') })] }));
+function ApprovalHead({ variant, settled, t }) {
+    const badge = settled === undefined
+        ? t(variant === 'owner' ? 'approval.state.pending_owner' : 'approval.state.pending_captain')
+        : t('approval.state.settled');
+    return (_jsxs("header", { className: css.head, children: [_jsx("img", { className: css.leadAvatar, src: LEAD_ART, alt: "", "aria-hidden": true }), _jsx("span", { className: css.title, children: t('approval.title') }), _jsx("span", { className: css.stateBadge, "data-settled": settled !== undefined || undefined, children: badge })] }));
 }
 /**
  * Member roster: one chip per proposed member, wearing the same OC avatar the
@@ -81,18 +121,34 @@ function ApprovalTasks({ tasks, t }) {
 }
 /** Read-only status used in the member's own session for a member proposal. */
 function MemberWaitingCard({ data, t }) {
-    return (_jsxs("section", { className: css.root, "data-sophia-approval": true, "data-request-id": data.requestId, children: [_jsx(ApprovalHead, { variant: "captain", t: t }), _jsxs("div", { className: css.line, children: [_jsx("span", { className: css.lineKey, children: t('approval.goalLabel') }), _jsx("span", { className: css.lineValue, children: data.goal })] }), _jsxs("div", { className: css.line, children: [_jsx("span", { className: css.lineKey, children: t('approval.requesterLabel') }), _jsx("span", { className: css.lineValue, children: t('approval.requester.member', { handle: data.requester.handle ?? '' }) })] }), _jsx(ApprovalRoster, { members: data.members, t: t }), _jsx(ApprovalCounts, { data: data, t: t }), _jsx(ApprovalTasks, { tasks: data.tasks, t: t }), _jsx("div", { className: css.feedback, children: t('approval.waiting') })] }));
+    const live = useApprovalLiveState(data.requestId);
+    const settled = settlementOf(undefined, live);
+    return (_jsxs("section", { className: css.root, "data-sophia-approval": true, "data-request-id": data.requestId, children: [_jsx(ApprovalHead, { variant: "captain", settled: settled, t: t }), _jsxs("div", { className: css.line, children: [_jsx("span", { className: css.lineKey, children: t('approval.goalLabel') }), _jsx("span", { className: css.lineValue, children: data.goal })] }), _jsxs("div", { className: css.line, children: [_jsx("span", { className: css.lineKey, children: t('approval.requesterLabel') }), _jsx("span", { className: css.lineValue, children: t('approval.requester.member', { handle: data.requester.handle ?? '' }) })] }), _jsx(ApprovalRoster, { members: data.members, t: t }), _jsx(ApprovalCounts, { data: data, t: t }), _jsx(ApprovalTasks, { tasks: data.tasks, t: t }), settled === undefined
+                ? _jsx("div", { className: css.feedback, children: t('approval.waiting') })
+                : _jsx("div", { className: css.settled, "data-settled": true, children: settledText(settled, t) })] }));
 }
 /** Owner approval surface: mode-selector + [批准][退回]. */
 function OwnerApprovalCard({ data, sessionId, t }) {
     const [mode, setMode] = useState(data.mode);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState(undefined);
+    const [outcome, setOutcome] = useState(undefined);
+    const live = useApprovalLiveState(data.requestId);
+    const settled = settlementOf(outcome, live);
+    const liveMode = live !== undefined && live !== 'absent' ? live.mode : undefined;
+    useEffect(() => {
+        if (liveMode === 'persistent' || liveMode === 'dag')
+            setMode(liveMode);
+    }, [liveMode]);
     const pendingAction = (action, payload) => async () => {
         setBusy(true);
         setError(undefined);
         try {
-            await postApprovalPlanAction(sessionId, { action, requestId: data.requestId, ...payload });
+            const result = await postApprovalPlanAction(sessionId, { action, requestId: data.requestId, ...payload });
+            if (result?.state !== undefined)
+                setOutcome(result.state);
+            if (result?.mode !== undefined)
+                setMode(result.mode);
         }
         catch (err) {
             setError(approvalErrorMessage(err));
@@ -101,22 +157,27 @@ function OwnerApprovalCard({ data, sessionId, t }) {
             setBusy(false);
         }
     };
-    return (_jsxs("section", { className: css.root, "data-sophia-approval": true, "data-request-id": data.requestId, children: [_jsx(ApprovalHead, { variant: "owner", t: t }), _jsxs("div", { className: css.line, children: [_jsx("span", { className: css.lineKey, children: t('approval.goalLabel') }), _jsx("span", { className: css.lineValue, children: data.goal })] }), _jsxs("div", { className: css.line, children: [_jsx("span", { className: css.lineKey, children: t('approval.requesterLabel') }), _jsx("span", { className: css.lineValue, children: data.requester.isHuman ? t('approval.requester.human') : t('approval.requester.member', { handle: data.requester.handle ?? '' }) })] }), _jsx(ApprovalRoster, { members: data.members, t: t }), _jsx(ApprovalCounts, { data: data, t: t }), _jsx(ApprovalTasks, { tasks: data.tasks, t: t }), _jsxs("div", { className: css.modeRow, children: [_jsx("span", { className: css.modeLabel, children: t('approval.modeLabel') }), _jsx(TeamModeMenu, { mode: mode, busy: busy, t: t, onSelect: (next) => {
-                            setMode(next);
-                            void pendingAction('set_mode', { mode: next })();
-                        } })] }), _jsxs("div", { className: css.actions, children: [_jsx("button", { type: "button", className: `${css.actionButton} ${css.approve}`, disabled: busy, onClick: () => void pendingAction('approve', { decision: 'approve', mode })(), children: t('approval.approve') }), _jsx("button", { type: "button", className: `${css.actionButton} ${css.danger}`, disabled: busy, onClick: () => void pendingAction('reject', {})(), children: t('approval.reject') })] }), error !== undefined && _jsx("div", { className: css.feedback, role: "alert", children: error })] }));
+    return (_jsxs("section", { className: css.root, "data-sophia-approval": true, "data-request-id": data.requestId, children: [_jsx(ApprovalHead, { variant: "owner", settled: settled, t: t }), _jsxs("div", { className: css.line, children: [_jsx("span", { className: css.lineKey, children: t('approval.goalLabel') }), _jsx("span", { className: css.lineValue, children: data.goal })] }), _jsxs("div", { className: css.line, children: [_jsx("span", { className: css.lineKey, children: t('approval.requesterLabel') }), _jsx("span", { className: css.lineValue, children: data.requester.isHuman ? t('approval.requester.human') : t('approval.requester.member', { handle: data.requester.handle ?? '' }) })] }), _jsx(ApprovalRoster, { members: data.members, t: t }), _jsx(ApprovalCounts, { data: data, t: t }), _jsx(ApprovalTasks, { tasks: data.tasks, t: t }), settled === undefined && (_jsxs(_Fragment, { children: [_jsxs("div", { className: css.modeRow, children: [_jsx("span", { className: css.modeLabel, children: t('approval.modeLabel') }), _jsx(TeamModeMenu, { mode: mode, busy: busy, t: t, onSelect: (next) => {
+                                    setMode(next);
+                                    void pendingAction('set_mode', { mode: next })();
+                                } })] }), _jsxs("div", { className: css.actions, children: [_jsx("button", { type: "button", className: `${css.actionButton} ${css.approve}`, disabled: busy, onClick: () => void pendingAction('approve', { decision: 'approve', mode })(), children: t('approval.approve') }), _jsx("button", { type: "button", className: `${css.actionButton} ${css.danger}`, disabled: busy, onClick: () => void pendingAction('reject', {})(), children: t('approval.reject') })] })] })), settled !== undefined && _jsx("div", { className: css.settled, "data-settled": true, children: settledText(settled, t) }), error !== undefined && _jsx("div", { className: css.feedback, role: "alert", children: error })] }));
 }
 /** Captain review surface for a member-initiated pending_captain proposal. */
 function CaptainReviewCard({ data, sessionId, t }) {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState(undefined);
+    const [outcome, setOutcome] = useState(undefined);
+    const live = useApprovalLiveState(data.requestId);
+    const settled = settlementOf(outcome, live);
     const review = (decision) => async () => {
         setBusy(true);
         setError(undefined);
         try {
             const needReason = decision === 'downgrade_to_dag';
             const reason = needReason ? t('approval.review.downgradeReason') : undefined;
-            await postApprovalPlanAction(sessionId, { action: 'review', requestId: data.requestId, decision, reason });
+            const result = await postApprovalPlanAction(sessionId, { action: 'review', requestId: data.requestId, decision, reason });
+            if (result?.state !== undefined)
+                setOutcome(result.state);
         }
         catch (err) {
             setError(approvalErrorMessage(err));
@@ -131,7 +192,7 @@ function CaptainReviewCard({ data, sessionId, t }) {
         { id: 'downgrade_to_dag', label: t('approval.review.downgrade_to_dag') },
         { id: 'reject', label: t('approval.review.reject') },
     ];
-    return (_jsxs("section", { className: css.root, "data-sophia-approval": true, "data-request-id": data.requestId, children: [_jsx(ApprovalHead, { variant: "captain", t: t }), _jsxs("div", { className: css.line, children: [_jsx("span", { className: css.lineKey, children: t('approval.goalLabel') }), _jsx("span", { className: css.lineValue, children: data.goal })] }), _jsxs("div", { className: css.line, children: [_jsx("span", { className: css.lineKey, children: t('approval.requesterLabel') }), _jsx("span", { className: css.lineValue, children: t('approval.requester.member', { handle: data.requester.handle ?? '' }) })] }), _jsx(ApprovalRoster, { members: data.members, t: t }), _jsx(ApprovalCounts, { data: data, t: t }), _jsx(ApprovalTasks, { tasks: data.tasks, t: t }), _jsx("div", { className: css.actions, children: verdicts.map((verdict) => (_jsx("button", { type: "button", className: `${css.actionButton} ${verdict.id === 'reject' ? css.danger : ''}`, disabled: busy, onClick: () => void review(verdict.id)(), children: verdict.label }, verdict.id))) }), error !== undefined && _jsx("div", { className: css.feedback, role: "alert", children: error })] }));
+    return (_jsxs("section", { className: css.root, "data-sophia-approval": true, "data-request-id": data.requestId, children: [_jsx(ApprovalHead, { variant: "captain", settled: settled, t: t }), _jsxs("div", { className: css.line, children: [_jsx("span", { className: css.lineKey, children: t('approval.goalLabel') }), _jsx("span", { className: css.lineValue, children: data.goal })] }), _jsxs("div", { className: css.line, children: [_jsx("span", { className: css.lineKey, children: t('approval.requesterLabel') }), _jsx("span", { className: css.lineValue, children: t('approval.requester.member', { handle: data.requester.handle ?? '' }) })] }), _jsx(ApprovalRoster, { members: data.members, t: t }), _jsx(ApprovalCounts, { data: data, t: t }), _jsx(ApprovalTasks, { tasks: data.tasks, t: t }), settled === undefined && (_jsx("div", { className: css.actions, children: verdicts.map((verdict) => (_jsx("button", { type: "button", className: `${css.actionButton} ${verdict.id === 'reject' ? css.danger : ''}`, disabled: busy, onClick: () => void review(verdict.id)(), children: verdict.label }, verdict.id))) })), settled !== undefined && _jsx("div", { className: css.settled, "data-settled": true, children: settledText(settled, t) }), error !== undefined && _jsx("div", { className: css.feedback, role: "alert", children: error })] }));
 }
 /** Render one pending Sophia approval proposal as a compact conversation card. */
 export default function SophiaApprovalCard({ node, sessionId, t, reviewer }) {

@@ -18570,7 +18570,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		}
 		//#endregion
 		//#region src/client/dag/sophia-approval-card-definition.ts
-		/** Approval states the card renders during (before materialization). */
+		/**
+		* Approval states the card renders during (before materialization). Exported
+		* because the card must also recognize the moment a request LEAVES this set —
+		* a settled request stops offering buttons.
+		*/
 		const PENDING_STATES = new Set([
 			"pending_owner",
 			"pending_captain",
@@ -18759,9 +18763,113 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			return message.isError === true || message.content.some((block) => typeof block === "object" && block !== null && "type" in block && block.type === "tool-result" && "isError" in block && block.isError === true);
 		}
 		//#endregion
+		//#region src/client/dag/sophia-approval-badge.ts
+		/**
+		* Pending-approval badge state (P4.2, design §4.6 channel 3 / dev-plan:190).
+		*
+		* The client is a leaf: durable truth lives on the Node side, so the badge
+		* polls the host `GET /plugins/dsh-sophia-entities/approvals` snapshot and
+		* counts the requests that demand the Human owner's attention. We surface the
+		* count plus the states so the footer action can decide wording; the badge is
+		* rendered only when the count is non-zero (§4.2 acceptance: '有 pending_owner
+		* 时徽标计数 > 0').
+		* @module dsh-sophia-entities/client/sophia-approval-badge
+		*/
+		/** GET target mirroring the card's POST plan route (orchestration routes.ts). */
+		const APPROVALS_STATE_URL = "/plugins/dsh-sophia-entities/approvals";
+		/** Live-poll cadence for the badge. Matches the activity monitor's hot loop. */
+		const APPROVAL_POLL_MS = 5e3;
+		/**
+		* The state the badge reacts to. Present-day orchestration keeps proposals in
+		* `pending_captain` then `pending_owner`; both are in-flight approvals the
+		* Human should see. `draft` is excluded — it is not yet routed to anyone.
+		*/
+		const APPROVAL_BADGE_STATES = new Set(["pending_owner", "pending_captain"]);
+		/** Fold a raw ApprovalsSnapshot body into the badge aggregate. */
+		function aggregateApprovalSnapshot(body) {
+			if (body === null || body === void 0) return {
+				count: 0,
+				states: []
+			};
+			if (!Array.isArray(body.requests)) return {
+				count: 0,
+				states: []
+			};
+			const states = /* @__PURE__ */ new Set();
+			let count = 0;
+			for (const row of body.requests) {
+				if (typeof row !== "object" || row === null) continue;
+				const state = row.state;
+				if (typeof state !== "string" || !APPROVAL_BADGE_STATES.has(state)) continue;
+				states.add(state);
+				count += 1;
+			}
+			return {
+				count,
+				states: [...states].sort()
+			};
+		}
+		function startApprovalBadgePolling(subscriber, runtime = {}) {
+			const fetchState = runtime.fetchState ?? ((url, init) => fetch(url, init));
+			const schedule = runtime.schedule ?? ((callback, intervalMs) => setInterval(callback, intervalMs));
+			const cancel = runtime.cancel ?? ((timer) => {
+				clearInterval(timer);
+			});
+			let cancelled = false;
+			let inFlight = false;
+			let timer;
+			let controller;
+			const tick = async () => {
+				if (inFlight || cancelled) return;
+				inFlight = true;
+				controller = new AbortController();
+				try {
+					const response = await fetchState(APPROVALS_STATE_URL, {
+						cache: "no-store",
+						signal: controller.signal
+					});
+					if (cancelled) return;
+					if (!response.ok) throw new Error("Approvals unavailable");
+					const body = await response.json();
+					if (cancelled) return;
+					subscriber(aggregateApprovalSnapshot(body));
+				} catch (error) {
+					if (error?.name === "AbortError") return;
+				} finally {
+					inFlight = false;
+				}
+			};
+			const firstTick = tick();
+			if (timer === void 0) timer = schedule(() => {
+				tick();
+			}, APPROVAL_POLL_MS);
+			return {
+				firstTick,
+				stop: () => {
+					if (cancelled) return;
+					cancelled = true;
+					controller?.abort();
+					cancel(timer);
+				},
+				isCancelled: () => cancelled
+			};
+		}
+		//#endregion
 		//#region src/client/dag/sophia-approval-requests.ts
 		/** POST body target for approval-plan actions (design §4.4.2 / routes.ts). */
 		const APPROVALS_PLAN_URL = "/plugins/dsh-sophia-entities/approvals/plan";
+		/** Fold the host's snake_case result body into the card's result shape. */
+		function parsePlanResult(body) {
+			if (typeof body !== "object" || body === null) return void 0;
+			const raw = body;
+			const result = {};
+			if (typeof raw["request_id"] === "string") result.requestId = raw["request_id"];
+			if (typeof raw["state"] === "string") result.state = raw["state"];
+			if (raw["mode"] === "persistent" || raw["mode"] === "dag") result.mode = raw["mode"];
+			if (raw["materialized"] === true) result.materialized = true;
+			if (typeof raw["team_ref"] === "string") result.teamRef = raw["team_ref"];
+			return result;
+		}
 		/**
 		* Fire one approval-plan action at the host. Mirrors the AgentTeams plan
 		* mutation fetch (`mutatePlan`): posts JSON, throws with the host's error
@@ -18773,6 +18881,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		* attached`) unless the owning session id rides in the body. Omitting it made
 		* every owner interaction — approve, reject, and the mode switch — fail with no
 		* visible effect.
+		*
+		* The resolved value is the host's own verdict. An ok response whose body is
+		* empty or unreadable resolves to `undefined` (the action still succeeded).
 		*/
 		async function postApprovalPlanAction(sessionId, payload) {
 			const owner = sessionId.trim();
@@ -18786,21 +18897,105 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 					sessionId: owner
 				})
 			});
-			if (response.ok) return;
-			let message = `HTTP ${response.status}`;
+			if (!response.ok) {
+				let message = `HTTP ${response.status}`;
+				try {
+					const body = await response.json();
+					if (typeof body.error === "string" && body.error.trim() !== "") message = body.error;
+				} catch {}
+				throw new Error(message);
+			}
 			try {
+				return parsePlanResult(await response.json());
+			} catch {
+				return;
+			}
+		}
+		/**
+		* Read the live queue and report what it says about `requestId`. The card is
+		* rendered from immutable conversation records, so a request decided earlier —
+		* by this card, by the captain, or from another paired device — stays
+		* "pending" in the transcript forever. This is how the card learns otherwise.
+		*/
+		async function fetchApprovalRequestState(requestId) {
+			if (requestId.trim() === "") return void 0;
+			try {
+				const response = await fetch(APPROVALS_STATE_URL, { cache: "no-store" });
+				if (!response.ok) return void 0;
 				const body = await response.json();
-				if (typeof body.error === "string" && body.error.trim() !== "") message = body.error;
-			} catch {}
-			throw new Error(message);
+				if (typeof body !== "object" || body === null || !Array.isArray(body.requests)) return void 0;
+				for (const row of body.requests) {
+					if (typeof row !== "object" || row === null) continue;
+					const entry = row;
+					if (entry.id !== requestId) continue;
+					if (typeof entry.state !== "string") return void 0;
+					return typeof entry.mode === "string" ? {
+						kind: "state",
+						state: entry.state,
+						mode: entry.mode
+					} : {
+						kind: "state",
+						state: entry.state
+					};
+				}
+				return "absent";
+			} catch {
+				return;
+			}
 		}
 		/** Normalize an unknown thrown value into a displayable message. */
 		function approvalErrorMessage(error) {
 			return error instanceof Error ? error.message : String(error);
 		}
 		//#endregion
+		//#region src/client/dag/sophia-approval-settlement.ts
+		/**
+		* When a folded proposal stops awaiting a decision.
+		*
+		* A Sophia approval card is folded from immutable conversation records, so the
+		* `state` baked into the transcript is whatever the propose tool reported —
+		* `pending_owner` — and it stays that way forever. The card therefore decides
+		* for itself whether the request is still live, from two sources:
+		*
+		*  1. the verdict the host returned for the action just fired
+		*     (`POST /approvals/plan` answers `{state, mode, …}`), and
+		*  2. one reconciliation against the live pending queue on mount
+		*     (`GET /approvals`, which carries only requests still awaiting a decision).
+		*
+		* Without this a decided proposal kept rendering [批准][退回], and every further
+		* click came back "is not awaiting owner decision" — buttons that look broken
+		* because the first click worked and said nothing.
+		*
+		* A state that is still pending is NOT a settlement: switching the team mode
+		* leaves the request awaiting a decision, so the controls must stay.
+		* @module dsh-sophia-entities/client/sophia-approval-settlement
+		*/
+		/**
+		* Fold the action verdict and the live queue into a settlement, or `undefined`
+		* while the request still awaits a decision. The verdict wins when present —
+		* it is the response to the click that just happened.
+		*/
+		function settlementOf(resultState, live) {
+			if (resultState !== void 0) return PENDING_STATES.has(resultState) ? void 0 : { state: resultState };
+			if (live === "absent") return "gone";
+			if (live !== void 0 && !PENDING_STATES.has(live.state)) return { state: live.state };
+		}
+		/** Map a settlement onto its wording; an unknown state falls back to itself. */
+		function settlementLabelOf(settlement) {
+			if (settlement === "gone") return { key: "approval.settled.gone" };
+			switch (settlement.state) {
+				case "approved": return { key: "approval.settled.approved" };
+				case "rejected": return { key: "approval.settled.rejected" };
+				case "materialized": return { key: "approval.settled.materialized" };
+				default: return {
+					key: "approval.settled.other",
+					state: settlement.state
+				};
+			}
+		}
+		//#endregion
 		//#region \0dsh-css:packages/client-agent-team/src/client/dag/SophiaApprovalCard.module.css.mjs
-		const css = ".KM9IEq_root{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-module-platform);border-radius:10px;flex-direction:column;gap:8px;width:100%;min-width:0;padding:10px 12px;display:flex}.KM9IEq_head{align-items:center;gap:8px;min-width:0;display:flex}.KM9IEq_leadAvatar{object-fit:contain;filter:drop-shadow(0 1px 1px #122d4833);flex:none;width:30px;height:30px}.KM9IEq_title{color:var(--dsw-alias-label-primary);text-overflow:ellipsis;white-space:nowrap;flex:0 auto;font-size:13px;font-weight:600;line-height:20px;overflow:hidden}.KM9IEq_stateBadge{border:1px solid var(--dsw-alias-border-l3);color:var(--dsw-alias-label-tertiary);white-space:nowrap;border-radius:999px;flex:none;margin-left:auto;padding:1px 7px;font-size:10px;font-weight:600;line-height:16px}.KM9IEq_line{min-width:0;color:var(--dsw-alias-label-secondary);align-items:baseline;gap:6px;font-size:12px;line-height:18px;display:flex}.KM9IEq_lineKey{color:var(--dsw-alias-label-tertiary);flex:none;font-size:11px}.KM9IEq_lineValue{overflow-wrap:anywhere;white-space:normal;min-width:0}.KM9IEq_modeRow{align-items:center;gap:8px;min-width:0;display:flex}.KM9IEq_modeLabel{color:var(--dsw-alias-label-tertiary);flex:none;font-size:11px}.KM9IEq_modeTrigger{border:1px solid var(--dsw-alias-border-l3);background:var(--dsw-alias-bg-layer-1);max-width:220px;color:var(--dsw-alias-label-secondary);font:inherit;cursor:pointer;border-radius:7px;align-items:center;gap:6px;padding:3px 8px;font-size:11.5px;font-weight:600;line-height:16px;transition:border-color .12s,color .12s;display:inline-flex}.KM9IEq_modeTrigger:hover{border-color:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-state-business-primary)}.KM9IEq_modeTrigger:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:1px}.KM9IEq_modeChevron{transition:transform .12s}.KM9IEq_modeItem{flex-direction:column;gap:2px;max-width:280px;display:flex}.KM9IEq_modeOptionTitle{font-weight:600}.KM9IEq_modeOptionDesc{color:var(--dsw-alias-label-tertiary);white-space:pre-line;font-size:10.5px}.KM9IEq_roster{flex-wrap:wrap;align-items:center;gap:6px;min-width:0;display:flex}.KM9IEq_memberChip{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);border-radius:999px;align-items:center;gap:5px;max-width:190px;padding:3px 8px 3px 3px;font-size:11px;line-height:16px;display:inline-flex}.KM9IEq_memberArt{object-fit:contain;flex:none;width:24px;height:24px}.KM9IEq_memberInitial{background:var(--dsw-alias-state-business-primary);width:20px;height:20px;color:var(--dsw-alias-label-primary-inverted);border-radius:50%;flex:none;justify-content:center;align-items:center;font-size:10px;font-weight:700;display:inline-flex}.KM9IEq_memberName{color:var(--dsw-alias-label-primary);text-overflow:ellipsis;white-space:nowrap;flex:0 auto;font-weight:600;overflow:hidden}.KM9IEq_memberRole{color:var(--dsw-alias-label-tertiary);text-overflow:ellipsis;white-space:nowrap;flex:0 auto;font-size:10px;overflow:hidden}.KM9IEq_chips{flex-wrap:wrap;align-items:center;gap:6px;min-width:0;display:flex}.KM9IEq_chip{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);white-space:nowrap;border-radius:999px;padding:1px 8px;font-size:10.5px;line-height:16px}.KM9IEq_tasks{flex-direction:column;gap:4px;min-width:0;display:flex}.KM9IEq_sectionLabel{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px}.KM9IEq_taskList{flex-direction:column;gap:3px;min-width:0;margin:0;padding:0;list-style:none;display:flex}.KM9IEq_taskRow{align-items:baseline;gap:6px;min-width:0;font-size:11px;line-height:16px;display:flex}.KM9IEq_taskId{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-tertiary);border-radius:6px;flex:none;padding:0 6px;font-size:10px;font-weight:600;line-height:15px}.KM9IEq_taskSubject{color:var(--dsw-alias-label-secondary);text-overflow:ellipsis;white-space:nowrap;flex:0 auto;overflow:hidden}.KM9IEq_taskDeps{color:var(--dsw-alias-label-tertiary);white-space:nowrap;flex:none;margin-left:auto;font-size:10px}.KM9IEq_actions{flex-wrap:wrap;align-items:center;gap:8px;min-width:0;display:flex}.KM9IEq_actionButton{border:1px solid var(--dsw-alias-border-l3);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);font:inherit;cursor:pointer;border-radius:999px;flex:none;padding:3px 10px;font-size:11px;font-weight:600;line-height:16px;transition:border-color .12s,color .12s,background-color .12s}.KM9IEq_actionButton:hover:not(:disabled){border-color:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-state-business-primary)}.KM9IEq_actionButton:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:1px}.KM9IEq_actionButton:disabled{opacity:.55;cursor:default}.KM9IEq_approve{border-color:var(--dsw-alias-state-business-primary);background:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-label-primary-inverted)}.KM9IEq_approve:hover:not(:disabled){border-color:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-label-primary-inverted);background:var(--dsw-alias-state-business-primary)}.KM9IEq_danger{border-color:var(--dsw-alias-state-danger,var(--dsw-alias-border-l3));color:var(--dsw-alias-state-danger,var(--dsw-alias-label-secondary))}.KM9IEq_danger:hover:not(:disabled){border-color:var(--dsw-alias-state-danger,var(--dsw-alias-state-business-primary));color:var(--dsw-alias-state-danger,var(--dsw-alias-state-business-primary))}.KM9IEq_feedback{color:var(--dsw-alias-state-danger,var(--dsw-alias-label-tertiary));font-size:11px;line-height:16px}.KM9IEq_badgeAction{justify-content:center;align-items:center;gap:6px;display:inline-flex;position:relative}.KM9IEq_badgeWide{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-module-platform);width:100%;color:var(--dsw-alias-label-secondary);cursor:pointer;border-radius:8px;align-items:center;gap:6px;padding:2px 8px;font-size:12px;line-height:24px;display:inline-flex}.KM9IEq_badgeRail{color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:0}.KM9IEq_badgeText{text-overflow:ellipsis;white-space:nowrap;overflow:hidden}.KM9IEq_badgeDot{box-sizing:border-box;background:var(--dsw-alias-state-danger,#e5484d);min-width:16px;height:16px;color:var(--dsw-alias-label-primary-inverted,#fff);border-radius:999px;justify-content:center;align-items:center;padding:0 5px;font-size:10px;font-weight:700;line-height:16px;display:inline-flex}";
+		const css = ".KM9IEq_root{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-module-platform);border-radius:10px;flex-direction:column;gap:8px;width:100%;min-width:0;padding:10px 12px;display:flex}.KM9IEq_head{align-items:center;gap:8px;min-width:0;display:flex}.KM9IEq_leadAvatar{object-fit:contain;filter:drop-shadow(0 1px 1px #122d4833);flex:none;width:30px;height:30px}.KM9IEq_title{color:var(--dsw-alias-label-primary);text-overflow:ellipsis;white-space:nowrap;flex:0 auto;font-size:13px;font-weight:600;line-height:20px;overflow:hidden}.KM9IEq_stateBadge{border:1px solid var(--dsw-alias-border-l3);color:var(--dsw-alias-label-tertiary);white-space:nowrap;border-radius:999px;flex:none;margin-left:auto;padding:1px 7px;font-size:10px;font-weight:600;line-height:16px}.KM9IEq_line{min-width:0;color:var(--dsw-alias-label-secondary);align-items:baseline;gap:6px;font-size:12px;line-height:18px;display:flex}.KM9IEq_lineKey{color:var(--dsw-alias-label-tertiary);flex:none;font-size:11px}.KM9IEq_lineValue{overflow-wrap:anywhere;white-space:normal;min-width:0}.KM9IEq_modeRow{align-items:center;gap:8px;min-width:0;display:flex}.KM9IEq_modeLabel{color:var(--dsw-alias-label-tertiary);flex:none;font-size:11px}.KM9IEq_modeTrigger{border:1px solid var(--dsw-alias-border-l3);background:var(--dsw-alias-bg-layer-1);max-width:220px;color:var(--dsw-alias-label-secondary);font:inherit;cursor:pointer;border-radius:7px;align-items:center;gap:6px;padding:3px 8px;font-size:11.5px;font-weight:600;line-height:16px;transition:border-color .12s,color .12s;display:inline-flex}.KM9IEq_modeTrigger:hover{border-color:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-state-business-primary)}.KM9IEq_modeTrigger:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:1px}.KM9IEq_modeChevron{transition:transform .12s}.KM9IEq_modeItem{flex-direction:column;gap:2px;max-width:280px;display:flex}.KM9IEq_modeOptionTitle{font-weight:600}.KM9IEq_modeOptionDesc{color:var(--dsw-alias-label-tertiary);white-space:pre-line;font-size:10.5px}.KM9IEq_roster{flex-wrap:wrap;align-items:center;gap:6px;min-width:0;display:flex}.KM9IEq_memberChip{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);border-radius:999px;align-items:center;gap:5px;max-width:190px;padding:3px 8px 3px 3px;font-size:11px;line-height:16px;display:inline-flex}.KM9IEq_memberArt{object-fit:contain;flex:none;width:24px;height:24px}.KM9IEq_memberInitial{background:var(--dsw-alias-state-business-primary);width:20px;height:20px;color:var(--dsw-alias-label-primary-inverted);border-radius:50%;flex:none;justify-content:center;align-items:center;font-size:10px;font-weight:700;display:inline-flex}.KM9IEq_memberName{color:var(--dsw-alias-label-primary);text-overflow:ellipsis;white-space:nowrap;flex:0 auto;font-weight:600;overflow:hidden}.KM9IEq_memberRole{color:var(--dsw-alias-label-tertiary);text-overflow:ellipsis;white-space:nowrap;flex:0 auto;font-size:10px;overflow:hidden}.KM9IEq_chips{flex-wrap:wrap;align-items:center;gap:6px;min-width:0;display:flex}.KM9IEq_chip{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);white-space:nowrap;border-radius:999px;padding:1px 8px;font-size:10.5px;line-height:16px}.KM9IEq_tasks{flex-direction:column;gap:4px;min-width:0;display:flex}.KM9IEq_sectionLabel{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px}.KM9IEq_taskList{flex-direction:column;gap:3px;min-width:0;margin:0;padding:0;list-style:none;display:flex}.KM9IEq_taskRow{align-items:baseline;gap:6px;min-width:0;font-size:11px;line-height:16px;display:flex}.KM9IEq_taskId{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-tertiary);border-radius:6px;flex:none;padding:0 6px;font-size:10px;font-weight:600;line-height:15px}.KM9IEq_taskSubject{color:var(--dsw-alias-label-secondary);text-overflow:ellipsis;white-space:nowrap;flex:0 auto;overflow:hidden}.KM9IEq_taskDeps{color:var(--dsw-alias-label-tertiary);white-space:nowrap;flex:none;margin-left:auto;font-size:10px}.KM9IEq_actions{flex-wrap:wrap;align-items:center;gap:8px;min-width:0;display:flex}.KM9IEq_actionButton{border:1px solid var(--dsw-alias-border-l3);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);font:inherit;cursor:pointer;border-radius:999px;flex:none;padding:3px 10px;font-size:11px;font-weight:600;line-height:16px;transition:border-color .12s,color .12s,background-color .12s}.KM9IEq_actionButton:hover:not(:disabled){border-color:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-state-business-primary)}.KM9IEq_actionButton:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:1px}.KM9IEq_actionButton:disabled{opacity:.55;cursor:default}.KM9IEq_approve{border-color:var(--dsw-alias-state-business-primary);background:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-label-primary-inverted)}.KM9IEq_approve:hover:not(:disabled){border-color:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-label-primary-inverted);background:var(--dsw-alias-state-business-primary)}.KM9IEq_danger{border-color:var(--dsw-alias-state-danger,var(--dsw-alias-border-l3));color:var(--dsw-alias-state-danger,var(--dsw-alias-label-secondary))}.KM9IEq_danger:hover:not(:disabled){border-color:var(--dsw-alias-state-danger,var(--dsw-alias-state-business-primary));color:var(--dsw-alias-state-danger,var(--dsw-alias-state-business-primary))}.KM9IEq_feedback{color:var(--dsw-alias-state-danger,var(--dsw-alias-label-tertiary));font-size:11px;line-height:16px}.KM9IEq_settled{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);border-radius:8px;padding:5px 9px;font-size:11px;line-height:16px}.KM9IEq_stateBadge[data-settled]{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);border-color:#0000}.KM9IEq_badgeAction{justify-content:center;align-items:center;gap:6px;display:inline-flex;position:relative}.KM9IEq_badgeWide{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-module-platform);width:100%;color:var(--dsw-alias-label-secondary);cursor:pointer;border-radius:8px;align-items:center;gap:6px;padding:2px 8px;font-size:12px;line-height:24px;display:inline-flex}.KM9IEq_badgeRail{color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:0}.KM9IEq_badgeText{text-overflow:ellipsis;white-space:nowrap;overflow:hidden}.KM9IEq_badgeDot{box-sizing:border-box;background:var(--dsw-alias-state-danger,#e5484d);min-width:16px;height:16px;color:var(--dsw-alias-label-primary-inverted,#fff);border-radius:999px;justify-content:center;align-items:center;padding:0 5px;font-size:10px;font-weight:700;line-height:16px;display:inline-flex}";
 		const tagId = "dsh-sophia-entities/SophiaApprovalCard.module.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {
 			const tag = document.createElement("style");
@@ -18842,6 +19037,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			"root": "KM9IEq_root",
 			"roster": "KM9IEq_roster",
 			"sectionLabel": "KM9IEq_sectionLabel",
+			"settled": "KM9IEq_settled",
 			"stateBadge": "KM9IEq_stateBadge",
 			"taskDeps": "KM9IEq_taskDeps",
 			"taskId": "KM9IEq_taskId",
@@ -18859,8 +19055,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		* materialized while the proposal is awaiting owner or captain approval.
 		*
 		* The card is a leaf: every interaction posts the full action record to the
-		* host (`POST /plugins/dsh-sophia-entities/approvals/plan`); durable truth
-		* stays on the Node side and returns through the session events.
+		* host (`POST /plugins/dsh-sophia-entities/approvals/plan`) and reads back the
+		* host's own verdict, so durable truth stays on the Node side.
+		*
+		* A card is folded from immutable conversation records, which means the state
+		* baked into the transcript stays `pending_*` forever. The card therefore keeps
+		* its own settlement: the `state` the host returns for an action, plus one
+		* reconciliation against the live pending queue on mount. Without it a decided
+		* proposal kept offering [批准][退回] and answered every further click with
+		* "is not awaiting owner decision" — which reads as buttons that do nothing.
 		*
 		* View selection — the same folded proposal appears in different sessions with
 		* different controls, per §4.4.3:
@@ -18889,6 +19092,35 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				"aria-hidden": true,
 				children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", { d: "M4 2.5 7.5 6 4 9.5" })
 			});
+		}
+		/**
+		* Reconcile one folded request against the live pending queue, once per mount.
+		* A failed read reports `undefined` and settles nothing, so a host restart can
+		* never masquerade as a decision.
+		*/
+		function useApprovalLiveState(requestId) {
+			const [live, setLive] = (0, react.useState)(void 0);
+			(0, react.useEffect)(() => {
+				let cancelled = false;
+				fetchApprovalRequestState(requestId).then((next) => {
+					if (!cancelled) setLive(next);
+				}).catch(() => {});
+				return () => {
+					cancelled = true;
+				};
+			}, [requestId]);
+			return live;
+		}
+		/** Localized wording for a settlement, with the raw state as the last resort. */
+		function settledText(settlement, t) {
+			const label = settlementLabelOf(settlement);
+			switch (label.key) {
+				case "approval.settled.gone": return t("approval.settled.gone");
+				case "approval.settled.approved": return t("approval.settled.approved");
+				case "approval.settled.rejected": return t("approval.settled.rejected");
+				case "approval.settled.materialized": return t("approval.settled.materialized");
+				default: return t("approval.settled.other", { state: label.state });
+			}
 		}
 		function TeamModeMenu({ mode, busy, onSelect, t }) {
 			const [open, setOpen] = (0, react.useState)(false);
@@ -18929,11 +19161,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			});
 		}
 		/**
-		* Shared card header: the lead avatar, the card title and the pending-state
-		* badge. Every view wears the same head so a folded proposal looks identical
-		* whichever session it is read in.
+		* Shared card header: the lead avatar, the card title and the state badge —
+		* the pending-state while a decision is owed, the settlement once it is not.
+		* Every view wears the same head so a folded proposal looks identical whichever
+		* session it is read in.
 		*/
-		function ApprovalHead({ variant, t }) {
+		function ApprovalHead({ variant, settled, t }) {
+			const badge = settled === void 0 ? t(variant === "owner" ? "approval.state.pending_owner" : "approval.state.pending_captain") : t("approval.state.settled");
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("header", {
 				className: SophiaApprovalCard_module_css_default.head,
 				children: [
@@ -18949,7 +19183,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
 						className: SophiaApprovalCard_module_css_default.stateBadge,
-						children: t(variant === "owner" ? "approval.state.pending_owner" : "approval.state.pending_captain")
+						"data-settled": settled !== void 0 || void 0,
+						children: badge
 					})
 				]
 			});
@@ -19052,6 +19287,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		}
 		/** Read-only status used in the member's own session for a member proposal. */
 		function MemberWaitingCard({ data, t }) {
+			const settled = settlementOf(void 0, useApprovalLiveState(data.requestId));
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("section", {
 				className: SophiaApprovalCard_module_css_default.root,
 				"data-sophia-approval": true,
@@ -19059,6 +19295,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				children: [
 					/* @__PURE__ */ (0, react_jsx_runtime.jsx)(ApprovalHead, {
 						variant: "captain",
+						settled,
 						t
 					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
@@ -19093,9 +19330,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						tasks: data.tasks,
 						t
 					}),
-					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+					settled === void 0 ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 						className: SophiaApprovalCard_module_css_default.feedback,
 						children: t("approval.waiting")
+					}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+						className: SophiaApprovalCard_module_css_default.settled,
+						"data-settled": true,
+						children: settledText(settled, t)
 					})
 				]
 			});
@@ -19105,15 +19346,24 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			const [mode, setMode] = (0, react.useState)(data.mode);
 			const [busy, setBusy] = (0, react.useState)(false);
 			const [error, setError] = (0, react.useState)(void 0);
+			const [outcome, setOutcome] = (0, react.useState)(void 0);
+			const live = useApprovalLiveState(data.requestId);
+			const settled = settlementOf(outcome, live);
+			const liveMode = live !== void 0 && live !== "absent" ? live.mode : void 0;
+			(0, react.useEffect)(() => {
+				if (liveMode === "persistent" || liveMode === "dag") setMode(liveMode);
+			}, [liveMode]);
 			const pendingAction = (action, payload) => async () => {
 				setBusy(true);
 				setError(void 0);
 				try {
-					await postApprovalPlanAction(sessionId, {
+					const result = await postApprovalPlanAction(sessionId, {
 						action,
 						requestId: data.requestId,
 						...payload
 					});
+					if (result?.state !== void 0) setOutcome(result.state);
+					if (result?.mode !== void 0) setMode(result.mode);
 				} catch (err) {
 					setError(approvalErrorMessage(err));
 				} finally {
@@ -19127,6 +19377,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				children: [
 					/* @__PURE__ */ (0, react_jsx_runtime.jsx)(ApprovalHead, {
 						variant: "owner",
+						settled,
 						t
 					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
@@ -19161,7 +19412,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						tasks: data.tasks,
 						t
 					}),
-					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+					settled === void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 						className: SophiaApprovalCard_module_css_default.modeRow,
 						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
 							className: SophiaApprovalCard_module_css_default.modeLabel,
@@ -19175,8 +19426,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 								pendingAction("set_mode", { mode: next })();
 							}
 						})]
-					}),
-					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+					}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 						className: SophiaApprovalCard_module_css_default.actions,
 						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 							type: "button",
@@ -19194,6 +19444,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 							onClick: () => void pendingAction("reject", {})(),
 							children: t("approval.reject")
 						})]
+					})] }),
+					settled !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+						className: SophiaApprovalCard_module_css_default.settled,
+						"data-settled": true,
+						children: settledText(settled, t)
 					}),
 					error !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 						className: SophiaApprovalCard_module_css_default.feedback,
@@ -19207,17 +19462,20 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		function CaptainReviewCard({ data, sessionId, t }) {
 			const [busy, setBusy] = (0, react.useState)(false);
 			const [error, setError] = (0, react.useState)(void 0);
+			const [outcome, setOutcome] = (0, react.useState)(void 0);
+			const settled = settlementOf(outcome, useApprovalLiveState(data.requestId));
 			const review = (decision) => async () => {
 				setBusy(true);
 				setError(void 0);
 				try {
 					const reason = decision === "downgrade_to_dag" ? t("approval.review.downgradeReason") : void 0;
-					await postApprovalPlanAction(sessionId, {
+					const result = await postApprovalPlanAction(sessionId, {
 						action: "review",
 						requestId: data.requestId,
 						decision,
 						reason
 					});
+					if (result?.state !== void 0) setOutcome(result.state);
 				} catch (err) {
 					setError(approvalErrorMessage(err));
 				} finally {
@@ -19249,6 +19507,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				children: [
 					/* @__PURE__ */ (0, react_jsx_runtime.jsx)(ApprovalHead, {
 						variant: "captain",
+						settled,
 						t
 					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
@@ -19283,7 +19542,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						tasks: data.tasks,
 						t
 					}),
-					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+					settled === void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 						className: SophiaApprovalCard_module_css_default.actions,
 						children: verdicts.map((verdict) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 							type: "button",
@@ -19292,6 +19551,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 							onClick: () => void review(verdict.id)(),
 							children: verdict.label
 						}, verdict.id))
+					}),
+					settled !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+						className: SophiaApprovalCard_module_css_default.settled,
+						"data-settled": true,
+						children: settledText(settled, t)
 					}),
 					error !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 						className: SophiaApprovalCard_module_css_default.feedback,
@@ -19317,98 +19581,6 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				sessionId,
 				t
 			}, data.requestId);
-		}
-		//#endregion
-		//#region src/client/dag/sophia-approval-badge.ts
-		/**
-		* Pending-approval badge state (P4.2, design §4.6 channel 3 / dev-plan:190).
-		*
-		* The client is a leaf: durable truth lives on the Node side, so the badge
-		* polls the host `GET /plugins/dsh-sophia-entities/approvals` snapshot and
-		* counts the requests that demand the Human owner's attention. We surface the
-		* count plus the states so the footer action can decide wording; the badge is
-		* rendered only when the count is non-zero (§4.2 acceptance: '有 pending_owner
-		* 时徽标计数 > 0').
-		* @module dsh-sophia-entities/client/sophia-approval-badge
-		*/
-		/** GET target mirroring the card's POST plan route (orchestration routes.ts). */
-		const APPROVALS_STATE_URL = "/plugins/dsh-sophia-entities/approvals";
-		/** Live-poll cadence for the badge. Matches the activity monitor's hot loop. */
-		const APPROVAL_POLL_MS = 5e3;
-		/**
-		* The state the badge reacts to. Present-day orchestration keeps proposals in
-		* `pending_captain` then `pending_owner`; both are in-flight approvals the
-		* Human should see. `draft` is excluded — it is not yet routed to anyone.
-		*/
-		const APPROVAL_BADGE_STATES = new Set(["pending_owner", "pending_captain"]);
-		/** Fold a raw ApprovalsSnapshot body into the badge aggregate. */
-		function aggregateApprovalSnapshot(body) {
-			if (body === null || body === void 0) return {
-				count: 0,
-				states: []
-			};
-			if (!Array.isArray(body.requests)) return {
-				count: 0,
-				states: []
-			};
-			const states = /* @__PURE__ */ new Set();
-			let count = 0;
-			for (const row of body.requests) {
-				if (typeof row !== "object" || row === null) continue;
-				const state = row.state;
-				if (typeof state !== "string" || !APPROVAL_BADGE_STATES.has(state)) continue;
-				states.add(state);
-				count += 1;
-			}
-			return {
-				count,
-				states: [...states].sort()
-			};
-		}
-		function startApprovalBadgePolling(subscriber, runtime = {}) {
-			const fetchState = runtime.fetchState ?? ((url, init) => fetch(url, init));
-			const schedule = runtime.schedule ?? ((callback, intervalMs) => setInterval(callback, intervalMs));
-			const cancel = runtime.cancel ?? ((timer) => {
-				clearInterval(timer);
-			});
-			let cancelled = false;
-			let inFlight = false;
-			let timer;
-			let controller;
-			const tick = async () => {
-				if (inFlight || cancelled) return;
-				inFlight = true;
-				controller = new AbortController();
-				try {
-					const response = await fetchState(APPROVALS_STATE_URL, {
-						cache: "no-store",
-						signal: controller.signal
-					});
-					if (cancelled) return;
-					if (!response.ok) throw new Error("Approvals unavailable");
-					const body = await response.json();
-					if (cancelled) return;
-					subscriber(aggregateApprovalSnapshot(body));
-				} catch (error) {
-					if (error?.name === "AbortError") return;
-				} finally {
-					inFlight = false;
-				}
-			};
-			const firstTick = tick();
-			if (timer === void 0) timer = schedule(() => {
-				tick();
-			}, APPROVAL_POLL_MS);
-			return {
-				firstTick,
-				stop: () => {
-					if (cancelled) return;
-					cancelled = true;
-					controller?.abort();
-					cancel(timer);
-				},
-				isCancelled: () => cancelled
-			};
 		}
 		//#endregion
 		//#region src/client/dag/SophiaApprovalBadge.tsx
@@ -19715,6 +19887,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			"approval.approve": "批准",
 			"approval.reject": "退回",
 			"approval.waiting": "已提交队长审核，等待中…",
+			"approval.state.settled": "已处理",
+			"approval.settled.gone": "该提议已不在待批队列中",
+			"approval.settled.approved": "✅ 已批准，团队正在组建",
+			"approval.settled.rejected": "🚫 已退回，提议作废",
+			"approval.settled.materialized": "✅ 团队已组建",
+			"approval.settled.other": "该提议已处理（{state}）",
 			"approval.review.approve_dag": "批准并创建 DAG 团队",
 			"approval.review.approve_persistent": "批准并升级为主人审批",
 			"approval.review.downgrade_to_dag": "降级为 DAG 团队",
@@ -19961,6 +20139,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			"approval.approve": "Approve",
 			"approval.reject": "Reject",
 			"approval.waiting": "Submitted for captain review; waiting…",
+			"approval.state.settled": "Settled",
+			"approval.settled.gone": "This proposal is no longer awaiting a decision",
+			"approval.settled.approved": "✅ Approved — the team is being assembled",
+			"approval.settled.rejected": "🚫 Returned — the proposal is closed",
+			"approval.settled.materialized": "✅ Team assembled",
+			"approval.settled.other": "This proposal is settled ({state})",
 			"approval.review.approve_dag": "Approve and create DAG team",
 			"approval.review.approve_persistent": "Approve and escalate to owner review",
 			"approval.review.downgrade_to_dag": "Downgrade to DAG team",

@@ -344,6 +344,24 @@
   line-height: 16px;
 }
 
+/* A decided proposal: the card stays as a record, the controls step aside. */
+
+.settled {
+  padding: 5px 9px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.stateBadge[data-settled] {
+  border-color: transparent;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-secondary);
+}
+
 /* P4.2 pending-approval badge (sidebar.footer.action additive row). */
 
 .badgeAction {

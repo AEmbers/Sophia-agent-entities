@@ -239,6 +239,12 @@ export declare const zh: {
     'approval.approve': string;
     'approval.reject': string;
     'approval.waiting': string;
+    'approval.state.settled': string;
+    'approval.settled.gone': string;
+    'approval.settled.approved': string;
+    'approval.settled.rejected': string;
+    'approval.settled.materialized': string;
+    'approval.settled.other': string;
     'approval.review.approve_dag': string;
     'approval.review.approve_persistent': string;
     'approval.review.downgrade_to_dag': string;
@@ -487,6 +493,12 @@ export declare const en: {
     'approval.approve': string;
     'approval.reject': string;
     'approval.waiting': string;
+    'approval.state.settled': string;
+    'approval.settled.gone': string;
+    'approval.settled.approved': string;
+    'approval.settled.rejected': string;
+    'approval.settled.materialized': string;
+    'approval.settled.other': string;
     'approval.review.approve_dag': string;
     'approval.review.approve_persistent': string;
     'approval.review.downgrade_to_dag': string;

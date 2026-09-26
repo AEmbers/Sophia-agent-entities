@@ -1,0 +1,52 @@
+/**
+ * When a folded proposal stops awaiting a decision.
+ *
+ * A Sophia approval card is folded from immutable conversation records, so the
+ * `state` baked into the transcript is whatever the propose tool reported —
+ * `pending_owner` — and it stays that way forever. The card therefore decides
+ * for itself whether the request is still live, from two sources:
+ *
+ *  1. the verdict the host returned for the action just fired
+ *     (`POST /approvals/plan` answers `{state, mode, …}`), and
+ *  2. one reconciliation against the live pending queue on mount
+ *     (`GET /approvals`, which carries only requests still awaiting a decision).
+ *
+ * Without this a decided proposal kept rendering [批准][退回], and every further
+ * click came back "is not awaiting owner decision" — buttons that look broken
+ * because the first click worked and said nothing.
+ *
+ * A state that is still pending is NOT a settlement: switching the team mode
+ * leaves the request awaiting a decision, so the controls must stay.
+ * @module dsh-sophia-entities/client/sophia-approval-settlement
+ */
+import type { ApprovalLiveState } from './sophia-approval-requests.ts';
+/**
+ * How a proposal ended. `{state}` is the host's own word (`approved`,
+ * `rejected`, `materialized`, …); `'gone'` means the live queue answered and
+ * this request was not in it, so it was decided with no state to show.
+ */
+export type ApprovalSettlement = {
+    readonly state: string;
+} | 'gone';
+/**
+ * Fold the action verdict and the live queue into a settlement, or `undefined`
+ * while the request still awaits a decision. The verdict wins when present —
+ * it is the response to the click that just happened.
+ */
+export declare function settlementOf(resultState: string | undefined, live: ApprovalLiveState): ApprovalSettlement | undefined;
+/** The locale key naming a settlement, plus the raw state when it is unnamed. */
+export type ApprovalSettlementLabel = {
+    readonly key: 'approval.settled.gone';
+} | {
+    readonly key: 'approval.settled.approved';
+} | {
+    readonly key: 'approval.settled.rejected';
+} | {
+    readonly key: 'approval.settled.materialized';
+} | {
+    readonly key: 'approval.settled.other';
+    readonly state: string;
+};
+/** Map a settlement onto its wording; an unknown state falls back to itself. */
+export declare function settlementLabelOf(settlement: ApprovalSettlement): ApprovalSettlementLabel;
+//# sourceMappingURL=sophia-approval-settlement.d.ts.map

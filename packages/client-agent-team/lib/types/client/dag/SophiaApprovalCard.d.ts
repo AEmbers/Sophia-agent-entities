@@ -4,8 +4,15 @@
  * materialized while the proposal is awaiting owner or captain approval.
  *
  * The card is a leaf: every interaction posts the full action record to the
- * host (`POST /plugins/dsh-sophia-entities/approvals/plan`); durable truth
- * stays on the Node side and returns through the session events.
+ * host (`POST /plugins/dsh-sophia-entities/approvals/plan`) and reads back the
+ * host's own verdict, so durable truth stays on the Node side.
+ *
+ * A card is folded from immutable conversation records, which means the state
+ * baked into the transcript stays `pending_*` forever. The card therefore keeps
+ * its own settlement: the `state` the host returns for an action, plus one
+ * reconciliation against the live pending queue on mount. Without it a decided
+ * proposal kept offering [批准][退回] and answered every further click with
+ * "is not awaiting owner decision" — which reads as buttons that do nothing.
  *
  * View selection — the same folded proposal appears in different sessions with
  * different controls, per §4.4.3:

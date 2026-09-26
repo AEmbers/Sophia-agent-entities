@@ -405,6 +405,8 @@ declare module '@deepseek-ai/dsh-client-ui-chat/client' {
 
 **与 teams 现有卡片的区别**：teams 的卡片有 `accepted` 门禁（只在成功后才渲染），而审批卡必须**在成功之后、物化之前**渲染。因此 `buildViewNode` 的条件改为：拿到 result **且** result 里的 `state` 属于 `pending_owner | pending_captain | draft`。物化完成后转为展示态卡片（可复用 teams 的 `AgentTeamsSummary`）。
 
+**落定（2026-09-26 补）**：卡片是从不可变的会话记录折出来的，所以 `state` 在 transcript 里**永远是 `pending_*`**——上述条件只决定「要不要渲染这张卡」，不能决定「卡上还要不要按钮」。实际做法：卡片自己持有一份落定状态（`sophia-approval-settlement.ts` 的 `settlementOf(resultState, live)`），来源有两条——(a) 每次动作 POST 的返回值本身就是判决（`routes.ts` 的 `runApprovalPlanAction` 返回 `{request_id, state, mode, materialized, team_ref}`），(b) 挂载时对活队列 `GET /plugins/dsh-sophia-entities/approvals` 对账一次（该路由只列**还待批**的请求，所以查不到 = 已被处理）。两者都判不出决定时按「仍在待批」处理：**只有真正落定才撤下模式选择器与 [批准][退回]**。漏了这一步时，退回/批准其实都成功了，但卡片继续显示按钮，再点一次就被宿主以 `request <id> is not awaiting owner decision (<state>)` 拒绝——表现成「按钮点了没反应」。
+
 #### 4.4.2 模式选择交互
 
 复用宿主 `@deepseek-ai/dsh-client-ui-primitives` 的 `Menu`（teams 的 `StagedModelPicker` 已证明该包在白名单内可 value import）：

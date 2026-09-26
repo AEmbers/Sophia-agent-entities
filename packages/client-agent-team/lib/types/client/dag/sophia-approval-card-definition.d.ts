@@ -17,6 +17,12 @@ import type { ConversationNodeDefinition } from '@deepseek-ai/dsh-client-ui-conv
 import type { TeamMode } from 'dsh-sophia-entities/orchestration/types';
 /** It is pending_owner / pending_captain / draft while awaiting approval. */
 export type SophiaApprovalPendingState = 'pending_owner' | 'pending_captain' | 'draft';
+/**
+ * Approval states the card renders during (before materialization). Exported
+ * because the card must also recognize the moment a request LEAVES this set —
+ * a settled request stops offering buttons.
+ */
+export declare const PENDING_STATES: ReadonlySet<string>;
 /** Final keyed Chat payload for the approval card. */
 export interface SophiaApprovalCardData {
     readonly requestId: string;

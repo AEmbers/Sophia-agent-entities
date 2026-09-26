@@ -4,8 +4,15 @@
  * materialized while the proposal is awaiting owner or captain approval.
  *
  * The card is a leaf: every interaction posts the full action record to the
- * host (`POST /plugins/dsh-sophia-entities/approvals/plan`); durable truth
- * stays on the Node side and returns through the session events.
+ * host (`POST /plugins/dsh-sophia-entities/approvals/plan`) and reads back the
+ * host's own verdict, so durable truth stays on the Node side.
+ *
+ * A card is folded from immutable conversation records, which means the state
+ * baked into the transcript stays `pending_*` forever. The card therefore keeps
+ * its own settlement: the `state` the host returns for an action, plus one
+ * reconciliation against the live pending queue on mount. Without it a decided
+ * proposal kept offering [批准][退回] and answered every further click with
+ * "is not awaiting owner decision" — which reads as buttons that do nothing.
  *
  * View selection — the same folded proposal appears in different sessions with
  * different controls, per §4.4.3:
@@ -19,13 +26,14 @@
  * @module dsh-sophia-entities/client/sophia-approval-card
  */
 
-import { useState, type JSX } from 'react'
+import { useEffect, useState, type JSX } from 'react'
 import { Menu, type MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { TeamMode } from 'dsh-sophia-entities/orchestration/types'
 import type { SophiaApprovalCardData } from './sophia-approval-card-definition.ts'
-import type { CaptainVerdict } from './sophia-approval-requests.ts'
-import { approvalErrorMessage, postApprovalPlanAction } from './sophia-approval-requests.ts'
+import type { ApprovalLiveState, CaptainVerdict } from './sophia-approval-requests.ts'
+import { approvalErrorMessage, fetchApprovalRequestState, postApprovalPlanAction } from './sophia-approval-requests.ts'
+import { settlementLabelOf, settlementOf, type ApprovalSettlement } from './sophia-approval-settlement.ts'
 import { LEAD_ART, memberArtUrl } from './artwork.ts'
 import css from './SophiaApprovalCard.module.css'
 
@@ -57,6 +65,35 @@ function DisclosureChevron({ open }: { readonly open: boolean }): JSX.Element {
   )
 }
 
+/**
+ * Reconcile one folded request against the live pending queue, once per mount.
+ * A failed read reports `undefined` and settles nothing, so a host restart can
+ * never masquerade as a decision.
+ */
+function useApprovalLiveState(requestId: string): ApprovalLiveState {
+  const [live, setLive] = useState<ApprovalLiveState>(undefined)
+  useEffect(() => {
+    let cancelled = false
+    void fetchApprovalRequestState(requestId)
+      .then((next) => { if (!cancelled) setLive(next) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [requestId])
+  return live
+}
+
+/** Localized wording for a settlement, with the raw state as the last resort. */
+function settledText(settlement: ApprovalSettlement, t: ApprovalLocale): string {
+  const label = settlementLabelOf(settlement)
+  switch (label.key) {
+    case 'approval.settled.gone': return t('approval.settled.gone')
+    case 'approval.settled.approved': return t('approval.settled.approved')
+    case 'approval.settled.rejected': return t('approval.settled.rejected')
+    case 'approval.settled.materialized': return t('approval.settled.materialized')
+    default: return t('approval.settled.other', { state: label.state })
+  }
+}
+
 function TeamModeMenu({
   mode,
   busy,
@@ -66,7 +103,7 @@ function TeamModeMenu({
   readonly mode: TeamMode | undefined
   readonly busy: boolean
   readonly onSelect: (mode: TeamMode) => void
-  readonly t: PropsLocale<'sophiaEntities'>['t']
+  readonly t: ApprovalLocale
 }) {
   const [open, setOpen] = useState(false)
   const items: readonly MenuEntry[] = MODE_IDS.map((candidate) => ({
@@ -112,16 +149,20 @@ function TeamModeMenu({
 type ApprovalVariant = 'owner' | 'captain'
 
 /**
- * Shared card header: the lead avatar, the card title and the pending-state
- * badge. Every view wears the same head so a folded proposal looks identical
- * whichever session it is read in.
+ * Shared card header: the lead avatar, the card title and the state badge —
+ * the pending-state while a decision is owed, the settlement once it is not.
+ * Every view wears the same head so a folded proposal looks identical whichever
+ * session it is read in.
  */
-function ApprovalHead({ variant, t }: { readonly variant: ApprovalVariant; readonly t: ApprovalLocale }): JSX.Element {
+function ApprovalHead({ variant, settled, t }: { readonly variant: ApprovalVariant; readonly settled: ApprovalSettlement | undefined; readonly t: ApprovalLocale }): JSX.Element {
+  const badge = settled === undefined
+    ? t(variant === 'owner' ? 'approval.state.pending_owner' : 'approval.state.pending_captain')
+    : t('approval.state.settled')
   return (
     <header className={css.head}>
       <img className={css.leadAvatar} src={LEAD_ART} alt="" aria-hidden />
       <span className={css.title}>{t('approval.title')}</span>
-      <span className={css.stateBadge}>{t(variant === 'owner' ? 'approval.state.pending_owner' : 'approval.state.pending_captain')}</span>
+      <span className={css.stateBadge} data-settled={settled !== undefined || undefined}>{badge}</span>
     </header>
   )
 }
@@ -189,15 +230,19 @@ function ApprovalTasks({ tasks, t }: { readonly tasks: SophiaApprovalCardData['t
 
 /** Read-only status used in the member's own session for a member proposal. */
 function MemberWaitingCard({ data, t }: { readonly data: SophiaApprovalCardData; readonly t: ApprovalLocale }): JSX.Element {
+  const live = useApprovalLiveState(data.requestId)
+  const settled = settlementOf(undefined, live)
   return (
     <section className={css.root} data-sophia-approval data-request-id={data.requestId}>
-      <ApprovalHead variant="captain" t={t} />
+      <ApprovalHead variant="captain" settled={settled} t={t} />
       <div className={css.line}><span className={css.lineKey}>{t('approval.goalLabel')}</span><span className={css.lineValue}>{data.goal}</span></div>
       <div className={css.line}><span className={css.lineKey}>{t('approval.requesterLabel')}</span><span className={css.lineValue}>{t('approval.requester.member', { handle: data.requester.handle ?? '' })}</span></div>
       <ApprovalRoster members={data.members} t={t} />
       <ApprovalCounts data={data} t={t} />
       <ApprovalTasks tasks={data.tasks} t={t} />
-      <div className={css.feedback}>{t('approval.waiting')}</div>
+      {settled === undefined
+        ? <div className={css.feedback}>{t('approval.waiting')}</div>
+        : <div className={css.settled} data-settled>{settledText(settled, t)}</div>}
     </section>
   )
 }
@@ -207,11 +252,20 @@ function OwnerApprovalCard({ data, sessionId, t }: { readonly data: SophiaApprov
   const [mode, setMode] = useState<TeamMode | undefined>(data.mode)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>(undefined)
+  const [outcome, setOutcome] = useState<string | undefined>(undefined)
+  const live = useApprovalLiveState(data.requestId)
+  const settled = settlementOf(outcome, live)
+  const liveMode = live !== undefined && live !== 'absent' ? live.mode : undefined
+  useEffect(() => {
+    if (liveMode === 'persistent' || liveMode === 'dag') setMode(liveMode)
+  }, [liveMode])
   const pendingAction = (action: 'set_mode' | 'approve' | 'reject', payload: Record<string, unknown>) => async () => {
     setBusy(true)
     setError(undefined)
     try {
-      await postApprovalPlanAction(sessionId, { action, requestId: data.requestId, ...payload } as never)
+      const result = await postApprovalPlanAction(sessionId, { action, requestId: data.requestId, ...payload } as never)
+      if (result?.state !== undefined) setOutcome(result.state)
+      if (result?.mode !== undefined) setMode(result.mode)
     } catch (err) {
       setError(approvalErrorMessage(err))
     } finally {
@@ -220,42 +274,47 @@ function OwnerApprovalCard({ data, sessionId, t }: { readonly data: SophiaApprov
   }
   return (
     <section className={css.root} data-sophia-approval data-request-id={data.requestId}>
-      <ApprovalHead variant="owner" t={t} />
+      <ApprovalHead variant="owner" settled={settled} t={t} />
       <div className={css.line}><span className={css.lineKey}>{t('approval.goalLabel')}</span><span className={css.lineValue}>{data.goal}</span></div>
       <div className={css.line}><span className={css.lineKey}>{t('approval.requesterLabel')}</span><span className={css.lineValue}>{data.requester.isHuman ? t('approval.requester.human') : t('approval.requester.member', { handle: data.requester.handle ?? '' })}</span></div>
       <ApprovalRoster members={data.members} t={t} />
       <ApprovalCounts data={data} t={t} />
       <ApprovalTasks tasks={data.tasks} t={t} />
-      <div className={css.modeRow}>
-        <span className={css.modeLabel}>{t('approval.modeLabel')}</span>
-        <TeamModeMenu
-          mode={mode}
-          busy={busy}
-          t={t}
-          onSelect={(next) => {
-            setMode(next)
-            void pendingAction('set_mode', { mode: next })()
-          }}
-        />
-      </div>
-      <div className={css.actions}>
-        <button
-          type="button"
-          className={`${css.actionButton} ${css.approve}`}
-          disabled={busy}
-          onClick={() => void pendingAction('approve', { decision: 'approve', mode })()}
-        >
-          {t('approval.approve')}
-        </button>
-        <button
-          type="button"
-          className={`${css.actionButton} ${css.danger}`}
-          disabled={busy}
-          onClick={() => void pendingAction('reject', {})()}
-        >
-          {t('approval.reject')}
-        </button>
-      </div>
+      {settled === undefined && (
+        <>
+          <div className={css.modeRow}>
+            <span className={css.modeLabel}>{t('approval.modeLabel')}</span>
+            <TeamModeMenu
+              mode={mode}
+              busy={busy}
+              t={t}
+              onSelect={(next) => {
+                setMode(next)
+                void pendingAction('set_mode', { mode: next })()
+              }}
+            />
+          </div>
+          <div className={css.actions}>
+            <button
+              type="button"
+              className={`${css.actionButton} ${css.approve}`}
+              disabled={busy}
+              onClick={() => void pendingAction('approve', { decision: 'approve', mode })()}
+            >
+              {t('approval.approve')}
+            </button>
+            <button
+              type="button"
+              className={`${css.actionButton} ${css.danger}`}
+              disabled={busy}
+              onClick={() => void pendingAction('reject', {})()}
+            >
+              {t('approval.reject')}
+            </button>
+          </div>
+        </>
+      )}
+      {settled !== undefined && <div className={css.settled} data-settled>{settledText(settled, t)}</div>}
       {error !== undefined && <div className={css.feedback} role="alert">{error}</div>}
     </section>
   )
@@ -265,13 +324,17 @@ function OwnerApprovalCard({ data, sessionId, t }: { readonly data: SophiaApprov
 function CaptainReviewCard({ data, sessionId, t }: { readonly data: SophiaApprovalCardData; readonly sessionId: string; readonly t: ApprovalLocale }): JSX.Element {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>(undefined)
+  const [outcome, setOutcome] = useState<string | undefined>(undefined)
+  const live = useApprovalLiveState(data.requestId)
+  const settled = settlementOf(outcome, live)
   const review = (decision: CaptainVerdict) => async () => {
     setBusy(true)
     setError(undefined)
     try {
       const needReason = decision === 'downgrade_to_dag'
       const reason = needReason ? t('approval.review.downgradeReason') : undefined
-      await postApprovalPlanAction(sessionId, { action: 'review', requestId: data.requestId, decision, reason })
+      const result = await postApprovalPlanAction(sessionId, { action: 'review', requestId: data.requestId, decision, reason })
+      if (result?.state !== undefined) setOutcome(result.state)
     } catch (err) {
       setError(approvalErrorMessage(err))
     } finally {
@@ -286,25 +349,28 @@ function CaptainReviewCard({ data, sessionId, t }: { readonly data: SophiaApprov
   ]
   return (
     <section className={css.root} data-sophia-approval data-request-id={data.requestId}>
-      <ApprovalHead variant="captain" t={t} />
+      <ApprovalHead variant="captain" settled={settled} t={t} />
       <div className={css.line}><span className={css.lineKey}>{t('approval.goalLabel')}</span><span className={css.lineValue}>{data.goal}</span></div>
       <div className={css.line}><span className={css.lineKey}>{t('approval.requesterLabel')}</span><span className={css.lineValue}>{t('approval.requester.member', { handle: data.requester.handle ?? '' })}</span></div>
       <ApprovalRoster members={data.members} t={t} />
       <ApprovalCounts data={data} t={t} />
       <ApprovalTasks tasks={data.tasks} t={t} />
-      <div className={css.actions}>
-        {verdicts.map((verdict) => (
-          <button
-            type="button"
-            key={verdict.id}
-            className={`${css.actionButton} ${verdict.id === 'reject' ? css.danger : ''}`}
-            disabled={busy}
-            onClick={() => void review(verdict.id)()}
-          >
-            {verdict.label}
-          </button>
-        ))}
-      </div>
+      {settled === undefined && (
+        <div className={css.actions}>
+          {verdicts.map((verdict) => (
+            <button
+              type="button"
+              key={verdict.id}
+              className={`${css.actionButton} ${verdict.id === 'reject' ? css.danger : ''}`}
+              disabled={busy}
+              onClick={() => void review(verdict.id)()}
+            >
+              {verdict.label}
+            </button>
+          ))}
+        </div>
+      )}
+      {settled !== undefined && <div className={css.settled} data-settled>{settledText(settled, t)}</div>}
       {error !== undefined && <div className={css.feedback} role="alert">{error}</div>}
     </section>
   )

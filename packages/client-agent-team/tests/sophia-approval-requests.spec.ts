@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   APPROVALS_PLAN_URL,
+  fetchApprovalRequestState,
   postApprovalPlanAction,
   type SophiaApprovalPlanAction,
 } from '../src/client/dag/sophia-approval-requests.ts'
+import { APPROVALS_STATE_URL } from '../src/client/dag/sophia-approval-badge.ts'
 
 interface Call { readonly url: string; readonly init: RequestInit | undefined }
 
@@ -13,6 +15,19 @@ function stubFetch(response: Response = new Response('', { status: 200 })): Call
   vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
     calls.push({ url, init })
     return Promise.resolve(response)
+  })
+  return calls
+}
+
+/** A fresh JSON responder, because a Response body can only be read once. */
+function stubJson(body: unknown, status = 200): Call[] {
+  const calls: Call[] = []
+  vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+    calls.push({ url, init })
+    return Promise.resolve(new Response(JSON.stringify(body), {
+      status,
+      headers: { 'content-type': 'application/json' },
+    }))
   })
   return calls
 }
@@ -77,5 +92,58 @@ describe('postApprovalPlanAction', () => {
     await expect(postApprovalPlanAction('sess-1', { action: 'approve', requestId: 'req-4', decision: 'approve' }))
       .resolves.toBeUndefined()
     expect(calls.length).toBe(1)
+  })
+
+  // Regression: the card kept offering [批准][退回] after a decision because the
+  // ok body was discarded, so the next click came back "is not awaiting owner
+  // decision". The host's verdict is what tells the card to stand down.
+  it('returns the state the host settled the request into', async () => {
+    stubJson({ request_id: 'req-5', state: 'rejected' })
+    await expect(postApprovalPlanAction('sess-1', { action: 'reject', requestId: 'req-5' }))
+      .resolves.toEqual({ requestId: 'req-5', state: 'rejected' })
+
+    vi.unstubAllGlobals()
+    stubJson({ request_id: 'req-6', state: 'materialized', mode: 'dag', materialized: true, team_ref: 'team-9' })
+    await expect(postApprovalPlanAction('sess-1', { action: 'approve', requestId: 'req-6', decision: 'approve' }))
+      .resolves.toEqual({ requestId: 'req-6', state: 'materialized', mode: 'dag', materialized: true, teamRef: 'team-9' })
+
+    vi.unstubAllGlobals()
+    stubJson({ request_id: 'req-7', state: 'pending_owner', mode: 'dag' })
+    await expect(postApprovalPlanAction('sess-1', { action: 'set_mode', requestId: 'req-7', mode: 'dag' }))
+      .resolves.toEqual({ requestId: 'req-7', state: 'pending_owner', mode: 'dag' })
+  })
+})
+
+describe('fetchApprovalRequestState', () => {
+  afterEach(() => { vi.unstubAllGlobals() })
+
+  it('reports the queued state and mode of a request that is still pending', async () => {
+    const calls = stubJson({ requests: [{ id: 'req-1', state: 'pending_owner', mode: 'dag' }] })
+    await expect(fetchApprovalRequestState('req-1')).resolves.toEqual({ kind: 'state', state: 'pending_owner', mode: 'dag' })
+    expect(calls[0]?.url).toBe(APPROVALS_STATE_URL)
+    expect(calls[0]?.init?.cache).toBe('no-store')
+  })
+
+  it('reports a request the queue no longer carries as absent', async () => {
+    stubJson({ requests: [{ id: 'req-other', state: 'pending_owner' }] })
+    await expect(fetchApprovalRequestState('req-1')).resolves.toBe('absent')
+  })
+
+  it('concludes nothing from a failed or unreadable snapshot', async () => {
+    stubJson({ error: 'failed to load pending approvals' }, 500)
+    await expect(fetchApprovalRequestState('req-1')).resolves.toBeUndefined()
+
+    vi.unstubAllGlobals()
+    stubJson({ not_requests: [] })
+    await expect(fetchApprovalRequestState('req-1')).resolves.toBeUndefined()
+
+    vi.unstubAllGlobals()
+    vi.stubGlobal('fetch', () => Promise.reject(new Error('host restarting')))
+    await expect(fetchApprovalRequestState('req-1')).resolves.toBeUndefined()
+
+    vi.unstubAllGlobals()
+    const none = stubJson({ requests: [] })
+    await expect(fetchApprovalRequestState('  ')).resolves.toBeUndefined()
+    expect(none.length).toBe(0)
   })
 })

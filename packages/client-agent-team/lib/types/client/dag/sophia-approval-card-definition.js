@@ -13,8 +13,12 @@
  * rendered result text produced by the orchestration propose tool.
  * @module dsh-sophia-entities/client/sophia-approval-card
  */
-/** Approval states the card renders during (before materialization). */
-const PENDING_STATES = new Set([
+/**
+ * Approval states the card renders during (before materialization). Exported
+ * because the card must also recognize the moment a request LEAVES this set —
+ * a settled request stops offering buttons.
+ */
+export const PENDING_STATES = new Set([
     'pending_owner',
     'pending_captain',
     'draft',
