@@ -1,0 +1,15 @@
+// Emit configuration for the orchestration layer. See tsconfig.json beside this
+// file for why `exactOptionalPropertyTypes` is relaxed for this package only.
+{
+  "extends": "../../tsconfig.types.json",
+  "include": ["src"],
+  "compilerOptions": {
+    "exactOptionalPropertyTypes": false,
+    "noEmit": false,
+    "rootDir": "src",
+    "outDir": "lib",
+    "declaration": true,
+    "declarationMap": true,
+    "declarationDir": "lib/types"
+  }
+}

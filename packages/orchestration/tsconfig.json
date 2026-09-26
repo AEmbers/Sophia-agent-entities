@@ -1,0 +1,17 @@
+// Type-check configuration for the orchestration layer (§4.1, §5.1).
+//
+// `exactOptionalPropertyTypes` is relaxed for this package, mirroring
+// packages/dag-team: the shared facade turns it on, but this layer's tool
+// outputs and HTTP snapshots routinely carry optional fields that are `undefined`
+// when absent (e.g. `materialized?: boolean` = `undefined` after a failed
+// materialize). Relaxing the flag is type-check only — emitted JavaScript and
+// the published .d.ts are unaffected, exactly as documented for dag-team.
+// Runtime code still never writes `undefined` into optional slot unless the
+// field is deliberately absent from the response.
+{
+  "extends": "../../tsconfig.types.json",
+  "include": ["src"],
+  "compilerOptions": {
+    "exactOptionalPropertyTypes": false
+  }
+}
