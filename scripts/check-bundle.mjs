@@ -57,9 +57,38 @@ const moved = [
   ...paths(git('ls-files', '--others', '--exclude-standard', '--', ...ARTIFACTS)).map(path => `untracked ${path}`),
 ]
 
+/**
+ * The first changed text hunk in one artifact, as a few printable lines.
+ *
+ * "client.js moved" says a rebuild disagrees with the commit but not how, and
+ * those two causes need opposite fixes: a genuine source change wants the
+ * artifacts recommitted, while a build that leaks an absolute path or a random
+ * temporary name is not reproducible at all and would otherwise be recommitted
+ * forever. Showing the first divergence separates them at the point of failure,
+ * where the runner is the only place that can see it.
+ */
+const firstDiff = (path) => {
+  try {
+    const text = git('diff', '-a', '-U0', 'HEAD', '--', path)
+    const hunk = text.split('\n').filter(line => line.startsWith('@@') || line.startsWith('+') || line.startsWith('-'))
+      .filter(line => !line.startsWith('+++') && !line.startsWith('---'))
+    if (hunk.length === 0) return []
+    return hunk.slice(0, 6).map(line => `      ${line.slice(0, 200)}`)
+  } catch {
+    return []
+  }
+}
+
 if (moved.length > 0) {
   console.error('check-bundle FAILED: the build no longer matches the shipped artifacts under packages/.')
   for (const entry of moved) console.error(`  ${entry}`)
+  for (const path of moved.map(entry => entry.split(/\s+/)[1]).slice(0, 3)) {
+    const hunk = firstDiff(path)
+    if (hunk.length > 0) {
+      console.error(`\n  first difference in ${path}:`)
+      for (const line of hunk) console.error(line)
+    }
+  }
   console.error(`
 A moved shipped file means src/ and the committed lib/ disagree: a source install
 would hand out bundles older than the source next to them. Rebuild and commit the
