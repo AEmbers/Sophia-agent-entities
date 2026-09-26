@@ -12,7 +12,11 @@
 //      `cordis.patch.yml`) are present;
 //   3. every runtime relative import resolves to a file that is actually in the
 //      tarball — the failure a `files` allowlist produces when it stops covering
-//      a module the entry points load.
+//      a module the entry points load;
+//   4. every runtime asset directory (`new URL('../assets/…', import.meta.url)`)
+//      has something shipped under it — the same failure for a directory no
+//      import statement mentions, which is how every avatar came to 404 while
+//      the tree still worked locally.
 //
 // Run it AFTER `npm run build`: it packs with `--ignore-scripts`, so it
 // validates the `lib/` that is on disk, which is what a real publish would ship.
@@ -123,7 +127,42 @@ if (missing.length > 0) {
   console.log(`ok   all ${checked} runtime relative imports resolve to shipped files`)
 }
 
-// ---- 5. Verdict -------------------------------------------------------------
+// ---- 5. Every runtime asset directory must be shipped ----------------------
+// `fileURLToPath(new URL('../assets/…/', import.meta.url))` reads a directory
+// that no import statement names, so section 4 is blind to it. When the `files`
+// allowlist stopped covering `packages/dag-team/assets/`, the plugin still found
+// every image in a source checkout and served 404s to installed users.
+const assetPaths = new Map()
+for (const file of jsFiles) {
+  let source
+  try {
+    source = readFileSync(join(repoRoot, file), 'utf8')
+  } catch {
+    continue
+  }
+  for (const match of source.matchAll(/new URL\(\s*['"](\.[^'"]+)['"]\s*,\s*import\.meta\.url\s*\)/g)) {
+    const target = normalize(join(dirname(file), match[1])).replaceAll('\\', '/').replace(/\/+$/, '')
+    assetPaths.set(`${file} -> ${match[1]}`, target)
+  }
+}
+
+const unshipped = []
+for (const [label, target] of assetPaths) {
+  if (!existsSync(join(repoRoot, target))) {
+    unshipped.push(`${label} (no such path on disk: ${target})`)
+    continue
+  }
+  if (!shipped.has(target) && ![...shipped].some(path => path.startsWith(`${target}/`))) {
+    unshipped.push(`${label} (nothing shipped under ${target}/)`)
+  }
+}
+if (unshipped.length > 0) {
+  failures.push(`runtime asset paths the artifact does not carry (${unshipped.length}): ${unshipped.slice(0, 5).join(' | ')}`)
+} else {
+  console.log(`ok   all ${assetPaths.size} runtime asset paths resolve inside the artifact`)
+}
+
+// ---- 6. Verdict -------------------------------------------------------------
 if (failures.length > 0) {
   console.error(`\nARTIFACT WOULD SHIP BROKEN (${failures.length} problem(s)):`)
   for (const failure of failures) console.error(`  x ${failure}`)

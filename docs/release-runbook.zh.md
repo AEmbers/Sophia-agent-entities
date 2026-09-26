@@ -36,7 +36,7 @@
 | `npm run lint` | lint 发现的问题。 |
 | `npm run test:browser` | 组合、Remote 挂载、slot 接管或普通 DSH 恢复被破坏。需要相邻的 `../deepseek-harness` checkout；浏览器验收是本地步骤，从不在 CI 运行。 |
 | `npm pack --dry-run` | 本身不拦什么——把文件数记进发布报告。 |
-| `npm run check:artifact` | 会以破损形态发布的产物：混入的 `.ts`/`.tsx`、缺失的 `cordis.patch.yml`，或目标不在 tarball 里的运行时相对导入。要在 `npm run build` **之后**跑。 |
+| `npm run check:artifact` | 会以破损形态发布的产物：混入的 `.ts`/`.tsx`、缺失的 `cordis.patch.yml`、目标不在 tarball 里的运行时相对导入，或运行时资源目录（`new URL('../assets/…', import.meta.url)`）在 tarball 里没有任何文件。要在 `npm run build` **之后**跑。 |
 | `npm run check:public-baseline` | 与 manifest 的已认证基线发生漂移的公开面（两个 README 与置顶的兼容性讨论）。需要 `gh`；`--offline` 会跳过讨论读取，仅用于本地迭代。 |
 | `git diff --check` | 改动里的空白符损坏。 |
 

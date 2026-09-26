@@ -57,7 +57,7 @@ git diff --check
 - `npm run lint`：运行 oxlint。
 - `npm run duplication`：用 `.jscpd.json` 对 `packages` 与 `scripts` 跑 jscpd。它的输出只是"值得看一眼的地方"，不是结论——移动或重构过的代码同样会被报成重复。
 - `npm pack --dry-run`：检查根 bundle 的发布内容；`prepack` 会先跑完整 build，所以它是发布前置步骤，不是日常检查。
-- `npm run check:artifact`：回读 `npm pack` 真正会装进 tarball 的内容，拒绝会以破损形态发布的产物——混入的 `.ts`/`.tsx` 源码、缺失的 `cordis.patch.yml`，或目标不在 tarball 内的运行时相对导入。最后一项在本地任何检查里都看不见，因为工作树里每个文件都在。跑完 `build`、发布之前跑它。
+- `npm run check:artifact`：回读 `npm pack` 真正会装进 tarball 的内容，拒绝会以破损形态发布的产物——混入的 `.ts`/`.tsx` 源码、缺失的 `cordis.patch.yml`、目标不在 tarball 内的运行时相对导入，或运行时资源目录（`fileURLToPath(new URL('../assets/…', import.meta.url))`）在 tarball 里没有任何文件。最后两项在本地任何检查里都看不见，因为工作树里每个文件都在。跑完 `build`、发布之前跑它。
 - `npm run check:public-baseline`：把 `@deepseek-ai/dsh-*` peer 声明的已认证 DSH 基线与每一处手工重述它的公开面比对——两个 README 与 Harness 仓里置顶的兼容性讨论。解析不出来的面算失败、不算跳过，所以改写 README 不会让它悄悄掉出覆盖范围。需要 `gh`；`--offline` 跳过讨论读取，只用于本地迭代。
 
 这两道门是发布期检查而非日常检查；[`release-runbook.md`](../release-runbook.md) 给出了它们在一次发布里的执行顺序。

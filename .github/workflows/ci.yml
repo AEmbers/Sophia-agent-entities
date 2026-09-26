@@ -88,6 +88,12 @@ jobs:
         # file therefore means src/ and the shipped bundles disagree.
         run: npm run check:bundle
 
+      - name: Check the publish artifact against the runtime
+        # Same allowlist, other direction: a runtime asset directory the files
+        # allowlist stopped covering still resolves in this checkout, so only the
+        # pack list shows that installed users would get 404s.
+        run: npm run check:artifact
+
       - name: Regenerate TypeScript path facades
         # sync-paths is not part of any npm script; skipping it leaves the
         # committed facades pointing at their generation-time paths.
@@ -148,6 +154,10 @@ jobs:
       - name: Check the build against the committed artifacts
         shell: bash
         run: npm run check:bundle
+
+      - name: Check the publish artifact against the runtime
+        shell: bash
+        run: npm run check:artifact
 
       - name: Regenerate TypeScript path facades
         shell: bash

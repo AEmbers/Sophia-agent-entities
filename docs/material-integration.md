@@ -166,12 +166,14 @@ export function memberArtUrl(name: string, role: string): string | null {
 - **UI 真实渲染尺寸小**（面板头像/成员卡），2048 全尺寸进 UI 无意义且首屏每张多拉 4–5 MB。
 - **建议方案（按优先级）**：
   1. **UI 只入 512×512 WebP**（预期单张 20–60 KB，20 张合计 < 2 MB）——面板效果不变，体积趋同鲸鱼素材；转换脚本（Pillow / sharp）挂在 prepack 或 build-client 阶段。
-  2. 2048 原图**不入 npm tarball**：放独立 assets 仓库 / git LFS / 外部对象存储，仓库内仅留预览级资源；或至少不把 `packages/dag-team/assets/**` 加进 root `package.json` 的 `files` 白名单（当前白名单不含 dag-team 任何路径，源码 checkout 模式下插件工作正常，发布场景才受影响）。
+  2. 2048 原图**不入 npm tarball**：放独立 assets 仓库 / git LFS / 外部对象存储，仓库内仅留预览级资源。**注意（2026-09-26 更正）**：这条只适用于**母版**；`assets/agent-teams/` 与 `assets/sophia-avatars-webp/` 是宿主路由真正读的运行时资源，**必须**留在 `files` 白名单里——见 §7 末条。
   3. 素材包自带 `preview/`（400×400 JPG，共 0.82 MB）可作为 UI 兜底集。
 - **✅ 已实施（建议 1 落地）**：`scripts/optimize-avatars.py`（Pillow，依赖无——用 DSH bundled Python，Pillow 12.3.0）将 `assets/sophia-avatars/<tier>/<中文职位名>.webp`（1024×1024 母版）转成扁平 `assets/sophia-avatars-webp/<slug>.webp`（512×512、WebP quality 82、LANCZOS）。实测：**87.53 MB → 863.9 KB（0.96%）**，20 张单张 39.1–48.5 KB，均 < 2 MB 预期上限；20/20 尺寸/格式校验通过，抽样 `architect.webp` vs 源图平均通道差 2.87（同主体，无损观感）。脚本幂等、含 `--dry-run`/`--size`/`--quality` 参数与 20 条「中文职位名 ⇄ slug」映射（§4 表为唯一事实源）。
 - **✅ 已实施（母版重制，2026-09-26）**：`scripts/shrink-avatar-masters.py`（Pillow）就地把 `assets/sophia-avatars/<tier>/<中文职位名>.png`（2048×2048，87.53 MB）重制为同名 `.webp`（**1024×1024 q90，method=6**），实测 **83.38 MB → 3.38 MB（4.1%）**，单张 156–195 KB。1024 而非 512 是因为运行时集就是 512，母版留一档余量便于日后放大重导。2048 原图归档在仓外 `.scratch/avatar-sources-2048/`（20 文件 / 87.5 MB，已 gitignore）；脚本会在归档不存在时告警，避免误丢母版。
 - 仓库体积账（决定性）：`.git` 约 95.5 MB 中 88.4 MB 是头像 PNG 的历史累计（`git rev-list --objects --all` 按路径聚合），当前 HEAD 树里即 87.5 MB。母版重制把**树**降到 3.38 MB，但**历史**仍需 `git filter-repo` 才能回收——本版本决策「重写历史暂缓」，因为那会改写已推送的 commit 且需全员重新克隆。
-- ROOT `package.json` `files` 白名单**不含** `packages/dag-team/assets/**`（决策落定：不纳入）。故 npm tarball 本就不含任何头像母版；Git 地址安装走整仓打包，正是它必须瘦身的原因。
+- ROOT `package.json` `files` 白名单：**纳入运行时资源、排除母版**（2026-09-26 更正，此前决策是错的）。纳入 `packages/dag-team/assets/agent-teams/**/*`（鲸鱼 15 PNG，0.94 MB）+ `packages/dag-team/assets/sophia-avatars-webp/**/*`（运行时 20 WebP，0.84 MB）；仍排除 `sophia-avatars/`（1024 母版 3.38 MB）与 `ui.png`。
+- **错在哪**：原决策的论据是「Git 地址安装走整仓打包，所以不纳入也不影响安装」，但实测 pnpm 对 git 依赖是**克隆后按 `files` 白名单打包**（`scripts/check-bundle.mjs` 头部注释同此结论）。白名单不含 dag-team 任何路径 ⇒ 安装副本里 `packages/dag-team/assets/` **整个不存在** ⇒ 宿主两条资源路由（`../assets/agent-teams/`、`../assets/sophia-avatars-webp/`，见 `packages/dag-team/src/index.ts:474/521`）全部 404 ⇒ 审批卡、团队卡、活动面板里**每一张头像都渲染成裂图**。源码 checkout 里文件都在，所以本地完全看不出来。
+- **门禁补齐**：`scripts/check-artifact.mjs` 新增第 4 项断言——扫描已发布 `.js` 里的 `new URL('<相对路径>', import.meta.url)`，要求该路径在 `npm pack` 清单里有对应条目（文件本身，或该目录下的文件）。原脚本只查相对 `import`，看不见「用 URL 拼出来的资源目录」，这正是本次漏网的原因。已做负控：把两条 assets 从 `files` 拿掉 → 门禁转红并指名两条路径；CI 两条 lane 都在 `check:bundle` 之后加了 `npm run check:artifact`。
 
 ## 8. 代码改动点清单（Lead 统一实施）
 
@@ -179,7 +181,7 @@ export function memberArtUrl(name: string, role: string): string | null {
 | --- | --- | --- |
 | ✅ `packages/client-agent-team/src/client/dag/artwork.ts` | **已实施**：新增 OC_ART_BASE、OC_ROLE_ART（20 项，中文职位名+现代岗位名双匹配）、OC_LEAD_ART；`LEAD_ART` 替换为 OC lead-ceo；`memberArtUrl` 改为 OC 表优先 → ROLE_ART 桶兜底 → null | 三处消费组件零改动（只消费 artwork.ts 导出）；smoke 测试 20 岗位全命中 + 未知岗回退 + 鲸鱼兜底 ✓ |
 | ✅ `packages/dag-team/src/index.ts`（~429-465 后） | **已实施**：新增 `ocArtDir = ../assets/sophia-avatars-webp/` + `OC_ALLOWLIST`（20 个 `.webp`）并注册独立前缀 `/plugins/dsh-sophia-entities/sophia-assets`；handler 与原 artwork 路由同构（末段文件名、白名单、`image/webp`） | 交叉校验：artwork.ts 20 slug ↔ allowlist 20 ↔ 磁盘 20 文件全部一致 ✓ |
-| 发布物 | root `package.json` `files` 白名单**不含** `packages/dag-team/assets/**` | **已定**：npm tarball 不带头像母版；Git 地址安装走整仓打包，母版体积由 §7 重制控制在 3.38 MB |
+| ✅ 发布物 | root `package.json` `files` 白名单**纳入** `packages/dag-team/assets/agent-teams/**/*` 与 `packages/dag-team/assets/sophia-avatars-webp/**/*`，另加 `assets/readme/**/*`（README 截图） | **2026-09-26 更正**：运行时资源必须入白名单，否则安装副本里整个 `assets/` 缺失、头像全裂图；母版 `sophia-avatars/` 与 `ui.png` 仍排除。白名单实测 `npm pack` 433 项、约 3 MB |
 | ✅ 体积治理 | **已实施**：`scripts/optimize-avatars.py`（Pillow）母版 → 512×512 WebP q82；87.53 MB → 863.9 KB | 幂等脚本；运行时集为扁平 `<slug>.webp` |
 | ✅ 母版重制 | **已实施（2026-09-26）**：`scripts/shrink-avatar-masters.py` 2048 PNG → 1024 WebP q90；83.38 MB → 3.38 MB | 母版改为 `.webp`（中文名保留、tier 目录保留）；2048 原图归档于仓外 `.scratch/avatar-sources-2048/` |
 | 映射表维护 | 中文职位名 ⇄ slug 以本文 §4 为唯一事实源 | 素材包升级时同步更新 |

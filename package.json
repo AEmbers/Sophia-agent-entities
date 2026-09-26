@@ -13,7 +13,10 @@
     "packages/tool-agent-team/lib/**/*",
     "packages/client-agent-team/lib/**/*",
     "packages/dag-team/lib/**/*",
+    "packages/dag-team/assets/agent-teams/**/*",
+    "packages/dag-team/assets/sophia-avatars-webp/**/*",
     "packages/orchestration/lib/**/*",
+    "assets/readme/**/*",
     "README.md",
     "README.zh.md"
   ],
