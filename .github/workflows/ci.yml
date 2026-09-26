@@ -82,6 +82,12 @@ jobs:
           node scripts/link-harness-packages.mjs
           npm run build
 
+      - name: Check the build against the committed artifacts
+        # The tree ships packages/*/lib, because a GitHub-address install packs
+        # the files allowlist without running a build. A rebuild that moves a
+        # file therefore means src/ and the shipped bundles disagree.
+        run: npm run check:bundle
+
       - name: Regenerate TypeScript path facades
         # sync-paths is not part of any npm script; skipping it leaves the
         # committed facades pointing at their generation-time paths.
@@ -138,6 +144,10 @@ jobs:
         run: |
           node scripts/link-harness-packages.mjs
           npm run build
+
+      - name: Check the build against the committed artifacts
+        shell: bash
+        run: npm run check:bundle
 
       - name: Regenerate TypeScript path facades
         shell: bash
