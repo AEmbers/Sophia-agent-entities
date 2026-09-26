@@ -1478,7 +1478,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamAddMemberResult',
         create: dsh_sophia_entities_agentTeam_addMember_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":891,"column":9},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":891,"column":9},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/archiveChannel',
@@ -1503,7 +1503,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamArchiveChannelResult',
         create: dsh_sophia_entities_agentTeam_archiveChannel_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":881,"column":9},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":881,"column":9},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/archiveMember',
@@ -1528,7 +1528,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamArchiveMemberResult',
         create: dsh_sophia_entities_agentTeam_archiveMember_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":1271,"column":9},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":1271,"column":9},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/changeAttention',
@@ -1553,7 +1553,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamThreadAttentionResult',
         create: dsh_sophia_entities_agentTeam_changeAttention_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":1500,"column":9},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":1500,"column":9},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/changes',
@@ -1580,7 +1580,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamChangesResult',
         create: dsh_sophia_entities_agentTeam_changes_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":814,"column":11},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":814,"column":11},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/changeTask',
@@ -1605,7 +1605,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamTaskResult',
         create: dsh_sophia_entities_agentTeam_changeTask_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":1283,"column":9},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":1283,"column":9},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/clearMemberContext',
@@ -1630,7 +1630,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamClearMemberContextResult',
         create: dsh_sophia_entities_agentTeam_clearMemberContext_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":997,"column":9},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":997,"column":9},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/createChannel',
@@ -1655,7 +1655,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamCreateChannelResult',
         create: dsh_sophia_entities_agentTeam_createChannel_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":854,"column":9},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":854,"column":9},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/getAttachment',
@@ -1680,7 +1680,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamGetAttachmentResult',
         create: dsh_sophia_entities_agentTeam_getAttachment_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":1397,"column":9},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":1397,"column":9},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/getHumanAvatar',
@@ -1705,7 +1705,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamGetHumanAvatarResult',
         create: dsh_sophia_entities_agentTeam_getHumanAvatar_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":1440,"column":9},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":1440,"column":9},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/humanProfile',
@@ -1731,7 +1731,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamHumanProfileResult',
         create: dsh_sophia_entities_agentTeam_humanProfile_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":1412,"column":3},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":1412,"column":3},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/inbox',
@@ -1756,7 +1756,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamInbox',
         create: dsh_sophia_entities_agentTeam_inbox_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":1509,"column":3},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":1509,"column":3},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/joinChannel',
@@ -1781,7 +1781,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamJoinChannelResult',
         create: dsh_sophia_entities_agentTeam_joinChannel_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":1303,"column":9},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":1303,"column":9},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/joinWorkspace',
@@ -1806,7 +1806,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamJoinWorkspaceResult',
         create: dsh_sophia_entities_agentTeam_joinWorkspace_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":1323,"column":9},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":1323,"column":9},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/leaveWorkspace',
@@ -1831,7 +1831,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamLeaveWorkspaceResult',
         create: dsh_sophia_entities_agentTeam_leaveWorkspace_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":1332,"column":9},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":1332,"column":9},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/members',
@@ -1857,7 +1857,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities#agentTeam/members:result',
         create: dsh_sophia_entities_agentTeam_members_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":804,"column":3},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":804,"column":3},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/promoteThread',
@@ -1882,7 +1882,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamPromoteThreadResult',
         create: dsh_sophia_entities_agentTeam_promoteThread_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":1293,"column":9},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":1293,"column":9},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/putAttachment',
@@ -1907,7 +1907,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamPutAttachmentResult',
         create: dsh_sophia_entities_agentTeam_putAttachment_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":1384,"column":9},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":1384,"column":9},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/putHumanAvatar',
@@ -1932,7 +1932,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamPutHumanAvatarResult',
         create: dsh_sophia_entities_agentTeam_putHumanAvatar_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":1432,"column":9},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":1432,"column":9},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/readThread',
@@ -1957,7 +1957,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamThreadReadResult',
         create: dsh_sophia_entities_agentTeam_readThread_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":1516,"column":9},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":1516,"column":9},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/recoverMember',
@@ -1982,7 +1982,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamRecoverMemberResult',
         create: dsh_sophia_entities_agentTeam_recoverMember_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":954,"column":9},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":954,"column":9},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/removeChannelMember',
@@ -2007,7 +2007,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamRemoveChannelMemberResult',
         create: dsh_sophia_entities_agentTeam_removeChannelMember_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":1314,"column":9},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":1314,"column":9},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/removeHumanAvatar',
@@ -2032,7 +2032,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamRemoveHumanAvatarResult',
         create: dsh_sophia_entities_agentTeam_removeHumanAvatar_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":1448,"column":9},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":1448,"column":9},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/reply',
@@ -2057,7 +2057,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamReplyResult',
         create: dsh_sophia_entities_agentTeam_reply_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":1494,"column":9},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":1494,"column":9},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/resolveTaskRefs',
@@ -2082,7 +2082,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamResolveTaskRefsResult',
         create: dsh_sophia_entities_agentTeam_resolveTaskRefs_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":778,"column":3},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":778,"column":3},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/resolveThreadRefs',
@@ -2107,7 +2107,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamResolveThreadRefsResult',
         create: dsh_sophia_entities_agentTeam_resolveThreadRefs_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":791,"column":3},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":791,"column":3},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/sendMessage',
@@ -2132,7 +2132,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamSendMessageResult',
         create: dsh_sophia_entities_agentTeam_sendMessage_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":1341,"column":9},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":1341,"column":9},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/setHumanProfile',
@@ -2157,7 +2157,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamSetHumanProfileResult',
         create: dsh_sophia_entities_agentTeam_setHumanProfile_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":1470,"column":9},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":1470,"column":9},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/threadHistory',
@@ -2182,7 +2182,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamThreadHistory',
         create: dsh_sophia_entities_agentTeam_threadHistory_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":1534,"column":3},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":1534,"column":3},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/threadObservations',
@@ -2207,7 +2207,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamThreadObservations',
         create: dsh_sophia_entities_agentTeam_threadObservations_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":1527,"column":3},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":1527,"column":3},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/updateChannel',
@@ -2232,7 +2232,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamUpdateChannelResult',
         create: dsh_sophia_entities_agentTeam_updateChannel_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":866,"column":9},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":866,"column":9},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/updateMember',
@@ -2257,7 +2257,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamMemberResult',
         create: dsh_sophia_entities_agentTeam_updateMember_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":1211,"column":9},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":1211,"column":9},
     },
     {
       id: 'dsh-sophia-entities#agentTeam/view',
@@ -2282,7 +2282,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-sophia-entities/types#AgentTeamView',
         create: dsh_sophia_entities_agentTeam_view_result$schema,
       },
-      sourceLocation: {"file":"packages/external-agent-team-iE9SKe/src/index.ts","line":1541,"column":3},
+      sourceLocation: {"file":"packages/agent-team/src/index.ts","line":1541,"column":3},
     },
   ],
 }

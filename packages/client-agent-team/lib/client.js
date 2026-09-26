@@ -5852,7 +5852,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_addMember_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 891,
 						"column": 9
 					}
@@ -5879,7 +5879,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_archiveChannel_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 881,
 						"column": 9
 					}
@@ -5906,7 +5906,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_archiveMember_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 1271,
 						"column": 9
 					}
@@ -5933,7 +5933,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_changeAttention_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 1500,
 						"column": 9
 					}
@@ -5962,7 +5962,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_changes_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 814,
 						"column": 11
 					}
@@ -5989,7 +5989,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_changeTask_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 1283,
 						"column": 9
 					}
@@ -6016,7 +6016,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_clearMemberContext_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 997,
 						"column": 9
 					}
@@ -6043,7 +6043,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_createChannel_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 854,
 						"column": 9
 					}
@@ -6070,7 +6070,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_getAttachment_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 1397,
 						"column": 9
 					}
@@ -6097,7 +6097,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_getHumanAvatar_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 1440,
 						"column": 9
 					}
@@ -6125,7 +6125,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_humanProfile_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 1412,
 						"column": 3
 					}
@@ -6152,7 +6152,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_inbox_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 1509,
 						"column": 3
 					}
@@ -6179,7 +6179,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_joinChannel_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 1303,
 						"column": 9
 					}
@@ -6206,7 +6206,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_joinWorkspace_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 1323,
 						"column": 9
 					}
@@ -6233,7 +6233,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_leaveWorkspace_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 1332,
 						"column": 9
 					}
@@ -6261,7 +6261,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_members_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 804,
 						"column": 3
 					}
@@ -6288,7 +6288,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_promoteThread_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 1293,
 						"column": 9
 					}
@@ -6315,7 +6315,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_putAttachment_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 1384,
 						"column": 9
 					}
@@ -6342,7 +6342,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_putHumanAvatar_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 1432,
 						"column": 9
 					}
@@ -6369,7 +6369,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_readThread_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 1516,
 						"column": 9
 					}
@@ -6396,7 +6396,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_recoverMember_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 954,
 						"column": 9
 					}
@@ -6423,7 +6423,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_removeChannelMember_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 1314,
 						"column": 9
 					}
@@ -6450,7 +6450,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_removeHumanAvatar_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 1448,
 						"column": 9
 					}
@@ -6477,7 +6477,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_reply_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 1494,
 						"column": 9
 					}
@@ -6504,7 +6504,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_resolveTaskRefs_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 778,
 						"column": 3
 					}
@@ -6531,7 +6531,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_resolveThreadRefs_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 791,
 						"column": 3
 					}
@@ -6558,7 +6558,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_sendMessage_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 1341,
 						"column": 9
 					}
@@ -6585,7 +6585,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_setHumanProfile_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 1470,
 						"column": 9
 					}
@@ -6612,7 +6612,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_threadHistory_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 1534,
 						"column": 3
 					}
@@ -6639,7 +6639,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_threadObservations_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 1527,
 						"column": 3
 					}
@@ -6666,7 +6666,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_updateChannel_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 866,
 						"column": 9
 					}
@@ -6693,7 +6693,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_updateMember_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 1211,
 						"column": 9
 					}
@@ -6720,7 +6720,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						create: dsh_sophia_entities_agentTeam_view_result$schema
 					},
 					sourceLocation: {
-						"file": "packages/external-agent-team-AWtj4S/src/index.ts",
+						"file": "packages/agent-team/src/index.ts",
 						"line": 1541,
 						"column": 3
 					}
