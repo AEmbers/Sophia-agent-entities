@@ -22,6 +22,18 @@ function renderPlan(facade, plan) {
     return `members: ${memberList}\ntasks: ${taskList}`;
 }
 /**
+ * Drop keys whose value is `undefined` from a tool output.
+ *
+ * A tool output crosses the host's lossless-JSON boundary: `undefined` cannot
+ * survive `JSON.parse(JSON.stringify(value))`, so an optional field that is
+ * present-but-undefined makes the harness reject the whole result with "value
+ * is not lossless JSON" and the model never sees it. Optional fields must be
+ * absent instead.
+ */
+function withoutUndefined(value) {
+    return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined));
+}
+/**
  * Register the three approval tools on a cordis context.
  * @returns the three definitions, for tool-surface composition (member tool
  *          filters include only `propose`, design §4.3.3).
@@ -122,14 +134,14 @@ export function registerApprovalTools(ctx, dependencies) {
                     }
                     : undefined,
             });
-            return {
+            return withoutUndefined({
                 request_id: result.request.id,
                 state: result.request.state,
                 duplicate: result.duplicate === true ? true : undefined,
                 requester: result.request.requester.kind === 'human' ? 'human' : (result.request.requester.handle ?? result.request.requester.memberId ?? 'member'),
                 mode: result.request.mode,
                 goal: result.request.goal,
-            };
+            });
         },
     });
     const review = defineTool({
@@ -171,13 +183,13 @@ export function registerApprovalTools(ctx, dependencies) {
                 reason: args.reason ?? '',
             });
             const materialized = result.materialized;
-            return {
+            return withoutUndefined({
                 request_id: result.request.id,
                 state: result.request.state,
                 materialized: materialized !== undefined ? true : undefined,
                 team_ref: materialized?.teamRef,
                 team_name: materialized?.teamName,
-            };
+            });
         },
     });
     const approve = defineTool({
@@ -222,14 +234,14 @@ export function registerApprovalTools(ctx, dependencies) {
                 mode: args.mode,
             });
             const materialized = result.materialized;
-            return {
+            return withoutUndefined({
                 request_id: result.request.id,
                 state: result.request.state,
                 materialized: materialized !== undefined ? true : undefined,
                 mode: result.request.mode,
                 team_ref: materialized?.teamRef,
                 team_name: materialized?.teamName,
-            };
+            });
         },
     });
     ctx.tools.register(propose);

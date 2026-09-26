@@ -15,6 +15,7 @@ All notable changes to this project are documented in this file. The format foll
 - The repository itself is an install source: the built bundles ship in the tree, so adding the Git address needs no build step.
 - Enabling the plugin no longer fails on the Host's session-controller entry group: the client manifest no longer lists a build-time-only type package, so the browser loader stops forcing that row to activate.
 - The plugin publishes as `dsh-sophia-entities`, continuing the line from `@wowyuarm/dsh-agent-team` 0.1.15: install the new name to pick up this release.
+- Proposing, reviewing, and approving a team work again: an optional field that was present but empty made the Host reject the whole tool result as "not lossless JSON", so every ordinary call failed and no card ever appeared.
 
 ## [0.1.15] - 2026-09-24
 
