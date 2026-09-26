@@ -40,6 +40,10 @@ Client plugin apply
 
 `dsh.client.inject` 描述 client module graph；它不保证 apply order、service readiness 或 slot declaration order。如果 declaration 可能稍后出现，使用 `ctx.slots.inject()`，让 registration 跟随 declaration lifetime，并随 owning fiber disposal。
 
+`dsh.client.inject` 也不是声明「编译期类型依赖」的地方。浏览器加载器会把这里列出的每一行先送达（arrive）再加载它的 consumer，所以列上一个 runtime 从不使用的包，等于让 Host 在启用本插件时顺带激活那一行。
+
+列上 `@deepseek-ai/dsh-api-session-controller` 就是这么出事的。client 侧只用 `import type` 引了它的 `client` 子路径，编译后即消失；它真正读取的 `ctx.sessions` face 来自 `@deepseek-ai/dsh-api-remotes`。被强行激活的 `ApiSessionController` 构造函数会无条件向单次注册槽位注册 file-upload 的 Agent resolver，于是该条目组启用失败、插件停在 pending。`inject` 里的每一项都必须是这个 client 在 runtime 真正会加载的包。
+
 Slot parent 的 `children` declaration 同时是 render site 和 render authority。两个存活的 parent entries 不能声明同一个 child slot。特别是 Team 的 `sidebar.workspaces` shadow 不得重新声明 shipped `sidebar.workspaces.directoryFlow`；即使 Team entry priority 更高，Harness SlotCore 也会拒绝这个 duplicate。不要复制 private WorkspaceBrowser、ConversationRoot、Shell 或 private CSS 来规避它。
 
 Team feature 需要现有 Harness capability 时，使用 public service 或 package export。对于 directory selection，先检查 `ctx.workspaces.pickDirectory()` 和 `host.pickDirectory` path，再考虑 Team-specific picker。如果 public contract 无法表达目标 composition，记录这个 limitation，选择 Team-owned plugin 或新设计，不要静默依赖 private implementation details。

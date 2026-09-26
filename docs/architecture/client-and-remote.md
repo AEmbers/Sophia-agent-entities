@@ -23,6 +23,10 @@ sidebar.settings            Team shadow, priority -100
 
 Activation mounts `agentTeamRemote`, waits for `remote.agentTeam`, then registers Team footer and mode shadows. `dsh.client.inject` describes the module graph but does not guarantee apply order or service readiness; use `ctx.slots.inject()` when a declaration may appear later.
 
+`dsh.client.inject` is also not a place to declare a build-time type dependency. The browser loader arrives every named row before its consumer, so listing a package the client never uses at runtime forces the Host to activate that row as a side effect of enabling this one.
+
+Listing `@deepseek-ai/dsh-api-session-controller` did exactly that. The client only imported its `client` subpath as a type, which erases under compilation, and the real `ctx.sessions` face it reads comes from `@deepseek-ai/dsh-api-remotes`. The forced activation re-instantiated `ApiSessionController`, whose constructor registers a file-upload Agent resolver unconditionally into a single-registration slot, so enabling the plugin failed that entry group and left it pending. Every `inject` entry must be a package this client actually loads at runtime.
+
 A slot parent's `children` declaration is both render site and authority. Team's `sidebar.workspaces` shadow must not redeclare shipped `sidebar.workspaces.directoryFlow`; Harness SlotCore rejects duplicate live declarations. Do not copy private WorkspaceBrowser, ConversationRoot, Shell, or private CSS. Use public Harness services and exports, such as `ctx.workspaces.pickDirectory()`, and record limitations rather than depending silently on private implementation.
 
 ## Client data and presentation boundary

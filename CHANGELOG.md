@@ -13,6 +13,7 @@ All notable changes to this project are documented in this file. The format foll
 - An identical proposal does not stack: a second proposal for the same goal and plan finds the request already waiting.
 - Standing teams render in the activity tree beside running ones, with a summary of the Members and tasks they carry.
 - The repository itself is an install source: the built bundles ship in the tree, so adding the Git address needs no build step.
+- Enabling the plugin no longer fails on the Host's session-controller entry group: the client manifest no longer lists a build-time-only type package, so the browser loader stops forcing that row to activate.
 - The plugin publishes as `dsh-sophia-entities`, continuing the line from `@wowyuarm/dsh-agent-team` 0.1.15: install the new name to pick up this release.
 
 ## [0.1.15] - 2026-09-24
