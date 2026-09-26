@@ -132,6 +132,8 @@ dsh plugin --profile web add /absolute/path/to/dsh-sophia-entities
 dsh web
 ```
 
+两种 Git 写法并不等价：`https://github.com/...` 地址走 HTTPS 下载源码 tarball，而 `github:owner/repo` 简写走 SSH clone，需要 GitHub 已经信任的密钥。
+
 终端用户都不需要相邻的 Harness repository，只有开发检查需要。
 
 ## 开发

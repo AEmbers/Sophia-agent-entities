@@ -132,6 +132,8 @@ dsh plugin --profile web add /absolute/path/to/dsh-sophia-entities
 dsh web
 ```
 
+The two Git forms are not interchangeable: an `https://github.com/...` address is fetched as a source tarball over HTTPS, while the `github:owner/repo` shorthand is cloned over SSH and so needs a key GitHub already trusts.
+
 Only the development checks need the adjacent Harness repository.
 
 ## Development
