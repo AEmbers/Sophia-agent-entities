@@ -38,6 +38,7 @@ export function parseSophiaProposeArgs(value) {
         if ('mode' in parsed && (parsed.mode === 'persistent' || parsed.mode === 'dag'))
             mode = parsed.mode;
         const members = [];
+        const tasks = [];
         let taskCount = 0;
         let dependencyCount = 0;
         if ('plan' in parsed && typeof parsed.plan === 'object' && parsed.plan !== null) {
@@ -57,14 +58,27 @@ export function parseSophiaProposeArgs(value) {
             if (Array.isArray(plan.tasks)) {
                 taskCount = plan.tasks.length;
                 for (const task of plan.tasks) {
-                    if (typeof task === 'object' && task !== null && 'dependencies' in task
-                        && Array.isArray(task.dependencies)) {
-                        dependencyCount += task.dependencies.length;
-                    }
+                    if (typeof task !== 'object' || task === null)
+                        continue;
+                    const dependsOn = 'dependencies' in task && Array.isArray(task.dependencies)
+                        ? task.dependencies.filter((item) => typeof item === 'string')
+                        : [];
+                    dependencyCount += dependsOn.length;
+                    // A task without an id cannot be referenced by another task, so it is
+                    // not worth a row; the counts above still account for it.
+                    if (!('id' in task) || typeof task.id !== 'string')
+                        continue;
+                    const id = task.id.trim();
+                    if (id === '')
+                        continue;
+                    const subject = 'subject' in task && typeof task.subject === 'string'
+                        ? task.subject.trim()
+                        : '';
+                    tasks.push({ id, subject, dependsOn });
                 }
             }
         }
-        return { goal, mode, members, taskCount, dependencyCount };
+        return { goal, mode, members, tasks, taskCount, dependencyCount };
     }
     catch {
         return undefined;
@@ -145,6 +159,7 @@ export const sophiaApprovalCardDefinition = {
             mode: parsed.mode,
             state: '',
             members: parsed.members,
+            tasks: parsed.tasks,
             taskCount: parsed.taskCount,
             dependencyCount: parsed.dependencyCount,
         };
@@ -194,6 +209,7 @@ export const sophiaApprovalCardDefinition = {
                 mode: state.mode,
                 state: state.state,
                 members: state.members,
+                tasks: state.tasks,
                 taskCount: state.taskCount,
                 dependencyCount: state.dependencyCount,
             },

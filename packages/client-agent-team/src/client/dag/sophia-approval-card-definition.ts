@@ -51,6 +51,12 @@ export interface SophiaApprovalCardData {
     readonly name: string
     readonly role: string
   }[]
+  /** The proposed task graph, so the card can show what depends on what. */
+  readonly tasks: readonly {
+    readonly id: string
+    readonly subject: string
+    readonly dependsOn: readonly string[]
+  }[]
   readonly taskCount: number
   readonly dependencyCount: number
 }
@@ -76,6 +82,11 @@ export interface SophiaApprovalNodeState {
     readonly name: string
     readonly role: string
   }[]
+  readonly tasks: readonly {
+    readonly id: string
+    readonly subject: string
+    readonly dependsOn: readonly string[]
+  }[]
   readonly taskCount: number
   readonly dependencyCount: number
 }
@@ -90,6 +101,7 @@ export function parseSophiaProposeArgs(value: string): {
   goal: string
   mode: TeamMode | undefined
   members: readonly { name: string; role: string }[]
+  tasks: readonly { id: string; subject: string; dependsOn: readonly string[] }[]
   taskCount: number
   dependencyCount: number
 } | undefined {
@@ -105,6 +117,7 @@ export function parseSophiaProposeArgs(value: string): {
     if ('mode' in parsed && (parsed.mode === 'persistent' || parsed.mode === 'dag')) mode = parsed.mode
 
     const members: { name: string; role: string }[] = []
+    const tasks: { id: string; subject: string; dependsOn: readonly string[] }[] = []
     let taskCount = 0
     let dependencyCount = 0
     if ('plan' in parsed && typeof parsed.plan === 'object' && parsed.plan !== null) {
@@ -123,14 +136,24 @@ export function parseSophiaProposeArgs(value: string): {
       if (Array.isArray(plan.tasks)) {
         taskCount = plan.tasks.length
         for (const task of plan.tasks) {
-          if (typeof task === 'object' && task !== null && 'dependencies' in task
-            && Array.isArray((task as { dependencies: unknown }).dependencies)) {
-            dependencyCount += (task as { dependencies: readonly unknown[] }).dependencies.length
-          }
+          if (typeof task !== 'object' || task === null) continue
+          const dependsOn = 'dependencies' in task && Array.isArray((task as { dependencies: unknown }).dependencies)
+            ? (task as { dependencies: readonly unknown[] }).dependencies.filter((item): item is string => typeof item === 'string')
+            : []
+          dependencyCount += dependsOn.length
+          // A task without an id cannot be referenced by another task, so it is
+          // not worth a row; the counts above still account for it.
+          if (!('id' in task) || typeof (task as { id: unknown }).id !== 'string') continue
+          const id = (task as { id: string }).id.trim()
+          if (id === '') continue
+          const subject = 'subject' in task && typeof (task as { subject: unknown }).subject === 'string'
+            ? (task as { subject: string }).subject.trim()
+            : ''
+          tasks.push({ id, subject, dependsOn })
         }
       }
     }
-    return { goal, mode, members, taskCount, dependencyCount }
+    return { goal, mode, members, tasks, taskCount, dependencyCount }
   } catch {
     return undefined
   }
@@ -217,6 +240,7 @@ export const sophiaApprovalCardDefinition: ConversationNodeDefinition<SophiaAppr
       mode: parsed.mode,
       state: '',
       members: parsed.members,
+      tasks: parsed.tasks,
       taskCount: parsed.taskCount,
       dependencyCount: parsed.dependencyCount,
     }
@@ -261,6 +285,7 @@ export const sophiaApprovalCardDefinition: ConversationNodeDefinition<SophiaAppr
         mode: state.mode,
         state: state.state,
         members: state.members,
+        tasks: state.tasks,
         taskCount: state.taskCount,
         dependencyCount: state.dependencyCount,
       },

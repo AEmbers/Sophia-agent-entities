@@ -10,13 +10,23 @@ export const APPROVALS_PLAN_URL = '/plugins/dsh-sophia-entities/approvals/plan';
  * Fire one approval-plan action at the host. Mirrors the AgentTeams plan
  * mutation fetch (`mutatePlan`): posts JSON, throws with the host's error
  * message (or an HTTP status) on any non-ok response.
+ *
+ * `sessionId` is the session the card is rendered in, and it is REQUIRED: the
+ * host route authenticates the browser as the human operator but still refuses
+ * the action with 400 `sessionId is required` (or 409 `human session is not
+ * attached`) unless the owning session id rides in the body. Omitting it made
+ * every owner interaction — approve, reject, and the mode switch — fail with no
+ * visible effect.
  */
-export async function postApprovalPlanAction(payload) {
+export async function postApprovalPlanAction(sessionId, payload) {
+    const owner = sessionId.trim();
+    if (owner === '')
+        throw new Error('approval actions require the viewing session id');
     const response = await fetch(APPROVALS_PLAN_URL, {
         method: 'POST',
         cache: 'no-store',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, sessionId: owner }),
     });
     if (response.ok)
         return;

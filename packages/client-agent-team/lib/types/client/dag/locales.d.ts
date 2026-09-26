@@ -230,6 +230,12 @@ export declare const zh: {
     'approval.mode.dag': string;
     'approval.mode.dag.desc': string;
     'approval.counts': string;
+    'approval.rosterLabel': string;
+    'approval.chip.members': string;
+    'approval.chip.tasks': string;
+    'approval.chip.deps': string;
+    'approval.tasksLabel': string;
+    'approval.taskDeps': string;
     'approval.approve': string;
     'approval.reject': string;
     'approval.waiting': string;
@@ -472,6 +478,12 @@ export declare const en: {
     'approval.mode.dag': string;
     'approval.mode.dag.desc': string;
     'approval.counts': string;
+    'approval.rosterLabel': string;
+    'approval.chip.members': string;
+    'approval.chip.tasks': string;
+    'approval.chip.deps': string;
+    'approval.tasksLabel': string;
+    'approval.taskDeps': string;
     'approval.approve': string;
     'approval.reject': string;
     'approval.waiting': string;

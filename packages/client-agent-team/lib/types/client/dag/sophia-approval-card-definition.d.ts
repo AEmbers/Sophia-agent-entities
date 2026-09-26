@@ -32,6 +32,12 @@ export interface SophiaApprovalCardData {
         readonly name: string;
         readonly role: string;
     }[];
+    /** The proposed task graph, so the card can show what depends on what. */
+    readonly tasks: readonly {
+        readonly id: string;
+        readonly subject: string;
+        readonly dependsOn: readonly string[];
+    }[];
     readonly taskCount: number;
     readonly dependencyCount: number;
 }
@@ -55,6 +61,11 @@ export interface SophiaApprovalNodeState {
         readonly name: string;
         readonly role: string;
     }[];
+    readonly tasks: readonly {
+        readonly id: string;
+        readonly subject: string;
+        readonly dependsOn: readonly string[];
+    }[];
     readonly taskCount: number;
     readonly dependencyCount: number;
 }
@@ -70,6 +81,11 @@ export declare function parseSophiaProposeArgs(value: string): {
     members: readonly {
         name: string;
         role: string;
+    }[];
+    tasks: readonly {
+        id: string;
+        subject: string;
+        dependsOn: readonly string[];
     }[];
     taskCount: number;
     dependencyCount: number;

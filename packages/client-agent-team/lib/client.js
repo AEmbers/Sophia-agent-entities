@@ -18558,6 +18558,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				let mode;
 				if ("mode" in parsed && (parsed.mode === "persistent" || parsed.mode === "dag")) mode = parsed.mode;
 				const members = [];
+				const tasks = [];
 				let taskCount = 0;
 				let dependencyCount = 0;
 				if ("plan" in parsed && typeof parsed.plan === "object" && parsed.plan !== null) {
@@ -18574,13 +18575,27 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 					}
 					if (Array.isArray(plan.tasks)) {
 						taskCount = plan.tasks.length;
-						for (const task of plan.tasks) if (typeof task === "object" && task !== null && "dependencies" in task && Array.isArray(task.dependencies)) dependencyCount += task.dependencies.length;
+						for (const task of plan.tasks) {
+							if (typeof task !== "object" || task === null) continue;
+							const dependsOn = "dependencies" in task && Array.isArray(task.dependencies) ? task.dependencies.filter((item) => typeof item === "string") : [];
+							dependencyCount += dependsOn.length;
+							if (!("id" in task) || typeof task.id !== "string") continue;
+							const id = task.id.trim();
+							if (id === "") continue;
+							const subject = "subject" in task && typeof task.subject === "string" ? task.subject.trim() : "";
+							tasks.push({
+								id,
+								subject,
+								dependsOn
+							});
+						}
 					}
 				}
 				return {
 					goal,
 					mode,
 					members,
+					tasks,
 					taskCount,
 					dependencyCount
 				};
@@ -18658,6 +18673,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 					mode: parsed.mode,
 					state: "",
 					members: parsed.members,
+					tasks: parsed.tasks,
 					taskCount: parsed.taskCount,
 					dependencyCount: parsed.dependencyCount
 				};
@@ -18698,6 +18714,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						mode: state.mode,
 						state: state.state,
 						members: state.members,
+						tasks: state.tasks,
 						taskCount: state.taskCount,
 						dependencyCount: state.dependencyCount
 					}
@@ -18716,13 +18733,25 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		* Fire one approval-plan action at the host. Mirrors the AgentTeams plan
 		* mutation fetch (`mutatePlan`): posts JSON, throws with the host's error
 		* message (or an HTTP status) on any non-ok response.
+		*
+		* `sessionId` is the session the card is rendered in, and it is REQUIRED: the
+		* host route authenticates the browser as the human operator but still refuses
+		* the action with 400 `sessionId is required` (or 409 `human session is not
+		* attached`) unless the owning session id rides in the body. Omitting it made
+		* every owner interaction — approve, reject, and the mode switch — fail with no
+		* visible effect.
 		*/
-		async function postApprovalPlanAction(payload) {
+		async function postApprovalPlanAction(sessionId, payload) {
+			const owner = sessionId.trim();
+			if (owner === "") throw new Error("approval actions require the viewing session id");
 			const response = await fetch(APPROVALS_PLAN_URL, {
 				method: "POST",
 				cache: "no-store",
 				headers: { "content-type": "application/json" },
-				body: JSON.stringify(payload)
+				body: JSON.stringify({
+					...payload,
+					sessionId: owner
+				})
 			});
 			if (response.ok) return;
 			let message = `HTTP ${response.status}`;
@@ -18738,7 +18767,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		}
 		//#endregion
 		//#region \0dsh-css:packages/client-agent-team/src/client/dag/SophiaApprovalCard.module.css.mjs
-		const css = ".KM9IEq_root{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-module-platform);border-radius:10px;flex-direction:column;gap:8px;width:100%;min-width:0;padding:10px 12px;display:flex}.KM9IEq_head{align-items:center;gap:8px;min-width:0;display:flex}.KM9IEq_title{color:var(--dsw-alias-label-primary);text-overflow:ellipsis;white-space:nowrap;flex:0 auto;font-size:13px;font-weight:600;line-height:20px;overflow:hidden}.KM9IEq_stateBadge{border:1px solid var(--dsw-alias-border-l3);color:var(--dsw-alias-label-tertiary);white-space:nowrap;border-radius:999px;flex:none;margin-left:auto;padding:1px 7px;font-size:10px;font-weight:600;line-height:16px}.KM9IEq_line{min-width:0;color:var(--dsw-alias-label-secondary);align-items:baseline;gap:6px;font-size:12px;line-height:18px;display:flex}.KM9IEq_lineKey{color:var(--dsw-alias-label-tertiary);flex:none;font-size:11px}.KM9IEq_lineValue{text-overflow:ellipsis;white-space:nowrap;min-width:0;overflow:hidden}.KM9IEq_modeRow{align-items:center;gap:8px;min-width:0;display:flex}.KM9IEq_modeLabel{color:var(--dsw-alias-label-tertiary);flex:none;font-size:11px}.KM9IEq_modeTrigger{border:1px solid var(--dsw-alias-border-l3);background:var(--dsw-alias-bg-layer-1);max-width:220px;color:var(--dsw-alias-label-secondary);font:inherit;cursor:pointer;border-radius:7px;align-items:center;gap:6px;padding:3px 8px;font-size:11.5px;font-weight:600;line-height:16px;transition:border-color .12s,color .12s;display:inline-flex}.KM9IEq_modeTrigger:hover{border-color:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-state-business-primary)}.KM9IEq_modeTrigger:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:1px}.KM9IEq_modeChevron{transition:transform .12s}.KM9IEq_modeItem{flex-direction:column;gap:2px;max-width:280px;display:flex}.KM9IEq_modeOptionTitle{font-weight:600}.KM9IEq_modeOptionDesc{color:var(--dsw-alias-label-tertiary);white-space:pre-line;font-size:10.5px}.KM9IEq_counts{color:var(--dsw-alias-label-secondary);font-size:11px;line-height:16px}.KM9IEq_actions{flex-wrap:wrap;align-items:center;gap:8px;min-width:0;display:flex}.KM9IEq_actionButton{border:1px solid var(--dsw-alias-border-l3);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);font:inherit;cursor:pointer;border-radius:999px;flex:none;padding:3px 10px;font-size:11px;font-weight:600;line-height:16px;transition:border-color .12s,color .12s,background-color .12s}.KM9IEq_actionButton:hover:not(:disabled){border-color:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-state-business-primary)}.KM9IEq_actionButton:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:1px}.KM9IEq_actionButton:disabled{opacity:.55;cursor:default}.KM9IEq_approve{border-color:var(--dsw-alias-state-business-primary);background:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-label-primary-inverted)}.KM9IEq_approve:hover:not(:disabled){border-color:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-label-primary-inverted);background:var(--dsw-alias-state-business-primary)}.KM9IEq_danger{border-color:var(--dsw-alias-state-danger,var(--dsw-alias-border-l3));color:var(--dsw-alias-state-danger,var(--dsw-alias-label-secondary))}.KM9IEq_danger:hover:not(:disabled){border-color:var(--dsw-alias-state-danger,var(--dsw-alias-state-business-primary));color:var(--dsw-alias-state-danger,var(--dsw-alias-state-business-primary))}.KM9IEq_feedback{color:var(--dsw-alias-state-danger,var(--dsw-alias-label-tertiary));font-size:11px;line-height:16px}.KM9IEq_badgeAction{justify-content:center;align-items:center;gap:6px;display:inline-flex;position:relative}.KM9IEq_badgeWide{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-module-platform);width:100%;color:var(--dsw-alias-label-secondary);cursor:pointer;border-radius:8px;align-items:center;gap:6px;padding:2px 8px;font-size:12px;line-height:24px;display:inline-flex}.KM9IEq_badgeRail{color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:0}.KM9IEq_badgeText{text-overflow:ellipsis;white-space:nowrap;overflow:hidden}.KM9IEq_badgeDot{box-sizing:border-box;background:var(--dsw-alias-state-danger,#e5484d);min-width:16px;height:16px;color:var(--dsw-alias-label-primary-inverted,#fff);border-radius:999px;justify-content:center;align-items:center;padding:0 5px;font-size:10px;font-weight:700;line-height:16px;display:inline-flex}";
+		const css = ".KM9IEq_root{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-module-platform);border-radius:10px;flex-direction:column;gap:8px;width:100%;min-width:0;padding:10px 12px;display:flex}.KM9IEq_head{align-items:center;gap:8px;min-width:0;display:flex}.KM9IEq_leadAvatar{object-fit:contain;filter:drop-shadow(0 1px 1px #122d4833);flex:none;width:30px;height:30px}.KM9IEq_title{color:var(--dsw-alias-label-primary);text-overflow:ellipsis;white-space:nowrap;flex:0 auto;font-size:13px;font-weight:600;line-height:20px;overflow:hidden}.KM9IEq_stateBadge{border:1px solid var(--dsw-alias-border-l3);color:var(--dsw-alias-label-tertiary);white-space:nowrap;border-radius:999px;flex:none;margin-left:auto;padding:1px 7px;font-size:10px;font-weight:600;line-height:16px}.KM9IEq_line{min-width:0;color:var(--dsw-alias-label-secondary);align-items:baseline;gap:6px;font-size:12px;line-height:18px;display:flex}.KM9IEq_lineKey{color:var(--dsw-alias-label-tertiary);flex:none;font-size:11px}.KM9IEq_lineValue{overflow-wrap:anywhere;white-space:normal;min-width:0}.KM9IEq_modeRow{align-items:center;gap:8px;min-width:0;display:flex}.KM9IEq_modeLabel{color:var(--dsw-alias-label-tertiary);flex:none;font-size:11px}.KM9IEq_modeTrigger{border:1px solid var(--dsw-alias-border-l3);background:var(--dsw-alias-bg-layer-1);max-width:220px;color:var(--dsw-alias-label-secondary);font:inherit;cursor:pointer;border-radius:7px;align-items:center;gap:6px;padding:3px 8px;font-size:11.5px;font-weight:600;line-height:16px;transition:border-color .12s,color .12s;display:inline-flex}.KM9IEq_modeTrigger:hover{border-color:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-state-business-primary)}.KM9IEq_modeTrigger:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:1px}.KM9IEq_modeChevron{transition:transform .12s}.KM9IEq_modeItem{flex-direction:column;gap:2px;max-width:280px;display:flex}.KM9IEq_modeOptionTitle{font-weight:600}.KM9IEq_modeOptionDesc{color:var(--dsw-alias-label-tertiary);white-space:pre-line;font-size:10.5px}.KM9IEq_roster{flex-wrap:wrap;align-items:center;gap:6px;min-width:0;display:flex}.KM9IEq_memberChip{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);border-radius:999px;align-items:center;gap:5px;max-width:190px;padding:3px 8px 3px 3px;font-size:11px;line-height:16px;display:inline-flex}.KM9IEq_memberArt{object-fit:contain;flex:none;width:24px;height:24px}.KM9IEq_memberInitial{background:var(--dsw-alias-state-business-primary);width:20px;height:20px;color:var(--dsw-alias-label-primary-inverted);border-radius:50%;flex:none;justify-content:center;align-items:center;font-size:10px;font-weight:700;display:inline-flex}.KM9IEq_memberName{color:var(--dsw-alias-label-primary);text-overflow:ellipsis;white-space:nowrap;flex:0 auto;font-weight:600;overflow:hidden}.KM9IEq_memberRole{color:var(--dsw-alias-label-tertiary);text-overflow:ellipsis;white-space:nowrap;flex:0 auto;font-size:10px;overflow:hidden}.KM9IEq_chips{flex-wrap:wrap;align-items:center;gap:6px;min-width:0;display:flex}.KM9IEq_chip{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);white-space:nowrap;border-radius:999px;padding:1px 8px;font-size:10.5px;line-height:16px}.KM9IEq_tasks{flex-direction:column;gap:4px;min-width:0;display:flex}.KM9IEq_sectionLabel{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px}.KM9IEq_taskList{flex-direction:column;gap:3px;min-width:0;margin:0;padding:0;list-style:none;display:flex}.KM9IEq_taskRow{align-items:baseline;gap:6px;min-width:0;font-size:11px;line-height:16px;display:flex}.KM9IEq_taskId{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-tertiary);border-radius:6px;flex:none;padding:0 6px;font-size:10px;font-weight:600;line-height:15px}.KM9IEq_taskSubject{color:var(--dsw-alias-label-secondary);text-overflow:ellipsis;white-space:nowrap;flex:0 auto;overflow:hidden}.KM9IEq_taskDeps{color:var(--dsw-alias-label-tertiary);white-space:nowrap;flex:none;margin-left:auto;font-size:10px}.KM9IEq_actions{flex-wrap:wrap;align-items:center;gap:8px;min-width:0;display:flex}.KM9IEq_actionButton{border:1px solid var(--dsw-alias-border-l3);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);font:inherit;cursor:pointer;border-radius:999px;flex:none;padding:3px 10px;font-size:11px;font-weight:600;line-height:16px;transition:border-color .12s,color .12s,background-color .12s}.KM9IEq_actionButton:hover:not(:disabled){border-color:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-state-business-primary)}.KM9IEq_actionButton:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:1px}.KM9IEq_actionButton:disabled{opacity:.55;cursor:default}.KM9IEq_approve{border-color:var(--dsw-alias-state-business-primary);background:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-label-primary-inverted)}.KM9IEq_approve:hover:not(:disabled){border-color:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-label-primary-inverted);background:var(--dsw-alias-state-business-primary)}.KM9IEq_danger{border-color:var(--dsw-alias-state-danger,var(--dsw-alias-border-l3));color:var(--dsw-alias-state-danger,var(--dsw-alias-label-secondary))}.KM9IEq_danger:hover:not(:disabled){border-color:var(--dsw-alias-state-danger,var(--dsw-alias-state-business-primary));color:var(--dsw-alias-state-danger,var(--dsw-alias-state-business-primary))}.KM9IEq_feedback{color:var(--dsw-alias-state-danger,var(--dsw-alias-label-tertiary));font-size:11px;line-height:16px}.KM9IEq_badgeAction{justify-content:center;align-items:center;gap:6px;display:inline-flex;position:relative}.KM9IEq_badgeWide{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-module-platform);width:100%;color:var(--dsw-alias-label-secondary);cursor:pointer;border-radius:8px;align-items:center;gap:6px;padding:2px 8px;font-size:12px;line-height:24px;display:inline-flex}.KM9IEq_badgeRail{color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:0}.KM9IEq_badgeText{text-overflow:ellipsis;white-space:nowrap;overflow:hidden}.KM9IEq_badgeDot{box-sizing:border-box;background:var(--dsw-alias-state-danger,#e5484d);min-width:16px;height:16px;color:var(--dsw-alias-label-primary-inverted,#fff);border-radius:999px;justify-content:center;align-items:center;padding:0 5px;font-size:10px;font-weight:700;line-height:16px;display:inline-flex}";
 		const tagId = "dsh-sophia-entities/SophiaApprovalCard.module.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {
 			const tag = document.createElement("style");
@@ -18756,13 +18785,20 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			"badgeRail": "KM9IEq_badgeRail",
 			"badgeText": "KM9IEq_badgeText",
 			"badgeWide": "KM9IEq_badgeWide",
-			"counts": "KM9IEq_counts",
+			"chip": "KM9IEq_chip",
+			"chips": "KM9IEq_chips",
 			"danger": "KM9IEq_danger",
 			"feedback": "KM9IEq_feedback",
 			"head": "KM9IEq_head",
+			"leadAvatar": "KM9IEq_leadAvatar",
 			"line": "KM9IEq_line",
 			"lineKey": "KM9IEq_lineKey",
 			"lineValue": "KM9IEq_lineValue",
+			"memberArt": "KM9IEq_memberArt",
+			"memberChip": "KM9IEq_memberChip",
+			"memberInitial": "KM9IEq_memberInitial",
+			"memberName": "KM9IEq_memberName",
+			"memberRole": "KM9IEq_memberRole",
 			"modeChevron": "KM9IEq_modeChevron",
 			"modeItem": "KM9IEq_modeItem",
 			"modeLabel": "KM9IEq_modeLabel",
@@ -18771,7 +18807,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			"modeRow": "KM9IEq_modeRow",
 			"modeTrigger": "KM9IEq_modeTrigger",
 			"root": "KM9IEq_root",
+			"roster": "KM9IEq_roster",
+			"sectionLabel": "KM9IEq_sectionLabel",
 			"stateBadge": "KM9IEq_stateBadge",
+			"taskDeps": "KM9IEq_taskDeps",
+			"taskId": "KM9IEq_taskId",
+			"taskList": "KM9IEq_taskList",
+			"taskRow": "KM9IEq_taskRow",
+			"taskSubject": "KM9IEq_taskSubject",
+			"tasks": "KM9IEq_tasks",
 			"title": "KM9IEq_title"
 		};
 		//#endregion
@@ -18851,6 +18895,128 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				})
 			});
 		}
+		/**
+		* Shared card header: the lead avatar, the card title and the pending-state
+		* badge. Every view wears the same head so a folded proposal looks identical
+		* whichever session it is read in.
+		*/
+		function ApprovalHead({ variant, t }) {
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("header", {
+				className: SophiaApprovalCard_module_css_default.head,
+				children: [
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("img", {
+						className: SophiaApprovalCard_module_css_default.leadAvatar,
+						src: LEAD_ART,
+						alt: "",
+						"aria-hidden": true
+					}),
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+						className: SophiaApprovalCard_module_css_default.title,
+						children: t("approval.title")
+					}),
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+						className: SophiaApprovalCard_module_css_default.stateBadge,
+						children: t(variant === "owner" ? "approval.state.pending_owner" : "approval.state.pending_captain")
+					})
+				]
+			});
+		}
+		/**
+		* Member roster: one chip per proposed member, wearing the same OC avatar the
+		* activity panel uses (falls back to an initial when the role has no art).
+		* Renders nothing for a proposal that carries no plan.
+		*/
+		function ApprovalRoster({ members, t }) {
+			if (members.length === 0) return null;
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+				className: SophiaApprovalCard_module_css_default.roster,
+				role: "list",
+				"aria-label": t("approval.rosterLabel"),
+				children: members.map((member) => {
+					const art = memberArtUrl(member.name, member.role);
+					return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
+						className: SophiaApprovalCard_module_css_default.memberChip,
+						role: "listitem",
+						title: `${member.name} · ${member.role}`,
+						children: [
+							art !== null ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("img", {
+								className: SophiaApprovalCard_module_css_default.memberArt,
+								src: art,
+								alt: "",
+								"aria-hidden": true
+							}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+								className: SophiaApprovalCard_module_css_default.memberInitial,
+								"aria-hidden": true,
+								children: member.name.slice(0, 1).toUpperCase()
+							}),
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+								className: SophiaApprovalCard_module_css_default.memberName,
+								children: member.name
+							}),
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+								className: SophiaApprovalCard_module_css_default.memberRole,
+								children: member.role
+							})
+						]
+					}, `${member.name}:${member.role}`);
+				})
+			});
+		}
+		/** Count chips: members, tasks and dependency edges, one chip each. */
+		function ApprovalCounts({ data, t }) {
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+				className: SophiaApprovalCard_module_css_default.chips,
+				children: [
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+						className: SophiaApprovalCard_module_css_default.chip,
+						children: t("approval.chip.members", { count: data.members.length })
+					}),
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+						className: SophiaApprovalCard_module_css_default.chip,
+						children: t("approval.chip.tasks", { count: data.taskCount })
+					}),
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+						className: SophiaApprovalCard_module_css_default.chip,
+						children: t("approval.chip.deps", { count: data.dependencyCount })
+					})
+				]
+			});
+		}
+		/**
+		* The proposed task graph in one flat list: each task keeps its id, its subject
+		* and the ids it waits for. A card is not a canvas, so the dependencies are
+		* named rather than drawn; the activity panel draws the real graph once the
+		* team exists.
+		*/
+		function ApprovalTasks({ tasks, t }) {
+			if (tasks.length === 0) return null;
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+				className: SophiaApprovalCard_module_css_default.tasks,
+				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+					className: SophiaApprovalCard_module_css_default.sectionLabel,
+					children: t("approval.tasksLabel")
+				}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("ul", {
+					className: SophiaApprovalCard_module_css_default.taskList,
+					children: tasks.map((task) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("li", {
+						className: SophiaApprovalCard_module_css_default.taskRow,
+						children: [
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+								className: SophiaApprovalCard_module_css_default.taskId,
+								children: task.id
+							}),
+							task.subject !== "" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+								className: SophiaApprovalCard_module_css_default.taskSubject,
+								children: task.subject
+							}),
+							task.dependsOn.length > 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+								className: SophiaApprovalCard_module_css_default.taskDeps,
+								children: t("approval.taskDeps", { deps: task.dependsOn.join(" · ") })
+							})
+						]
+					}, task.id))
+				})]
+			});
+		}
 		/** Read-only status used in the member's own session for a member proposal. */
 		function MemberWaitingCard({ data, t }) {
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("section", {
@@ -18858,15 +19024,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				"data-sophia-approval": true,
 				"data-request-id": data.requestId,
 				children: [
-					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("header", {
-						className: SophiaApprovalCard_module_css_default.head,
-						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-							className: SophiaApprovalCard_module_css_default.title,
-							children: t("approval.title")
-						}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-							className: SophiaApprovalCard_module_css_default.stateBadge,
-							children: t("approval.state.pending_captain")
-						})]
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)(ApprovalHead, {
+						variant: "captain",
+						t
 					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 						className: SophiaApprovalCard_module_css_default.line,
@@ -18888,13 +19048,17 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 							children: t("approval.requester.member", { handle: data.requester.handle ?? "" })
 						})]
 					}),
-					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-						className: SophiaApprovalCard_module_css_default.counts,
-						children: t("approval.counts", {
-							members: data.members.length,
-							tasks: data.taskCount,
-							deps: data.dependencyCount
-						})
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)(ApprovalRoster, {
+						members: data.members,
+						t
+					}),
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)(ApprovalCounts, {
+						data,
+						t
+					}),
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)(ApprovalTasks, {
+						tasks: data.tasks,
+						t
 					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 						className: SophiaApprovalCard_module_css_default.feedback,
@@ -18904,7 +19068,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			});
 		}
 		/** Owner approval surface: mode-selector + [批准][退回]. */
-		function OwnerApprovalCard({ data, t }) {
+		function OwnerApprovalCard({ data, sessionId, t }) {
 			const [mode, setMode] = (0, react.useState)(data.mode);
 			const [busy, setBusy] = (0, react.useState)(false);
 			const [error, setError] = (0, react.useState)(void 0);
@@ -18912,7 +19076,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				setBusy(true);
 				setError(void 0);
 				try {
-					await postApprovalPlanAction({
+					await postApprovalPlanAction(sessionId, {
 						action,
 						requestId: data.requestId,
 						...payload
@@ -18928,15 +19092,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				"data-sophia-approval": true,
 				"data-request-id": data.requestId,
 				children: [
-					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("header", {
-						className: SophiaApprovalCard_module_css_default.head,
-						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-							className: SophiaApprovalCard_module_css_default.title,
-							children: t("approval.title")
-						}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-							className: SophiaApprovalCard_module_css_default.stateBadge,
-							children: t("approval.state.pending_owner")
-						})]
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)(ApprovalHead, {
+						variant: "owner",
+						t
 					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 						className: SophiaApprovalCard_module_css_default.line,
@@ -18958,6 +19116,18 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 							children: data.requester.isHuman ? t("approval.requester.human") : t("approval.requester.member", { handle: data.requester.handle ?? "" })
 						})]
 					}),
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)(ApprovalRoster, {
+						members: data.members,
+						t
+					}),
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)(ApprovalCounts, {
+						data,
+						t
+					}),
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)(ApprovalTasks, {
+						tasks: data.tasks,
+						t
+					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 						className: SophiaApprovalCard_module_css_default.modeRow,
 						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
@@ -18972,14 +19142,6 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 								pendingAction("set_mode", { mode: next })();
 							}
 						})]
-					}),
-					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-						className: SophiaApprovalCard_module_css_default.counts,
-						children: t("approval.counts", {
-							members: data.members.length,
-							tasks: data.taskCount,
-							deps: data.dependencyCount
-						})
 					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 						className: SophiaApprovalCard_module_css_default.actions,
@@ -19009,7 +19171,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			});
 		}
 		/** Captain review surface for a member-initiated pending_captain proposal. */
-		function CaptainReviewCard({ data, t }) {
+		function CaptainReviewCard({ data, sessionId, t }) {
 			const [busy, setBusy] = (0, react.useState)(false);
 			const [error, setError] = (0, react.useState)(void 0);
 			const review = (decision) => async () => {
@@ -19017,7 +19179,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				setError(void 0);
 				try {
 					const reason = decision === "downgrade_to_dag" ? t("approval.review.downgradeReason") : void 0;
-					await postApprovalPlanAction({
+					await postApprovalPlanAction(sessionId, {
 						action: "review",
 						requestId: data.requestId,
 						decision,
@@ -19052,15 +19214,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				"data-sophia-approval": true,
 				"data-request-id": data.requestId,
 				children: [
-					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("header", {
-						className: SophiaApprovalCard_module_css_default.head,
-						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-							className: SophiaApprovalCard_module_css_default.title,
-							children: t("approval.title")
-						}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-							className: SophiaApprovalCard_module_css_default.stateBadge,
-							children: t("approval.state.pending_captain")
-						})]
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)(ApprovalHead, {
+						variant: "captain",
+						t
 					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 						className: SophiaApprovalCard_module_css_default.line,
@@ -19082,13 +19238,17 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 							children: t("approval.requester.member", { handle: data.requester.handle ?? "" })
 						})]
 					}),
-					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-						className: SophiaApprovalCard_module_css_default.counts,
-						children: t("approval.counts", {
-							members: data.members.length,
-							tasks: data.taskCount,
-							deps: data.dependencyCount
-						})
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)(ApprovalRoster, {
+						members: data.members,
+						t
+					}),
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)(ApprovalCounts, {
+						data,
+						t
+					}),
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)(ApprovalTasks, {
+						tasks: data.tasks,
+						t
 					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 						className: SophiaApprovalCard_module_css_default.actions,
@@ -19109,10 +19269,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			});
 		}
 		/** Render one pending Sophia approval proposal as a compact conversation card. */
-		function SophiaApprovalCard({ node, t, reviewer }) {
+		function SophiaApprovalCard({ node, sessionId, t, reviewer }) {
 			const data = node.data;
 			if (!data.requester.isHuman) return reviewer ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(CaptainReviewCard, {
 				data,
+				sessionId,
 				t
 			}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)(MemberWaitingCard, {
 				data,
@@ -19120,6 +19281,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			});
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)(OwnerApprovalCard, {
 				data,
+				sessionId,
 				t
 			}, data.requestId);
 		}
@@ -19511,6 +19673,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			"approval.mode.dag": "DAG 团队",
 			"approval.mode.dag.desc": "· DAG 团队（任务依赖 + 质量门禁）",
 			"approval.counts": "成员 {members} · 任务 {tasks} · 依赖 {deps}",
+			"approval.rosterLabel": "成员名单",
+			"approval.chip.members": "成员 {count}",
+			"approval.chip.tasks": "任务 {count}",
+			"approval.chip.deps": "依赖 {count}",
+			"approval.tasksLabel": "任务依赖",
+			"approval.taskDeps": "等待 {deps}",
 			"approval.approve": "批准",
 			"approval.reject": "退回",
 			"approval.waiting": "已提交队长审核，等待中…",
@@ -19751,6 +19919,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			"approval.mode.dag": "DAG team",
 			"approval.mode.dag.desc": "· DAG team (task dependencies + quality gates)",
 			"approval.counts": "{members} members · {tasks} tasks · {deps} dependencies",
+			"approval.rosterLabel": "Member roster",
+			"approval.chip.members": "{count} members",
+			"approval.chip.tasks": "{count} tasks",
+			"approval.chip.deps": "{count} dependencies",
+			"approval.tasksLabel": "Task dependencies",
+			"approval.taskDeps": "waits for {deps}",
 			"approval.approve": "Approve",
 			"approval.reject": "Reject",
 			"approval.waiting": "Submitted for captain review; waiting…",

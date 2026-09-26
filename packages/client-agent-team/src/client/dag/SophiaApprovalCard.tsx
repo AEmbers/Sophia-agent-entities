@@ -26,7 +26,11 @@ import type { TeamMode } from 'dsh-sophia-entities/orchestration/types'
 import type { SophiaApprovalCardData } from './sophia-approval-card-definition.ts'
 import type { CaptainVerdict } from './sophia-approval-requests.ts'
 import { approvalErrorMessage, postApprovalPlanAction } from './sophia-approval-requests.ts'
+import { LEAD_ART, memberArtUrl } from './artwork.ts'
 import css from './SophiaApprovalCard.module.css'
+
+/** Bound translator for this namespace (the card's three views share it). */
+type ApprovalLocale = PropsLocale<'sophiaEntities'>['t']
 
 /** Injection from the plugin (and the node-side owner/captain session card). */
 export interface SophiaApprovalCardInjected {
@@ -104,24 +108,102 @@ function TeamModeMenu({
   )
 }
 
+/** Which pending state the header badge names. */
+type ApprovalVariant = 'owner' | 'captain'
+
+/**
+ * Shared card header: the lead avatar, the card title and the pending-state
+ * badge. Every view wears the same head so a folded proposal looks identical
+ * whichever session it is read in.
+ */
+function ApprovalHead({ variant, t }: { readonly variant: ApprovalVariant; readonly t: ApprovalLocale }): JSX.Element {
+  return (
+    <header className={css.head}>
+      <img className={css.leadAvatar} src={LEAD_ART} alt="" aria-hidden />
+      <span className={css.title}>{t('approval.title')}</span>
+      <span className={css.stateBadge}>{t(variant === 'owner' ? 'approval.state.pending_owner' : 'approval.state.pending_captain')}</span>
+    </header>
+  )
+}
+
+/**
+ * Member roster: one chip per proposed member, wearing the same OC avatar the
+ * activity panel uses (falls back to an initial when the role has no art).
+ * Renders nothing for a proposal that carries no plan.
+ */
+function ApprovalRoster({ members, t }: { readonly members: SophiaApprovalCardData['members']; readonly t: ApprovalLocale }): JSX.Element | null {
+  if (members.length === 0) return null
+  return (
+    <div className={css.roster} role="list" aria-label={t('approval.rosterLabel')}>
+      {members.map((member) => {
+        const art = memberArtUrl(member.name, member.role)
+        return (
+          <span className={css.memberChip} role="listitem" key={`${member.name}:${member.role}`} title={`${member.name} · ${member.role}`}>
+            {art !== null
+              ? <img className={css.memberArt} src={art} alt="" aria-hidden />
+              : <span className={css.memberInitial} aria-hidden>{member.name.slice(0, 1).toUpperCase()}</span>}
+            <span className={css.memberName}>{member.name}</span>
+            <span className={css.memberRole}>{member.role}</span>
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
+/** Count chips: members, tasks and dependency edges, one chip each. */
+function ApprovalCounts({ data, t }: { readonly data: SophiaApprovalCardData; readonly t: ApprovalLocale }): JSX.Element {
+  return (
+    <div className={css.chips}>
+      <span className={css.chip}>{t('approval.chip.members', { count: data.members.length })}</span>
+      <span className={css.chip}>{t('approval.chip.tasks', { count: data.taskCount })}</span>
+      <span className={css.chip}>{t('approval.chip.deps', { count: data.dependencyCount })}</span>
+    </div>
+  )
+}
+
+/**
+ * The proposed task graph in one flat list: each task keeps its id, its subject
+ * and the ids it waits for. A card is not a canvas, so the dependencies are
+ * named rather than drawn; the activity panel draws the real graph once the
+ * team exists.
+ */
+function ApprovalTasks({ tasks, t }: { readonly tasks: SophiaApprovalCardData['tasks']; readonly t: ApprovalLocale }): JSX.Element | null {
+  if (tasks.length === 0) return null
+  return (
+    <div className={css.tasks}>
+      <span className={css.sectionLabel}>{t('approval.tasksLabel')}</span>
+      <ul className={css.taskList}>
+        {tasks.map((task) => (
+          <li className={css.taskRow} key={task.id}>
+            <span className={css.taskId}>{task.id}</span>
+            {task.subject !== '' && <span className={css.taskSubject}>{task.subject}</span>}
+            {task.dependsOn.length > 0
+              && <span className={css.taskDeps}>{t('approval.taskDeps', { deps: task.dependsOn.join(' · ') })}</span>}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 /** Read-only status used in the member's own session for a member proposal. */
-function MemberWaitingCard({ data, t }: { readonly data: SophiaApprovalCardData; readonly t: PropsLocale<'sophiaEntities'>['t'] }): JSX.Element {
+function MemberWaitingCard({ data, t }: { readonly data: SophiaApprovalCardData; readonly t: ApprovalLocale }): JSX.Element {
   return (
     <section className={css.root} data-sophia-approval data-request-id={data.requestId}>
-      <header className={css.head}>
-        <span className={css.title}>{t('approval.title')}</span>
-        <span className={css.stateBadge}>{t('approval.state.pending_captain')}</span>
-      </header>
+      <ApprovalHead variant="captain" t={t} />
       <div className={css.line}><span className={css.lineKey}>{t('approval.goalLabel')}</span><span className={css.lineValue}>{data.goal}</span></div>
       <div className={css.line}><span className={css.lineKey}>{t('approval.requesterLabel')}</span><span className={css.lineValue}>{t('approval.requester.member', { handle: data.requester.handle ?? '' })}</span></div>
-      <div className={css.counts}>{t('approval.counts', { members: data.members.length, tasks: data.taskCount, deps: data.dependencyCount })}</div>
+      <ApprovalRoster members={data.members} t={t} />
+      <ApprovalCounts data={data} t={t} />
+      <ApprovalTasks tasks={data.tasks} t={t} />
       <div className={css.feedback}>{t('approval.waiting')}</div>
     </section>
   )
 }
 
 /** Owner approval surface: mode-selector + [批准][退回]. */
-function OwnerApprovalCard({ data, t }: { readonly data: SophiaApprovalCardData; readonly t: PropsLocale<'sophiaEntities'>['t'] }): JSX.Element {
+function OwnerApprovalCard({ data, sessionId, t }: { readonly data: SophiaApprovalCardData; readonly sessionId: string; readonly t: ApprovalLocale }): JSX.Element {
   const [mode, setMode] = useState<TeamMode | undefined>(data.mode)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>(undefined)
@@ -129,7 +211,7 @@ function OwnerApprovalCard({ data, t }: { readonly data: SophiaApprovalCardData;
     setBusy(true)
     setError(undefined)
     try {
-      await postApprovalPlanAction({ action, requestId: data.requestId, ...payload } as never)
+      await postApprovalPlanAction(sessionId, { action, requestId: data.requestId, ...payload } as never)
     } catch (err) {
       setError(approvalErrorMessage(err))
     } finally {
@@ -138,12 +220,12 @@ function OwnerApprovalCard({ data, t }: { readonly data: SophiaApprovalCardData;
   }
   return (
     <section className={css.root} data-sophia-approval data-request-id={data.requestId}>
-      <header className={css.head}>
-        <span className={css.title}>{t('approval.title')}</span>
-        <span className={css.stateBadge}>{t('approval.state.pending_owner')}</span>
-      </header>
+      <ApprovalHead variant="owner" t={t} />
       <div className={css.line}><span className={css.lineKey}>{t('approval.goalLabel')}</span><span className={css.lineValue}>{data.goal}</span></div>
       <div className={css.line}><span className={css.lineKey}>{t('approval.requesterLabel')}</span><span className={css.lineValue}>{data.requester.isHuman ? t('approval.requester.human') : t('approval.requester.member', { handle: data.requester.handle ?? '' })}</span></div>
+      <ApprovalRoster members={data.members} t={t} />
+      <ApprovalCounts data={data} t={t} />
+      <ApprovalTasks tasks={data.tasks} t={t} />
       <div className={css.modeRow}>
         <span className={css.modeLabel}>{t('approval.modeLabel')}</span>
         <TeamModeMenu
@@ -156,7 +238,6 @@ function OwnerApprovalCard({ data, t }: { readonly data: SophiaApprovalCardData;
           }}
         />
       </div>
-      <div className={css.counts}>{t('approval.counts', { members: data.members.length, tasks: data.taskCount, deps: data.dependencyCount })}</div>
       <div className={css.actions}>
         <button
           type="button"
@@ -181,7 +262,7 @@ function OwnerApprovalCard({ data, t }: { readonly data: SophiaApprovalCardData;
 }
 
 /** Captain review surface for a member-initiated pending_captain proposal. */
-function CaptainReviewCard({ data, t }: { readonly data: SophiaApprovalCardData; readonly t: PropsLocale<'sophiaEntities'>['t'] }): JSX.Element {
+function CaptainReviewCard({ data, sessionId, t }: { readonly data: SophiaApprovalCardData; readonly sessionId: string; readonly t: ApprovalLocale }): JSX.Element {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>(undefined)
   const review = (decision: CaptainVerdict) => async () => {
@@ -190,7 +271,7 @@ function CaptainReviewCard({ data, t }: { readonly data: SophiaApprovalCardData;
     try {
       const needReason = decision === 'downgrade_to_dag'
       const reason = needReason ? t('approval.review.downgradeReason') : undefined
-      await postApprovalPlanAction({ action: 'review', requestId: data.requestId, decision, reason })
+      await postApprovalPlanAction(sessionId, { action: 'review', requestId: data.requestId, decision, reason })
     } catch (err) {
       setError(approvalErrorMessage(err))
     } finally {
@@ -205,13 +286,12 @@ function CaptainReviewCard({ data, t }: { readonly data: SophiaApprovalCardData;
   ]
   return (
     <section className={css.root} data-sophia-approval data-request-id={data.requestId}>
-      <header className={css.head}>
-        <span className={css.title}>{t('approval.title')}</span>
-        <span className={css.stateBadge}>{t('approval.state.pending_captain')}</span>
-      </header>
+      <ApprovalHead variant="captain" t={t} />
       <div className={css.line}><span className={css.lineKey}>{t('approval.goalLabel')}</span><span className={css.lineValue}>{data.goal}</span></div>
       <div className={css.line}><span className={css.lineKey}>{t('approval.requesterLabel')}</span><span className={css.lineValue}>{t('approval.requester.member', { handle: data.requester.handle ?? '' })}</span></div>
-      <div className={css.counts}>{t('approval.counts', { members: data.members.length, tasks: data.taskCount, deps: data.dependencyCount })}</div>
+      <ApprovalRoster members={data.members} t={t} />
+      <ApprovalCounts data={data} t={t} />
+      <ApprovalTasks tasks={data.tasks} t={t} />
       <div className={css.actions}>
         {verdicts.map((verdict) => (
           <button
@@ -231,14 +311,14 @@ function CaptainReviewCard({ data, t }: { readonly data: SophiaApprovalCardData;
 }
 
 /** Render one pending Sophia approval proposal as a compact conversation card. */
-export default function SophiaApprovalCard({ node, t, reviewer }: SophiaApprovalCardProps): JSX.Element {
+export default function SophiaApprovalCard({ node, sessionId, t, reviewer }: SophiaApprovalCardProps): JSX.Element {
   const data = node.data
   // Member-initiated (requester is a member, not the human owner):
   if (!data.requester.isHuman) {
     return reviewer
-      ? <CaptainReviewCard data={data} t={t} />
+      ? <CaptainReviewCard data={data} sessionId={sessionId} t={t} />
       : <MemberWaitingCard data={data} t={t} />
   }
   // Human-owner initiated: owner session controls (mode-selector + approve/reject).
-  return <OwnerApprovalCard key={data.requestId} data={data} t={t} />
+  return <OwnerApprovalCard key={data.requestId} data={data} sessionId={sessionId} t={t} />
 }

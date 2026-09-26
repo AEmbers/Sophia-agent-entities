@@ -30,5 +30,5 @@ export interface SophiaApprovalCardInjected {
 /** Complete keyed Chat renderer props. */
 export type SophiaApprovalCardProps = PropsRuntime<'conversation.chat.node', 'sophia-approval'> & PropsLocale<'sophiaEntities'> & SophiaApprovalCardInjected;
 /** Render one pending Sophia approval proposal as a compact conversation card. */
-export default function SophiaApprovalCard({ node, t, reviewer }: SophiaApprovalCardProps): JSX.Element;
+export default function SophiaApprovalCard({ node, sessionId, t, reviewer }: SophiaApprovalCardProps): JSX.Element;
 //# sourceMappingURL=SophiaApprovalCard.d.ts.map
