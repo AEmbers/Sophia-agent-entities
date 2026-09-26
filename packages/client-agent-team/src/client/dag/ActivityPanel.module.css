@@ -312,6 +312,35 @@
   border-bottom: 0;
 }
 
+/* P4.3: summary card for persistent (ledger) teams. The persistent backend
+   surfaces membership/task volumes, not per-row activity, so the panel shows
+   a compact stat card in place of the DAG delegation tree / dependency map. */
+.persistentCard {
+  container-name: agent-team;
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.persistentHeading {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--dsw-alias-text-tertiary, var(--dsw-alias-text-secondary));
+}
+
+.persistentStat {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--dsw-alias-text-secondary);
+}
+
 .teamHead {
   display: flex;
   align-items: center;

@@ -12,11 +12,15 @@ import type { Context } from '@deepseek-ai/cordis'
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { memberActivity } from './members.ts'
+import type { TeamSummary } from 'dsh-sophia-entities/orchestration/types'
 import {
   CAPTAIN_KEY, listArchivedTeamIds, readArchivedTeam, readUnreadMailbox, readTeam,
   taskDepthsById, taskVisualState,
 } from './state.ts'
 import type { MemberStatus, TeamState, TeamTask } from './types.ts'
+
+/** Team kind carried on the activity snapshot (design §4.7, P4.3). */
+export type ActivityTeamMode = 'persistent' | 'dag'
 
 /** Visual task state for the activity panel. */
 export type VisualTaskState = 'blocked' | 'open' | 'running' | 'completed' | 'failed' | 'cancelled'
@@ -73,10 +77,21 @@ export interface TeamActivitySnapshot {
   readonly phase: 'staged' | 'running'
   readonly planReviewState?: 'awaiting_review' | 'awaiting_feedback'
   readonly halted?: boolean
+  /** Team kind: 'dag' (durable DAG teams) or 'persistent' (ledger channels). */
+  readonly mode: ActivityTeamMode
   readonly members: readonly TeamActivityMember[]
   readonly tasks: readonly TeamActivityTask[]
   readonly messageCount: number
   readonly captainInbox: readonly TeamActivityMessage[]
+  /**
+   * Volume counts for persistent (ledger) teams (P4.3 first-stage canary). The
+   * persistent backend only surfaces membership/task volumes through its
+   * `TeamSummary`, not the per-row `members`/`tasks` arrays the DAG projector
+   * assembles, so the panel renders a summary card from these instead. Always
+   * undefined for `mode: 'dag'`.
+   */
+  readonly memberCount?: number
+  readonly taskCount?: number
 }
 
 /** Snapshot projection switches for live and archived teams. */
@@ -172,6 +187,7 @@ export async function assembleTeamSnapshot(
     ...state.description !== undefined ? { description: state.description } : {},
     captainSessionId: state.captainSessionId,
     phase: state.phase ?? 'running',
+    mode: 'dag',
     ...state.phase === 'staged'
       ? { planReviewState: state.planReviewState ?? 'awaiting_review' as const }
       : {},
@@ -199,6 +215,40 @@ export async function assembleTeamSnapshot(
       content: message.content,
     })),
   }
+}
+
+/**
+ * Project one persistent (ledger) team into a panel snapshot (P4.3).
+ *
+ * The persistent backend's `TeamSummary` carries only membership/task volumes
+ * plus the channel display name — no per-row member/task/message detail is
+ * available through the ledger view without building that projection (a later
+ * §4.3 increment). This first-stage canary therefore returns a minimal card:
+ * `mode: 'persistent'`, empty member/task rows, and the volumes on
+ * `memberCount`/`taskCount` so the client can render a summary card and a
+ * mode-aware layout without fabricating rows it cannot source.
+ * @param workspace - display name of the owning workspace (matches DAG teams).
+ * @param summary - the persistent `TeamSummary` from the ledger backend.
+ * @returns the minimal persistent activity snapshot.
+ */
+export function persistentTeamSnapshot(
+  workspace: string,
+  summary: TeamSummary,
+): TeamActivitySnapshot {
+  return Object.freeze({
+    workspace,
+    teamId: summary.teamId,
+    name: summary.name,
+    captainSessionId: '',
+    phase: 'running',
+    mode: 'persistent',
+    members: Object.freeze([]),
+    tasks: Object.freeze([]),
+    messageCount: 0,
+    captainInbox: Object.freeze([]),
+    memberCount: summary.memberCount,
+    taskCount: summary.taskCount,
+  })
 }
 
 /**

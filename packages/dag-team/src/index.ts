@@ -37,7 +37,7 @@ import { installAgentTeamsGestureBoundary, registerAgentTeamsCommand } from './c
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { collectArchivedTeamsActivity, collectTeamsActivity } from './snapshot.ts'
+import { collectArchivedTeamsActivity, collectTeamsActivity, persistentTeamSnapshot } from './snapshot.ts'
 import { findTeamByCaptain } from './state.ts'
 import { formatProfilesForPrompt, type TeamProfileConfig } from './profiles.ts'
 import { installTeamCapabilities } from './capabilities.ts'
@@ -238,6 +238,26 @@ export function apply(ctx: Context, config: Config): void {
       const snapshots = url.searchParams.get('archived') === '1'
         ? await collectArchivedTeamsActivity(ctx, roots)
         : await collectTeamsActivity(ctx, roots)
+      // P4.3: mix persistent (ledger) teams into the live activity feed so the
+      // panel renders them alongside DAG teams. Best-effort: a composition
+      // without the agent-team host resolves the lazy backend and fails here,
+      // never breaking the DAG feed. Persistent teams are only meaningful in
+      // the live (non-archived) view; archived persistent channels are not yet
+      // surfaced.
+      if (url.searchParams.get('archived') !== '1' && approvalHandle !== undefined) {
+        try {
+          const persistent = await approvalHandle.persistentBackend.list(ctx)
+          // Persistent teams live in the approval plane's workspace; use its
+          // registry display name when a root matches, else the working dir.
+          const workingRoot = roots.find(root => root.stateRoot === join(approvalHandle.workingDirectory, resolved.stateDir))
+          const workspaceLabel = workingRoot?.workspace ?? approvalHandle.workingDirectory
+          for (const summary of persistent) {
+            snapshots.push(persistentTeamSnapshot(workspaceLabel, summary))
+          }
+        } catch (error: unknown) {
+          ctx.logger.warn(`agent-teams: persistent team blend failed: ${String(error)}`)
+        }
+      }
       const body = JSON.stringify({ teams: snapshots })
       res.writeHead(200, {
         'content-type': 'application/json; charset=utf-8',

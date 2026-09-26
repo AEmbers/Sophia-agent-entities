@@ -569,6 +569,14 @@ export function TeamSection({ team, modelDirectory, onContinuePlanning, onDiscar
           )}
         </header>
 
+        {team.mode === 'persistent' ? (
+          <section className={css.persistentCard} aria-label={t('team.persistent.aria')}>
+            <h3 className={css.persistentHeading}>{t('team.persistent.heading')}</h3>
+            <p className={css.persistentStat}>{t('team.persistent.members', { count: team.memberCount ?? 0 })}</p>
+            <p className={css.persistentStat}>{t('team.persistent.tasks', { count: team.taskCount ?? 0 })}</p>
+          </section>
+        ) : (
+        <>
         {team.phase === 'staged' && !historic && modelDirectory !== undefined && onContinuePlanning !== undefined && onDiscarded !== undefined && (
           <StagingPlanEditor
             team={team}
@@ -741,6 +749,8 @@ export function TeamSection({ team, modelDirectory, onContinuePlanning, onDiscar
       </section>
 
       <DependencyMap tasks={team.tasks} members={team.members} t={t} discarded={discarded} workspace={workspace} onSelectTask={setSelectedTaskId} />
+        </>
+        )}
       </section>
       <Modal
         open={stopOpen}
@@ -773,6 +783,7 @@ export function historicCardTeam(data: AgentTeamsCardData, owner: string): Activ
     name: data.teamName,
     captainSessionId: data.captainSessionId || owner,
     phase: 'running',
+    mode: 'dag',
     members: data.members.map((member) => ({
       ...member,
       status: 'removed',
@@ -998,8 +1009,12 @@ export function ActivityPanel({ sessionsList, modelDirectories, openMember, t, c
   // summaries are visible only while their captain session is current.
   const visibleTeams = useMemo(
     // No current session (initial load): show nothing until one is picked,
-    // so cross-session teams never leak into the floater.
-    () => (current === undefined ? [] : teams.filter((team) => team.captainSessionId === current)),
+    // so cross-session teams never leak into the floater. DAG teams follow
+    // their captain; persistent (ledger) teams have no captain session and
+    // appear whenever any session is active.
+    () => (current === undefined ? [] : teams.filter((team) =>
+      team.captainSessionId === current || team.mode === 'persistent',
+    )),
     [teams, current],
   )
   const visibleHistoric = useMemo(

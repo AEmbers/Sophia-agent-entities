@@ -52,10 +52,15 @@ export interface ActivityTeam {
   readonly phase: 'staged' | 'running'
   readonly planReviewState?: 'awaiting_review' | 'awaiting_feedback'
   readonly halted?: boolean
+  /** Team kind (mirrors the host): 'dag' defaults when the field is absent. */
+  readonly mode?: 'persistent' | 'dag'
   readonly members: readonly ActivityMember[]
   readonly tasks: readonly ActivityTask[]
   readonly messageCount: number
   readonly captainInbox: readonly ActivityMessage[]
+  /** Volume counts for persistent (ledger) teams (P4.3 summary card). */
+  readonly memberCount?: number
+  readonly taskCount?: number
 }
 
 /** A successfully-created conversation card that currently needs updates. */
